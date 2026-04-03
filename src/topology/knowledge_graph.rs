@@ -197,6 +197,65 @@ impl KnowledgeGraph {
         self.node_count = all.len();
     }
 
+    /// Migra tutti gli archi di `from` su `into_word`, poi rimuove `from`.
+    /// Usato per normalizzare coppie accentata/non-accentata.
+    /// Se un arco identico (stessa rel+oggetto) esiste già in `into_word`, lo salta.
+    pub fn merge_word_into(&mut self, from: &str, into_word: &str) {
+        // Raccogli archi uscenti di `from` (snapshot owned)
+        let out_edges: Vec<(RelationType, String, f32, Option<String>)> = self.outgoing
+            .get(from)
+            .map(|rel_map| rel_map.iter().flat_map(|(&rel, targets)| {
+                targets.iter().map(move |t| (rel, t.object.clone(), t.confidence, t.via.clone()))
+            }).collect())
+            .unwrap_or_default();
+
+        // Raccogli archi entranti: lista di (rel, soggetto) — confidence/via recuperate dopo
+        let in_pairs: Vec<(RelationType, String)> = self.incoming
+            .get(from)
+            .map(|rel_map| rel_map.iter().flat_map(|(&rel, subjects)| {
+                subjects.iter().map(move |s| (rel, s.clone()))
+            }).collect())
+            .unwrap_or_default();
+
+        // Per ogni in_pair, recupera confidence e via dall'outgoing del soggetto
+        let in_edges: Vec<(RelationType, String, f32, Option<String>)> = in_pairs.iter()
+            .filter_map(|(rel, subj)| {
+                self.outgoing.get(subj.as_str())
+                    .and_then(|m| m.get(rel))
+                    .and_then(|v| v.iter().find(|t| t.object == from))
+                    .map(|t| (*rel, subj.clone(), t.confidence, t.via.clone()))
+            })
+            .collect();
+
+        // Inserisci archi uscenti in into_word
+        for (rel, obj, conf, via) in out_edges {
+            let target_obj = if obj == from { into_word.to_string() } else { obj };
+            self.add_edge(crate::topology::relation::TypedEdge {
+                subject: into_word.to_string(),
+                relation: rel,
+                object: target_obj,
+                confidence: conf,
+                source: crate::topology::relation::EdgeSource::Curated,
+                via,
+            });
+        }
+
+        // Inserisci archi entranti come (subj → into_word)
+        for (rel, subj, conf, via) in in_edges {
+            self.add_edge(crate::topology::relation::TypedEdge {
+                subject: subj,
+                relation: rel,
+                object: into_word.to_string(),
+                confidence: conf,
+                source: crate::topology::relation::EdgeSource::Curated,
+                via,
+            });
+        }
+
+        // Rimuovi `from` completamente
+        self.remove_word(from);
+    }
+
     /// Tutti i nodi presenti nel grafo (come soggetti o oggetti).
     pub fn all_nodes(&self) -> Vec<&str> {
         let mut nodes: std::collections::HashSet<&str> = std::collections::HashSet::new();

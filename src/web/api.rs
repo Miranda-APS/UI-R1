@@ -770,6 +770,24 @@ pub async fn post_pulizia_verbi(
 }
 
 // ═══════════════════════════════════════════════════════════════
+// POST /api/cura/normalizza-accenti?dry_run=true
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn post_normalizza_accenti(
+    State(state): State<AppState>,
+    Query(params): Query<PuliziaQuery>,
+) -> Json<crate::web::state::NormalizzaDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::NormalizzaAccenti {
+        dry_run: params.dry_run.unwrap_or(false),
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(crate::web::state::NormalizzaDto {
+        pairs: vec![], count: 0, dry_run: true
+    }))
+}
+
+// ═══════════════════════════════════════════════════════════════
 // GET /api/concept?word=xxx — Tutto ciò che il sistema sa di un concetto
 // ═══════════════════════════════════════════════════════════════
 

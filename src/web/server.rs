@@ -143,6 +143,7 @@ pub async fn run(port: u16) {
         .route("/api/cura/firma", post(api::post_update_firma))
         .route("/api/cura/categorie", get(api::get_categories))
         .route("/api/cura/pulizia-verbi", post(api::post_pulizia_verbi))
+        .route("/api/cura/normalizza-accenti", post(api::post_normalizza_accenti))
         .route("/api/biennale/field", get(api::get_biennale_field))
         .route("/api/biennale/word", get(api::get_biennale_word))
         .route("/api/biennale/journey", get(api::get_biennale_journey))
@@ -237,6 +238,87 @@ fn pulizia_verbi(engine: &mut crate::topology::engine::PrometeoTopologyEngine, d
     }
 
     crate::web::state::PuliziaDto { deleted: to_delete, count, dry_run }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Normalizzazione accenti
+// ═══════════════════════════════════════════════════════════════
+
+/// Rimuove gli accenti da una stringa italiana.
+fn strip_accents(s: &str) -> String {
+    s.chars().map(|c| match c {
+        'à' => 'a', 'á' => 'a',
+        'è' => 'e', 'é' => 'e', 'ê' => 'e',
+        'ì' => 'i', 'í' => 'i', 'î' => 'i',
+        'ò' => 'o', 'ó' => 'o', 'ô' => 'o',
+        'ù' => 'u', 'ú' => 'u', 'û' => 'u',
+        other => other,
+    }).collect()
+}
+
+fn normalizza_accenti(
+    engine: &mut crate::topology::engine::PrometeoTopologyEngine,
+    dry_run: bool,
+) -> crate::web::state::NormalizzaDto {
+    use std::collections::HashMap;
+
+    // Costruisci mappa stripped → Vec<parola_originale>
+    let all_words: Vec<String> = engine.lexicon.patterns_iter()
+        .map(|(w, _)| w.to_string())
+        .collect();
+
+    let mut by_stripped: HashMap<String, Vec<String>> = HashMap::new();
+    for word in &all_words {
+        let stripped = strip_accents(word);
+        by_stripped.entry(stripped).or_default().push(word.clone());
+    }
+
+    // Trova coppie dove una versione HA accenti e l'altra NO
+    let mut pairs: Vec<[String; 2]> = Vec::new(); // [non_accentata, accentata]
+    for (_stripped, group) in &by_stripped {
+        if group.len() < 2 { continue; }
+        // Cerca quali hanno accenti e quali no
+        let with_accent: Vec<&String> = group.iter().filter(|w| strip_accents(w) != **w).collect();
+        let without_accent: Vec<&String> = group.iter().filter(|w| strip_accents(w) == **w).collect();
+        if with_accent.is_empty() || without_accent.is_empty() { continue; }
+        // Associa: ogni parola senza accento → parola con accento (preferisci quella con più relazioni)
+        for plain in &without_accent {
+            // Scegli la versione accentata con più archi come canonica
+            let canonical = with_accent.iter()
+                .max_by_key(|w| engine.kg.out_degree(w) + engine.kg.in_degree(w))
+                .unwrap();
+            pairs.push([plain.to_string(), canonical.to_string()]);
+        }
+    }
+
+    pairs.sort_by(|a, b| a[1].cmp(&b[1]));
+    let count = pairs.len();
+
+    if !dry_run {
+        for pair in &pairs {
+            let plain = &pair[0];
+            let accented = &pair[1];
+            // Merge lessico: trasferisci stabilità/esposizione se quella senza accento è più alta
+            let (plain_stab, plain_exp) = engine.lexicon.get(plain)
+                .map(|p| (p.stability, p.exposure_count))
+                .unwrap_or((0.0, 0));
+            if let Some(acc_pat) = engine.lexicon.get_mut(accented) {
+                // Prendi il massimo di stabilità ed esposizione tra le due
+                acc_pat.stability = acc_pat.stability.max(plain_stab);
+                acc_pat.exposure_count = acc_pat.exposure_count.max(plain_exp);
+            }
+            // Merge KG
+            engine.kg.merge_word_into(plain, accented);
+            // Rimuovi la versione non accentata dal lessico
+            engine.lexicon.remove_word(plain);
+        }
+        if count > 0 {
+            engine.recompute_all_word_affinities();
+            cura_save(engine);
+        }
+    }
+
+    crate::web::state::NormalizzaDto { pairs, count, dry_run }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -815,6 +897,10 @@ fn engine_loop(
             }
             EngineCommand::PuliziaVerbi { dry_run, reply } => {
                 let dto = pulizia_verbi(&mut engine, dry_run);
+                let _ = reply.send(dto);
+            }
+            EngineCommand::NormalizzaAccenti { dry_run, reply } => {
+                let dto = normalizza_accenti(&mut engine, dry_run);
                 let _ = reply.send(dto);
             }
             EngineCommand::GetCategories { relation, min_children, query, reply } => {

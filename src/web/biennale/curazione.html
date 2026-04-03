@@ -394,6 +394,18 @@ select.form-input option{background:#0e0e1e}
         <div id="pulizia-list" style="margin-top:10px;max-height:180px;overflow-y:auto;font-size:12px;color:#a0c0a0;display:none"></div>
       </div>
 
+      <!-- Normalizzazione accenti -->
+      <div style="background:#0c0c1e;border:1px solid rgba(100,200,255,.2);border-radius:9px;padding:14px;margin-bottom:16px">
+        <div class="sec-title" style="color:#60d0ff;margin-bottom:8px">normalizza accenti</div>
+        <p style="font-size:12px;color:#a0b8c0;margin-bottom:10px;line-height:1.6">Trova coppie come <em style="color:#c0f0ff">qualita / qualità</em> e unisce le loro relazioni nella versione con accento, rimuovendo il duplicato.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn-add" id="btn-norm-preview" style="background:rgba(40,140,200,.35);border-color:rgba(60,180,220,.5)">anteprima (dry run)</button>
+          <button class="btn-add" id="btn-norm-esegui" style="background:rgba(20,120,180,.5);border-color:rgba(40,160,210,.6);display:none">esegui normalizzazione</button>
+          <span id="norm-info" style="font-size:12px;color:#70c0e0"></span>
+        </div>
+        <div id="norm-list" style="margin-top:10px;max-height:180px;overflow-y:auto;font-size:12px;color:#80c0d0;display:none"></div>
+      </div>
+
       <div class="cat-count" id="cat-count"></div>
       <div id="cat-list"></div>
 
@@ -890,6 +902,30 @@ document.getElementById('cat-bulk-save').onclick = async () => {
   }
   info.textContent = `✓ ${ok} aggiunte${fail?', ✗ '+fail+' fallite':''}`;
   loadCategories();
+};
+
+// ── NORMALIZZA ACCENTI ───────────────────────────────
+let normPairs = [];
+document.getElementById('btn-norm-preview').onclick = async () => {
+  document.getElementById('norm-info').textContent = 'analisi in corso...';
+  const r = await fetch('/api/cura/normalizza-accenti?dry_run=true', {method:'POST'});
+  const d = await r.json();
+  normPairs = d.pairs;
+  document.getElementById('norm-info').textContent = `trovate ${d.count} coppie`;
+  const listEl = document.getElementById('norm-list');
+  listEl.style.display = d.count ? 'block' : 'none';
+  listEl.textContent = d.pairs.map(p => `${p[0]} → ${p[1]}`).join('  ·  ');
+  document.getElementById('btn-norm-esegui').style.display = d.count ? '' : 'none';
+};
+document.getElementById('btn-norm-esegui').onclick = async () => {
+  if (!confirm(`Unificare ${normPairs.length} coppie accentate/non-accentate? Le relazioni verranno unite nella versione con accento.`)) return;
+  document.getElementById('norm-info').textContent = 'normalizzazione in corso...';
+  const r = await fetch('/api/cura/normalizza-accenti?dry_run=false', {method:'POST'});
+  const d = await r.json();
+  document.getElementById('norm-info').textContent = `✓ unificate ${d.count} coppie`;
+  document.getElementById('norm-list').style.display = 'none';
+  document.getElementById('btn-norm-esegui').style.display = 'none';
+  loadList();
 };
 
 // ── PULIZIA VERBI ────────────────────────────────────

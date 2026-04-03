@@ -199,6 +199,11 @@ pub enum EngineCommand {
         dry_run: bool,
         reply: oneshot::Sender<PuliziaDto>,
     },
+    /// Normalizza accenti: unifica coppie accentata/non-accentata
+    NormalizzaAccenti {
+        dry_run: bool,
+        reply: oneshot::Sender<NormalizzaDto>,
+    },
     /// Tutto ciò che il sistema sa di un concetto via InferenceEngine
     GetConcept {
         word: String,
@@ -826,6 +831,14 @@ pub struct UpdateFirmaBody {
 #[derive(Serialize)]
 pub struct PuliziaDto {
     pub deleted: Vec<String>,
+    pub count: usize,
+    pub dry_run: bool,
+}
+
+#[derive(Serialize)]
+pub struct NormalizzaDto {
+    /// Coppie (non_accentata, accentata) trovate
+    pub pairs: Vec<[String; 2]>,
     pub count: usize,
     pub dry_run: bool,
 }
