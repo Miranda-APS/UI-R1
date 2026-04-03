@@ -32,6 +32,13 @@ html,body{height:100%;background:#09090f;color:#e8eeff;font-family:'Courier New'
 }
 #search-bar input::placeholder{color:rgba(150,170,255,.3)}
 #search-bar input:focus{border-color:#5a7fff}
+#sort-bar{padding:4px 12px 6px;display:flex;align-items:center;gap:6px}
+#sort-bar label{font-size:10px;color:#8aabff;letter-spacing:.06em;font-weight:bold;white-space:nowrap}
+#sort-sel{
+  flex:1;background:#0e0e1e;border:1px solid rgba(100,120,255,.3);border-radius:6px;
+  padding:4px 7px;color:#dde8ff;font:12px 'Courier New',monospace;outline:none;cursor:pointer
+}
+#sort-sel option{background:#0e0e1e}
 #list-info{padding:4px 12px 6px;font-size:12px;color:rgba(160,180,255,.4)}
 #word-list{flex:1;overflow-y:auto}
 .word-item{
@@ -219,6 +226,19 @@ select.form-input option{background:#0e0e1e}
   <div id="search-bar">
     <input id="search" type="text" placeholder="Cerca parola..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
   </div>
+  <div id="sort-bar">
+    <label>ORDINA</label>
+    <select id="sort-sel">
+      <option value="alpha_asc">A → Z</option>
+      <option value="alpha_desc">Z → A</option>
+      <option value="out_desc">↗ uscenti (più → meno)</option>
+      <option value="out_asc">↗ uscenti (meno → più)</option>
+      <option value="in_desc">↙ entranti (più → meno)</option>
+      <option value="in_asc">↙ entranti (meno → più)</option>
+      <option value="stab_desc">stabilità (alta → bassa)</option>
+      <option value="stab_asc">stabilità (bassa → alta)</option>
+    </select>
+  </div>
   <div id="list-info">caricamento...</div>
   <div id="word-list"></div>
   <div id="pagination">
@@ -268,7 +288,7 @@ select.form-input option{background:#0e0e1e}
 
         <!-- Relazioni entranti -->
         <div class="rel-section">
-          <div class="sec-title">relazioni entranti</div>
+          <div class="sec-title">relazioni entranti <span style="font-size:10px;font-style:italic;letter-spacing:0;color:rgba(180,200,255,.5);font-weight:normal">(altre parole che puntano a questa — clicca % per modificare quella relazione)</span></div>
           <div id="rel-in"></div>
         </div>
 
@@ -496,7 +516,7 @@ const OCT = [
 ];
 
 const PAGE = 50;
-let st = {page:0, query:'', total:0, cur:null, curDetail:null};
+let st = {page:0, query:'', sort:'alpha_asc', total:0, cur:null, curDetail:null};
 let searchTimer=null, firmaTimer=null;
 // popup state
 let popup = {subject:null, relation:null, object:null};
@@ -516,7 +536,7 @@ document.querySelectorAll('.tab').forEach(t => {
 async function loadList() {
   const off = st.page * PAGE;
   const q = encodeURIComponent(st.query);
-  const r = await fetch(`/api/cura/parole?q=${q}&offset=${off}&limit=${PAGE}`);
+  const r = await fetch(`/api/cura/parole?q=${q}&offset=${off}&limit=${PAGE}&sort=${st.sort}`);
   const d = await r.json();
   st.total = d.total;
   renderList(d.words);
@@ -560,6 +580,11 @@ document.getElementById('pg-next').onclick = () => {
 document.getElementById('search').addEventListener('input', e => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {st.query=e.target.value.trim();st.page=0;loadList();}, 280);
+});
+document.getElementById('sort-sel').addEventListener('change', e => {
+  st.sort = e.target.value;
+  st.page = 0;
+  loadList();
 });
 
 // ── DETTAGLIO ────────────────────────────────────────
@@ -693,17 +718,19 @@ function makeRelRow(e, curWord, isOut) {
     <span class="rel-target">${esc(e.target)}</span>
     ${viaBit}
     <span class="rel-conf" title="clicca per modificare">${confPct}%</span>
-    ${isOut?`<button class="btn-del-rel" title="rimuovi">×</button>`:''}
+    <button class="btn-del-rel" title="rimuovi">×</button>
   `;
+  // Per uscenti: subject=curWord, object=e.target
+  // Per entranti: subject=e.target (la parola sorgente), object=curWord
+  const subject = isOut ? curWord : e.target;
+  const object  = isOut ? e.target : curWord;
   row.querySelector('.rel-target').onclick = () => selectWord(e.target);
-  if (isOut) {
-    row.querySelector('.rel-conf').onclick = ev => openEditPopup(ev, curWord, e.relation, e.target, e.confidence, e.via);
-    row.querySelector('.rel-via-chip').onclick = ev => openEditPopup(ev, curWord, e.relation, e.target, e.confidence, e.via);
-    row.querySelector('.btn-del-rel').onclick = ev => {
-      ev.stopPropagation();
-      deleteRelation(curWord, e.relation, e.target, row);
-    };
-  }
+  row.querySelector('.rel-conf').onclick = ev => openEditPopup(ev, subject, e.relation, object, e.confidence, e.via);
+  row.querySelector('.rel-via-chip').onclick = ev => openEditPopup(ev, subject, e.relation, object, e.confidence, e.via);
+  row.querySelector('.btn-del-rel').onclick = ev => {
+    ev.stopPropagation();
+    deleteRelation(subject, e.relation, object, row);
+  };
   return row;
 }
 
@@ -711,7 +738,7 @@ function makeRelRow(e, curWord, isOut) {
 function openEditPopup(ev, subject, relation, object, confidence, via) {
   ev.stopPropagation();
   popup = {subject, relation, object};
-  document.getElementById('ep-desc').textContent = `${subject} [${relation}] ${object}`;
+  document.getElementById('ep-desc').textContent = `${subject} [${relation}] → ${object}`;
   document.getElementById('ep-conf').value = confidence.toFixed(2);
   document.getElementById('ep-via').value = via||'';
   const pop = document.getElementById('rel-edit-popup');

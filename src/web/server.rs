@@ -789,8 +789,8 @@ fn engine_loop(
                 cura_save(&engine);
                 let _ = reply.send(true);
             }
-            EngineCommand::GetWordList { query, offset, limit, reply } => {
-                let dto = build_word_list(&engine, &query, offset, limit);
+            EngineCommand::GetWordList { query, offset, limit, sort, reply } => {
+                let dto = build_word_list(&engine, &query, offset, limit, &sort);
                 let _ = reply.send(dto);
             }
             EngineCommand::UpdateWordFirma { word, firma, reply } => {
@@ -1641,6 +1641,7 @@ fn build_word_list(
     query: &str,
     offset: usize,
     limit: usize,
+    sort: &str,
 ) -> crate::web::state::WordListDto {
     use crate::web::state::{WordListDto, WordListItemDto};
     let q = query.to_lowercase();
@@ -1664,7 +1665,16 @@ fn build_word_list(
             }
         })
         .collect();
-    items.sort_by(|a, b| a.word.cmp(&b.word));
+    match sort {
+        "alpha_desc" => items.sort_by(|a, b| b.word.cmp(&a.word)),
+        "out_asc"    => items.sort_by(|a, b| a.out_degree.cmp(&b.out_degree)),
+        "out_desc"   => items.sort_by(|a, b| b.out_degree.cmp(&a.out_degree)),
+        "in_asc"     => items.sort_by(|a, b| a.in_degree.cmp(&b.in_degree)),
+        "in_desc"    => items.sort_by(|a, b| b.in_degree.cmp(&a.in_degree)),
+        "stab_asc"   => items.sort_by(|a, b| a.stability.partial_cmp(&b.stability).unwrap_or(std::cmp::Ordering::Equal)),
+        "stab_desc"  => items.sort_by(|a, b| b.stability.partial_cmp(&a.stability).unwrap_or(std::cmp::Ordering::Equal)),
+        _            => items.sort_by(|a, b| a.word.cmp(&b.word)), // alpha_asc default
+    }
     let total = items.len();
     let words = items.into_iter().skip(offset).take(limit).collect();
     WordListDto { words, total }

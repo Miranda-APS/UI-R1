@@ -169,6 +169,7 @@ pub enum EngineCommand {
         query: String,
         offset: usize,
         limit: usize,
+        sort: String,
         reply: oneshot::Sender<WordListDto>,
     },
     /// Aggiorna la firma 8D di una parola

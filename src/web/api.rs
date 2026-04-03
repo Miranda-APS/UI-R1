@@ -618,6 +618,7 @@ pub struct WordListQuery {
     pub q: Option<String>,
     pub offset: Option<usize>,
     pub limit: Option<usize>,
+    pub sort: Option<String>,
 }
 
 pub async fn get_word_list(
@@ -629,6 +630,7 @@ pub async fn get_word_list(
         query: params.q.unwrap_or_default(),
         offset: params.offset.unwrap_or(0),
         limit: params.limit.unwrap_or(50),
+        sort: params.sort.unwrap_or_else(|| "alpha_asc".to_string()),
         reply: tx,
     }).await;
     Json(rx.await.unwrap_or_default())
