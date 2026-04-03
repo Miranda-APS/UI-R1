@@ -164,6 +164,12 @@ pub enum EngineCommand {
         word: String,
         reply: oneshot::Sender<bool>,
     },
+    /// Rinomina una parola: merge KG + lessico, rimuove la vecchia
+    RinominaWord {
+        from: String,
+        to: String,
+        reply: oneshot::Sender<bool>,
+    },
     /// Lista parole del lessico (con paginazione e ricerca)
     GetWordList {
         query: String,

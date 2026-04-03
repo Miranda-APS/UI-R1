@@ -140,6 +140,7 @@ pub async fn run(port: u16) {
         .route("/api/cura/relazione", delete(api::delete_word_relation))
         .route("/api/cura/relazione/modifica", post(api::post_update_edge))
         .route("/api/cura/parola", delete(api::delete_word))
+        .route("/api/cura/rinomina", post(api::post_rinomina))
         .route("/api/cura/firma", post(api::post_update_firma))
         .route("/api/cura/categorie", get(api::get_categories))
         .route("/api/cura/pulizia-verbi", post(api::post_pulizia_verbi))
@@ -870,6 +871,33 @@ fn engine_loop(
                 engine.lexicon.remove_word(&word);
                 cura_save(&engine);
                 let _ = reply.send(true);
+            }
+            EngineCommand::RinominaWord { from, to, reply } => {
+                if from == to || to.is_empty() {
+                    let _ = reply.send(false);
+                } else {
+                    // Se `to` non esiste nel lessico, copia il pattern di `from`
+                    let exists_to = engine.lexicon.get(&to).is_some();
+                    if !exists_to {
+                        if let Some(pat) = engine.lexicon.get(&from).cloned() {
+                            engine.lexicon.insert_pattern(&to, pat);
+                        }
+                    } else {
+                        // Unifica stabilità/esposizione
+                        let (fs, fe) = engine.lexicon.get(&from)
+                            .map(|p| (p.stability, p.exposure_count))
+                            .unwrap_or((0.0, 0));
+                        if let Some(tp) = engine.lexicon.get_mut(&to) {
+                            tp.stability = tp.stability.max(fs);
+                            tp.exposure_count = tp.exposure_count.max(fe);
+                        }
+                    }
+                    engine.kg.merge_word_into(&from, &to);
+                    engine.lexicon.remove_word(&from);
+                    engine.recompute_all_word_affinities();
+                    cura_save(&engine);
+                    let _ = reply.send(true);
+                }
             }
             EngineCommand::GetWordList { query, offset, limit, sort, reply } => {
                 let dto = build_word_list(&engine, &query, offset, limit, &sort);

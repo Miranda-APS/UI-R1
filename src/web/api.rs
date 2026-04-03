@@ -678,6 +678,29 @@ pub async fn delete_word(
 }
 
 // ═══════════════════════════════════════════════════════════════
+// POST /api/cura/rinomina — Rinomina parola (merge KG + lessico)
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct RinominaBody {
+    pub from: String,
+    pub to: String,
+}
+
+pub async fn post_rinomina(
+    State(state): State<AppState>,
+    Json(body): Json<RinominaBody>,
+) -> Json<bool> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::RinominaWord {
+        from: body.from.trim().to_lowercase(),
+        to: body.to.trim().to_lowercase(),
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
 // POST /api/cura/firma — Aggiorna firma 8D di una parola
 // ═══════════════════════════════════════════════════════════════
 

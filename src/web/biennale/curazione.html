@@ -77,6 +77,12 @@ html,body{height:100%;background:#09090f;color:#e8eeff;font-family:'Courier New'
 .chip-reg{color:#d0a0ff;border-color:rgba(140,80,255,.3);background:rgba(30,10,70,.5)}
 .btn-del-word{background:rgba(200,50,50,.1);border:1px solid rgba(200,50,50,.3);border-radius:7px;padding:6px 14px;color:#ff9090;cursor:pointer;font:13px 'Courier New',monospace;transition:background .1s}
 .btn-del-word:hover{background:rgba(200,50,50,.22)}
+.btn-rename-word{background:rgba(80,140,255,.1);border:1px solid rgba(80,140,255,.3);border-radius:7px;padding:6px 14px;color:#90b8ff;cursor:pointer;font:13px 'Courier New',monospace;transition:background .1s}
+.btn-rename-word:hover{background:rgba(80,140,255,.22)}
+#rename-popup{position:fixed;z-index:200;background:#0e0e24;border:1px solid rgba(100,140,255,.4);border-radius:10px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:300px;display:none}
+#rename-popup h4{font-size:12px;letter-spacing:.1em;color:#a0c0ff;text-transform:uppercase;margin-bottom:12px;font-weight:bold}
+#rename-input{width:100%;background:#0a0a1a;border:1px solid rgba(100,140,255,.4);border-radius:6px;padding:8px 12px;color:#fff;font:14px 'Courier New',monospace;outline:none;margin-bottom:12px}
+#rename-input:focus{border-color:#6a8fff}
 #no-word{display:flex;flex:1;align-items:center;justify-content:center;color:rgba(130,150,255,.3);font-size:16px}
 
 /* body scrollabile */
@@ -267,7 +273,8 @@ select.form-input option{background:#0e0e1e}
           <span class="chip chip-exp" id="c-exp"></span>
           <span class="chip chip-reg" id="c-reg"></span>
         </div>
-        <button class="btn-del-word" id="btn-del-word">cancella parola</button>
+        <button class="btn-rename-word" id="btn-rename-word">rinomina</button>
+        <button class="btn-del-word" id="btn-del-word">cancella</button>
       </div>
       <div id="detail-body">
 
@@ -488,6 +495,17 @@ select.form-input option{background:#0e0e1e}
 
 </div><!-- /right -->
 </div><!-- /app -->
+
+<!-- Popup rinomina parola -->
+<div id="rename-popup">
+  <h4>rinomina parola</h4>
+  <div style="font-size:12px;color:rgba(160,190,255,.6);margin-bottom:10px">Tutte le relazioni verranno spostate sulla nuova parola.</div>
+  <input id="rename-input" type="text" placeholder="nuovo nome..." autocorrect="off" autocapitalize="off" spellcheck="false">
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="ep-btn ep-btn-cancel" id="rename-cancel">annulla</button>
+    <button class="ep-btn ep-btn-save" id="rename-save">salva</button>
+  </div>
+</div>
 
 <!-- Popup modifica relazione -->
 <div id="rel-edit-popup">
@@ -813,6 +831,48 @@ document.getElementById('btn-add-rel').onclick = async () => {
     document.getElementById('add-via').value='';
     selectWord(from);
   }
+};
+
+// ── RINOMINA PAROLA ──────────────────────────────────
+document.getElementById('btn-rename-word').onclick = () => {
+  if (!st.cur) return;
+  const pop = document.getElementById('rename-popup');
+  document.getElementById('rename-input').value = st.cur;
+  pop.style.display = 'block';
+  // posiziona sotto il pulsante
+  const btn = document.getElementById('btn-rename-word');
+  const rect = btn.getBoundingClientRect();
+  pop.style.top = (rect.bottom + 6) + 'px';
+  pop.style.left = Math.min(rect.left, window.innerWidth - 320) + 'px';
+  setTimeout(() => {
+    const inp = document.getElementById('rename-input');
+    inp.focus(); inp.select();
+  }, 50);
+};
+document.getElementById('rename-cancel').onclick = () => {
+  document.getElementById('rename-popup').style.display = 'none';
+};
+document.getElementById('rename-save').onclick = async () => {
+  const newName = document.getElementById('rename-input').value.trim().toLowerCase();
+  if (!newName || newName === st.cur) {
+    document.getElementById('rename-popup').style.display = 'none';
+    return;
+  }
+  document.getElementById('rename-popup').style.display = 'none';
+  const r = await fetch('/api/cura/rinomina', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({from: st.cur, to: newName})
+  });
+  if (await r.json()) {
+    const oldWord = st.cur;
+    st.cur = newName;
+    loadList();
+    selectWord(newName);
+  }
+};
+document.getElementById('rename-input').onkeydown = e => {
+  if (e.key === 'Enter') document.getElementById('rename-save').click();
+  if (e.key === 'Escape') document.getElementById('rename-cancel').click();
 };
 
 // ── CANCELLA PAROLA ──────────────────────────────────
