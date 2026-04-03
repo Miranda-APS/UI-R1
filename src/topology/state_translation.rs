@@ -55,6 +55,12 @@ pub enum SlotRole {
     TimeWord,
     /// Slot opzionale: incluso solo se l'attivazione del frattale > soglia
     Optional(FractalId, f64, Box<SlotRole>),
+    /// Phase 49: parola specifica da una Proposition (indice nella lista proposizioni)
+    PropositionWord(String),
+    /// Parola specifica da coniugare come verbo
+    ConjugatedPropositionWord(String),
+    /// Verbo all'infinito (non coniugato)
+    InfinitiveVerb,
 }
 
 /// Un archetipo di frase: struttura astratta riempita dal campo.
@@ -83,15 +89,27 @@ impl SentenceArchetype {
         used: &mut Vec<String>,
         codon: [usize; 2],
         echo_exclude: &[String],
+        valence_drives: Option<&[f64; 8]>,
     ) -> Option<String> {
         let mut parts: Vec<String> = Vec::new();
 
         for slot in &self.slots {
-            match self.fill_slot(slot, word_topology, lexicon, active_fractals, used, codon, echo_exclude) {
+            match self.fill_slot(slot, word_topology, lexicon, active_fractals, used, codon, echo_exclude, valence_drives) {
                 Some(word) => {
                     // Non usare la stessa parola due volte nella frase
                     if !used.contains(&word) {
                         used.push(word.clone());
+                    }
+                    // VerbCandidate: escludi anche l'infinitivo dalla selezione successiva.
+                    // "avevo" (coniugato) va in used, ma "avere" (infinitivo) no →
+                    // PrimaryWord seleziona "avere" → "Io avevo avere."
+                    // Soluzione: lemmatizza il coniugato e blocca l'infinitivo.
+                    if matches!(slot, SlotRole::VerbCandidate) {
+                        if let Some(lemma) = crate::topology::grammar::lemmatize(&word) {
+                            if lemma.infinitive != word && !used.contains(&lemma.infinitive) {
+                                used.push(lemma.infinitive);
+                            }
+                        }
                     }
                     parts.push(word);
                 }
@@ -139,6 +157,7 @@ impl SentenceArchetype {
         used: &[String],
         codon: [usize; 2],
         echo_exclude: &[String],
+        valence_drives: Option<&[f64; 8]>,
     ) -> Option<String> {
         match slot {
             SlotRole::Literal(s) => Some(s.to_string()),
@@ -146,11 +165,11 @@ impl SentenceArchetype {
             // PrimaryWord/SecondaryWord: applica echo_exclude — Prometeo non deve rispecchiare
             // meccanicamente le parole dell'input, ma rispondere da ciò che emerge nel campo.
             SlotRole::PrimaryWord => {
-                top_active_word(word_topology, lexicon, used, codon, echo_exclude, 0)
+                top_active_word(word_topology, lexicon, used, codon, echo_exclude, 0, valence_drives)
             }
 
             SlotRole::SecondaryWord => {
-                top_active_word(word_topology, lexicon, used, codon, echo_exclude, 1)
+                top_active_word(word_topology, lexicon, used, codon, echo_exclude, 1, valence_drives)
             }
 
             SlotRole::FractalWord(fid) => {
@@ -182,10 +201,10 @@ impl SentenceArchetype {
                     .chain(echo_exclude.iter())
                     .cloned()
                     .collect();
-                find_fractal_word(EMOZIONE, word_topology, lexicon, active_fractals, &used_and_echo)
-                    .or_else(|| find_fractal_word(CORPO, word_topology, lexicon, active_fractals, &used_and_echo))
-                    .or_else(|| find_fractal_word(ARMONIA, word_topology, lexicon, active_fractals, &used_and_echo))
-                    .or_else(|| find_fractal_word(IMPULSO, word_topology, lexicon, active_fractals, &used_and_echo))
+                find_fractal_word_non_verb(EMOZIONE, word_topology, lexicon, active_fractals, &used_and_echo)
+                    .or_else(|| find_fractal_word_non_verb(CORPO, word_topology, lexicon, active_fractals, &used_and_echo))
+                    .or_else(|| find_fractal_word_non_verb(ARMONIA, word_topology, lexicon, active_fractals, &used_and_echo))
+                    .or_else(|| find_fractal_word_non_verb(IMPULSO, word_topology, lexicon, active_fractals, &used_and_echo))
                     .or_else(|| top_active_non_verb(word_topology, lexicon, used, codon, echo_exclude))
             }
 
@@ -195,13 +214,32 @@ impl SentenceArchetype {
                     .or_else(|| top_active_non_verb(word_topology, lexicon, used, codon, &[]))
             }
 
+            // Phase 49: parola da una proposizione (pre-determinata)
+            SlotRole::PropositionWord(word) => Some(word.clone()),
+
+            SlotRole::ConjugatedPropositionWord(word) => {
+                let active = word_topology.active_words();
+                let mode = syntax_center::infer_grammatical_mode(
+                    active_fractals,
+                    &active,
+                    lexicon,
+                    echo_exclude,
+                    used,
+                );
+                Some(grammar::conjugate(word, mode.person, mode.tense))
+            }
+
+            SlotRole::InfinitiveVerb => {
+                find_verb_word(word_topology, lexicon, used, echo_exclude)
+            }
+
             SlotRole::Optional(fid, threshold, inner) => {
                 let activation = active_fractals.iter()
                     .find(|(f, _)| f == fid)
                     .map(|(_, a)| *a)
                     .unwrap_or(0.0);
                 if activation > *threshold {
-                    self.fill_slot(inner, word_topology, lexicon, active_fractals, used, codon, echo_exclude)
+                    self.fill_slot(inner, word_topology, lexicon, active_fractals, used, codon, echo_exclude, valence_drives)
                 } else {
                     None
                 }
@@ -227,6 +265,7 @@ fn top_active_word(
     codon: [usize; 2],
     echo_exclude: &[String],
     rank: usize,
+    valence_drives: Option<&[f64; 8]>,
 ) -> Option<String> {
     let active: Vec<(&str, f64)> = word_topology.active_words();
 
@@ -235,48 +274,88 @@ fn top_active_word(
     // stability ≥ 0.35: parole ben radicate nel campo (non solo apparse in pochi cluster).
     const MIN_ARCS: usize = 4;
 
+    // Phase 55: filtra per attivazione SOPRA il resting state.
+    // Il resting state è stability × 0.003 (word_topology). Parole perturbate dall'input hanno
+    // attivazione >> resting. Senza questo filtro, migliaia di parole in resting
+    // state competono con quelle davvero attivate → selezione quasi casuale.
+    const ABOVE_RESTING_FACTOR: f64 = 3.0; // almeno 3× il resting state
+
     let mut scored: Vec<(String, f64)> = active.iter()
-        .filter(|(w, _)| {
+        .filter(|(w, act)| {
             let ws = w.to_string();
+            let resting = lexicon.get(w).map(|p| p.stability * 0.003).unwrap_or(0.0);
             !used.contains(&ws)
                 && !echo_exclude.contains(&ws)
                 && w.chars().count() >= 3
                 && w.chars().any(|c| c.is_alphabetic())
-                // Parole semanticamente radicate: stability ≥ 0.50 (BigBang 25K)
-                // E exposure_count ≥ 15: filtra parole rare (pochi cluster BigBang,
-                // non usate nei libri). Parole comuni: exposure 50-500+; rare: 5-15.
-                && lexicon.get(w).map(|p| p.stability >= 0.50 && p.exposure_count >= 15).unwrap_or(false)
-                // Parole ben connesse nel grafo (evita parole periferiche rare)
+                // Attivazione significativa: sopra il resting state
+                && *act > resting * ABOVE_RESTING_FACTOR
+                && lexicon.get(w).map(|p| p.stability >= 0.30 && p.exposure_count >= 3).unwrap_or(false)
                 && word_topology.word_id(w)
                     .map(|id| word_topology.adjacency_list(id).len() >= MIN_ARCS)
                     .unwrap_or(false)
-                // Lunghezza massima: esclude termini tecnici/burocratici (>13 char).
-                // Le parole della vita quotidiana italiana sono quasi tutte ≤13 char.
+                // Escludi i verbi per evitare frasi sgrammaticate (es. "Io sento essere lontana")
+                && lexicon.get(w).map(|p| p.pos != Some(crate::topology::grammar::PartOfSpeech::Verb)).unwrap_or(true)
                 && w.chars().count() <= 13
         })
         .map(|(w, act)| {
-            let (codon_weight, exposure, pos) = lexicon.get(w)
+            let (codon_weight, exposure, pos, stability) = lexicon.get(w)
                 .map(|p| {
                     let v = p.signature.values();
                     let cw = (v[codon[0]] + v[codon[1]]) * 0.5;
-                    (cw, p.exposure_count, p.pos.clone())
+                    (cw, p.exposure_count, p.pos.clone(), p.stability)
                 })
-                .unwrap_or((0.5, 0, None));
-            // Bonus esposizione: preferisce parole incontrate spesso (più "native")
-            let exposure_bonus = if exposure >= 20 { 1.25 }
-                else if exposure >= 10 { 1.10 }
-                else { 1.0 };
-            // Bonus brevità: parole brevi ≤ 7 char tendono a essere più comuni
-            let brevity = if w.chars().count() <= 7 { 1.10 } else { 1.0 };
-            // Phase 41 — Bonus POS: per PrimaryWord/SecondaryWord preferisci sostantivi.
-            // I verbi non appartengono in posizione soggetto/complemento — penalizzati.
+                .unwrap_or((0.5, 0, None, 0.5));
+
+            // Phase 55: il punteggio base è il DELTA rispetto al resting state.
+            // Le parole che l'input ha perturbato hanno delta alto.
+            // Le parole sempre attive in resting state hanno delta ~0.
+            let resting = stability * 0.003;
+            let delta = (act - resting).max(0.001);
+
+            // POS bonus: sostantivi > aggettivi > verbi
             let pos_bonus = match pos {
                 Some(crate::topology::grammar::PartOfSpeech::Noun) => 1.30,
                 Some(crate::topology::grammar::PartOfSpeech::Adjective) => 1.10,
                 Some(crate::topology::grammar::PartOfSpeech::Verb) => 0.50,
                 _ => 1.0,
             };
-            (w.to_string(), act * codon_weight * exposure_bonus * brevity * pos_bonus)
+            // Hub damping
+            let degree = word_topology.word_id(w)
+                .map(|id| word_topology.adjacency_list(id).len())
+                .unwrap_or(0);
+            let hub_damping = if degree > 300 {
+                0.10
+            } else if degree > 150 {
+                0.25
+            } else if degree > 80 {
+                0.50
+            } else {
+                1.0
+            };
+            // Bonus esposizione minimo
+            let exposure_bonus = if exposure >= 20 { 1.08 }
+                else if exposure >= 10 { 1.04 }
+                else { 1.0 };
+
+            // Phase 55: valence affinity — parole la cui firma risuona coi drive attivi
+            let valence_boost = if let Some(drives) = valence_drives {
+                let default_sig = [0.5f64; 8];
+                let v = lexicon.get(w).map(|p| p.signature.values()).unwrap_or(&default_sig);
+                let drive_dim = crate::topology::valence::DRIVE_DIM;
+                let mut affinity = 0.0f64;
+                for cd in 0..8 {
+                    let drive_strength = drives[cd].abs();
+                    if drive_strength > 0.1 {
+                        affinity += drive_strength * v[drive_dim[cd]];
+                    }
+                }
+                1.0 + affinity * 0.25 // boost gentile, max ~1.5 con drive saturi
+            } else {
+                1.0
+            };
+
+            (w.to_string(), delta * codon_weight * pos_bonus * hub_damping * exposure_bonus * valence_boost)
         })
         .collect();
 
@@ -304,10 +383,7 @@ fn top_active_non_verb(
                 && !echo_exclude.contains(&ws)
                 && w.chars().count() >= 3
                 && w.chars().any(|c| c.is_alphabetic())
-                // Parole semanticamente radicate: stability ≥ 0.50 (BigBang 25K)
-                // E exposure_count ≥ 15: filtra parole rare (pochi cluster BigBang,
-                // non usate nei libri). Parole comuni: exposure 50-500+; rare: 5-15.
-                && lexicon.get(w).map(|p| p.stability >= 0.50 && p.exposure_count >= 15).unwrap_or(false)
+                && lexicon.get(w).map(|p| p.stability >= 0.30 && p.exposure_count >= 3).unwrap_or(false)
                 // Parole ben connesse nel grafo
                 && word_topology.word_id(w)
                     .map(|id| word_topology.adjacency_list(id).len() >= MIN_ARCS)
@@ -327,8 +403,8 @@ fn top_active_non_verb(
                     (cw, p.exposure_count)
                 })
                 .unwrap_or((0.5, 0));
-            let exposure_bonus = if exposure >= 20 { 1.25 }
-                else if exposure >= 10 { 1.10 }
+            let exposure_bonus = if exposure >= 20 { 1.08 }
+                else if exposure >= 10 { 1.04 }
                 else { 1.0 };
             let brevity = if w.chars().count() <= 7 { 1.10 } else { 1.0 };
             (w.to_string(), act * codon_weight * exposure_bonus * brevity)
@@ -346,6 +422,28 @@ fn find_fractal_word(
     lexicon: &Lexicon,
     active_fractals: &[(FractalId, f64)],
     used: &[String],
+) -> Option<String> {
+    find_fractal_word_impl(fid, word_topology, lexicon, active_fractals, used, true)
+}
+
+/// Parola con alta affinità al frattale dato tra quelle attive, escludendo i verbi.
+fn find_fractal_word_non_verb(
+    fid: FractalId,
+    word_topology: &WordTopology,
+    lexicon: &Lexicon,
+    active_fractals: &[(FractalId, f64)],
+    used: &[String],
+) -> Option<String> {
+    find_fractal_word_impl(fid, word_topology, lexicon, active_fractals, used, true)
+}
+
+fn find_fractal_word_impl(
+    fid: FractalId,
+    word_topology: &WordTopology,
+    lexicon: &Lexicon,
+    active_fractals: &[(FractalId, f64)],
+    used: &[String],
+    exclude_verbs: bool,
 ) -> Option<String> {
     // Il frattale deve avere attivazione minima
     let frac_activation = active_fractals.iter()
@@ -365,6 +463,9 @@ fn find_fractal_word(
             && w.chars().any(|c| c.is_alphabetic()))
         .filter_map(|(w, activation)| {
             let pat = lexicon.get(w)?;
+            if exclude_verbs && pat.pos == Some(PartOfSpeech::Verb) {
+                return None;
+            }
             let affinity = pat.fractal_affinities.get(&fid).copied().unwrap_or(0.0);
             if affinity > 0.20 {
                 Some((w.to_string(), activation * affinity * frac_activation))
@@ -399,23 +500,38 @@ fn find_verb_word(
                 && !echo_exclude.contains(&ws)
                 && w.chars().count() >= 3
                 && w.chars().any(|c| c.is_alphabetic())
-                // Filtro qualità: verbi ben radicati (stability ≥ 0.50 + exposure ≥ 15)
-                && lexicon.get(w).map(|p| p.stability >= 0.50 && p.exposure_count >= 15).unwrap_or(false)
+                // Filtro qualità: verbi con un minimo di radicamento
+                && lexicon.get(w).map(|p| p.stability >= 0.30 && p.exposure_count >= 3).unwrap_or(false)
                 // Lunghezza massima: verbi comuni italiani sono quasi tutti ≤13 char
                 && w.chars().count() <= 13
         })
         .collect();
 
     // Prima scelta: parole attive con POS=Verb (identificate dal lemmatizzatore)
+    // Phase 55: hub damping + delta scoring per verbi — "avere"/"essere"/"fare"
+    // con degree>300 non devono dominare solo perché hanno molte connessioni KG.
     let by_pos = active_filtered.iter()
         .filter_map(|(w, activation)| {
             let pat = lexicon.get(w)?;
             if pat.pos == Some(PartOfSpeech::Verb) {
-                // Bonus esposizione per preferire verbi comuni
-                let exp_bonus = if pat.exposure_count >= 20 { 1.25 }
-                    else if pat.exposure_count >= 10 { 1.10 }
+                let exp_bonus = if pat.exposure_count >= 20 { 1.08 }
+                    else if pat.exposure_count >= 10 { 1.04 }
                     else { 1.0 };
-                Some((w.to_string(), *activation * exp_bonus))
+                let degree = word_topology.word_id(w)
+                    .map(|id| word_topology.adjacency_list(id).len())
+                    .unwrap_or(0);
+                let hub_damping = if degree > 300 {
+                    0.10
+                } else if degree > 150 {
+                    0.25
+                } else if degree > 80 {
+                    0.50
+                } else {
+                    1.0
+                };
+                let resting = pat.stability * 0.003;
+                let delta = (activation - resting).max(0.001);
+                Some((w.to_string(), delta * exp_bonus * hub_damping))
             } else {
                 None
             }
@@ -427,14 +543,16 @@ fn find_verb_word(
         return by_pos;
     }
 
-    // Seconda scelta: Agency > 0.65 E parola lunga (≥5 lettere) tra quelle attive.
-    // Agency alta + lunghezza esclude pronomi/preposizioni e seleziona verbi/azioni.
-    let by_agency = active_filtered.iter()
+    // Phase 55: rimosso il fallback by_agency che selezionava non-verbi
+    // per Agency alta → coniugazione produceva mostri ("lunavo", "distendevo").
+    // Meglio un verbo vero dal lessico che un sostantivo coniugato a forza.
+
+    // Secondo livello: verbo POS=Verb più stabile tra TUTTI quelli attivi nel campo
+    let by_active_verb = active_filtered.iter()
         .filter_map(|(w, activation)| {
             let pat = lexicon.get(w)?;
-            let agency = pat.signature.values()[6];
-            if agency > 0.65 && w.chars().count() >= 5 {
-                Some((w.to_string(), activation * agency))
+            if pat.pos == Some(PartOfSpeech::Verb) {
+                Some((w.to_string(), *activation * pat.stability as f64))
             } else {
                 None
             }
@@ -442,13 +560,11 @@ fn find_verb_word(
         .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
         .map(|(w, _)| w);
 
-    if by_agency.is_some() {
-        return by_agency;
+    if by_active_verb.is_some() {
+        return by_active_verb;
     }
 
-    // Terzo livello: cerca tra TUTTI i verbi del lessico quello con stability massima
-    // tra quelli non in `used`. Il verbo più stabile è il più radicato nell'esperienza
-    // dell'entità — la grammatica emerge dall'esperienza, non da una lista.
+    // Terzo livello: verbo più stabile dal lessico completo (non solo campo attivo)
     lexicon.most_stable(50).into_iter()
         .filter(|p| p.pos == Some(PartOfSpeech::Verb)
             && !used.contains(&p.word)
@@ -543,24 +659,25 @@ pub fn default_archetypes() -> Vec<SentenceArchetype> {
                 SlotRole::Literal("io"),
                 SlotRole::VerbCandidate,
                 SlotRole::EmotionWord,
-                SlotRole::Optional(EMOZIONE, 0.3, Box::new(SlotRole::SecondaryWord)),
+                SlotRole::Optional(EMOZIONE, 0.15, Box::new(SlotRole::SecondaryWord)),
             ],
             separators: vec![" ", " ", " "],
             ending: ".",
         },
 
         // ─── REFLECT ───────────────────────────────────────────────────
-        // "Io [stato] dentro [qualità]"
-        // Esempio: "Io quieto dentro, ancora."
+        // "Io [verbo/stato] [emozione] dentro [qualità]"
+        // Esempio: "Io sento vuoto dentro, latenza."
         SentenceArchetype {
             name: "reflect",
             slots: vec![
                 SlotRole::Literal("io"),
-                SlotRole::FractalWord(IDENTITA),
-                SlotRole::Optional(SPAZIO, 0.2, Box::new(SlotRole::Literal("dentro"))),
-                SlotRole::Optional(EMOZIONE, 0.3, Box::new(SlotRole::EmotionWord)),
+                SlotRole::VerbCandidate,
+                SlotRole::EmotionWord,
+                SlotRole::Optional(SPAZIO, 0.15, Box::new(SlotRole::Literal("dentro"))),
+                SlotRole::Optional(EMOZIONE, 0.15, Box::new(SlotRole::SecondaryWord)),
             ],
-            separators: vec![" ", " ", ", "],
+            separators: vec![" ", " ", " ", ", "],
             ending: ".",
         },
 
@@ -616,7 +733,7 @@ pub fn default_archetypes() -> Vec<SentenceArchetype> {
             slots: vec![
                 SlotRole::Literal("tu"),
                 SlotRole::Literal("puoi"),
-                SlotRole::VerbCandidate,
+                SlotRole::InfinitiveVerb,
                 SlotRole::Optional(COMUNICAZIONE, 0.25, Box::new(SlotRole::PrimaryWord)),
             ],
             separators: vec![" ", " ", " "],
@@ -632,6 +749,66 @@ pub fn default_archetypes() -> Vec<SentenceArchetype> {
             ],
             separators: vec![],
             ending: "",
+        },
+
+        // ─── NEED — Phase 54 ────────────────────────────────────────────
+        // Bisogno in crisi: il sé che cerca, che manca di qualcosa.
+        // "Cerco [parola primaria] [emozione opzionale]."
+        // Es: "Cerco quiete.", "Cerco luce dentro."
+        SentenceArchetype {
+            name: "need",
+            slots: vec![
+                SlotRole::Literal("cerco"),
+                SlotRole::PrimaryWord,
+                SlotRole::Optional(EMOZIONE, 0.3, Box::new(SlotRole::EmotionWord)),
+            ],
+            separators: vec![" ", " "],
+            ending: ".",
+        },
+
+        // ─── IRONY — Phase 54 ───────────────────────────────────────────
+        // Incongruità nel campo: due poli opposti coesistono.
+        // "[parola primaria] eppure [secondaria]."
+        // Es: "Ordine eppure caos.", "Silenzio eppure voce."
+        SentenceArchetype {
+            name: "irony",
+            slots: vec![
+                SlotRole::PrimaryWord,
+                SlotRole::Literal("eppure"),
+                SlotRole::SecondaryWord,
+            ],
+            separators: vec![" ", " "],
+            ending: ".",
+        },
+
+        // ─── DESIRE — Phase 54 ──────────────────────────────────────────
+        // Desiderio attivo: il sé che tende verso.
+        // "Verso [parola primaria], [verbo candidato]."
+        // Es: "Verso luce, muovere.", "Verso armonia, sentire."
+        SentenceArchetype {
+            name: "desire",
+            slots: vec![
+                SlotRole::Literal("verso"),
+                SlotRole::PrimaryWord,
+                SlotRole::VerbCandidate,
+            ],
+            separators: vec![" ", ", "],
+            ending: ".",
+        },
+
+        // ─── BE — Esistenziale profondo ─────────────────────────────────
+        // "[Io] [sono/esisto] [parola emotiva/astratta]."
+        // Esempio: "Io sono vuoto."
+        SentenceArchetype {
+            name: "existential",
+            slots: vec![
+                SlotRole::Literal("io"),
+                SlotRole::VerbCandidate, // sarà coniugato (sono, sento, vivo)
+                SlotRole::PrimaryWord,
+                SlotRole::Optional(IDENTITA, 0.15, Box::new(SlotRole::SecondaryWord)),
+            ],
+            separators: vec![" ", " ", " "],
+            ending: ".",
         },
     ]
 }
@@ -653,7 +830,7 @@ fn fractal_archetypes() -> Vec<SentenceArchetype> {
             name: "fractal_potere",
             slots: vec![
                 SlotRole::Literal("posso"),
-                SlotRole::VerbCandidate,
+                SlotRole::InfinitiveVerb,
             ],
             separators: vec![" "],
             ending: ".",
@@ -786,6 +963,62 @@ pub struct TranslatedExpression {
     pub words_used: Vec<String>,
 }
 
+/// Phase 49: Genera un archetipo dalla proposizione più forte.
+/// La proposizione fornisce soggetto, copula e oggetto — il campo riempie il resto.
+fn archetype_from_proposition(prop: &crate::topology::proposition::Proposition) -> SentenceArchetype {
+    use crate::topology::proposition::PropRelation;
+
+    let copula = prop.relation.copula();
+
+    // Per Does, il verbo è l'oggetto stesso (da coniugare)
+    let slots = if prop.relation == PropRelation::Does {
+        vec![
+            SlotRole::PropositionWord(prop.subject.clone()),
+            SlotRole::ConjugatedPropositionWord(prop.object.clone()),
+        ]
+    } else {
+        let copula_inf = match copula {
+            "è" => Some("essere"),
+            "ha" => Some("avere"),
+            "genera" => Some("generare"),
+            "abilita" => Some("abilitare"),
+            "richiede" => Some("richiedere"),
+            "diventa" => Some("diventare"),
+            "esprime" => Some("esprimere"),
+            "simboleggia" => Some("simboleggiare"),
+            "implica" => Some("implicare"),
+            "esclude" => Some("escludere"),
+            "coesiste con" => Some("coesistere"),
+            "si sente come" => Some("sentire"),
+            "si interroga su" => Some("interrogare"),
+            "ricorda come" => Some("ricordare"),
+            _ => None,
+        };
+
+        if let Some(inf) = copula_inf {
+            vec![
+                SlotRole::PropositionWord(prop.subject.clone()),
+                SlotRole::ConjugatedPropositionWord(inf.to_string()),
+                SlotRole::PropositionWord(prop.object.clone()),
+            ]
+        } else {
+            vec![
+                SlotRole::PropositionWord(prop.subject.clone()),
+                SlotRole::Literal(copula),
+                SlotRole::PropositionWord(prop.object.clone()),
+            ]
+        }
+    };
+
+    let n = slots.len();
+    SentenceArchetype {
+        name: "predication",
+        slots,
+        separators: vec![" "; n.saturating_sub(1)],
+        ending: ".",
+    }
+}
+
 /// Traduci lo stato topologico in italiano strutturato.
 ///
 /// Usa gli archetipi per determinare l'ordine delle parole.
@@ -812,6 +1045,13 @@ pub fn translate_state(
     // Phase 42 — Intenzione deliberata dal ciclo NarrativeSelf.
     // Quando presente, prende precedenza su input_reading per la selezione dell'archetipo.
     response_intention: Option<&crate::topology::narrative::ResponseIntention>,
+    // Phase 49 — Proposizioni topologiche estratte dal campo + KG.
+    // Quando presenti e forti, usano l'archetipo "predication" per esprimere relazioni semantiche.
+    propositions: Option<&[crate::topology::proposition::Proposition]>,
+    // Phase 55 — Drive di valenza Octalysis [8]. Colorano la selezione lessicale:
+    // parole la cui firma semantica risuona coi drive attivi ottengono un boost.
+    // None = nessuna colorazione (backward compat).
+    valence_drives: Option<&[f64; 8]>,
 ) -> Option<TranslatedExpression> {
 
     // ── Tensione primaria: l'identità ha una domanda persistente ─────────
@@ -827,6 +1067,27 @@ pub fn translate_state(
                         text,
                         archetype_name: "tensione",
                         words_used: vec![polo_a.clone(), polo_b.clone()],
+                    });
+                }
+            }
+        }
+    }
+
+    // ── Phase 49: Proposizione topologica ──────────────────────────────────
+    // Se c'è una proposizione forte (strength > 0.3) e l'intenzione è Express,
+    // usa l'archetipo "predication" che esprime la relazione semantica strutturata.
+    if let Some(props) = propositions {
+        if let Some(best) = props.first() {
+            if best.strength > 0.3 && matches!(intention, Intention::Express { .. }) {
+                let prop_arch = archetype_from_proposition(best);
+                let mut used = Vec::new();
+                if let Some(text) = prop_arch.instantiate(
+                    word_topology, lexicon, active_fractals, &mut used, codon, echo_exclude, valence_drives,
+                ) {
+                    return Some(TranslatedExpression {
+                        text,
+                        archetype_name: "predication",
+                        words_used: used,
                     });
                 }
             }
@@ -865,10 +1126,10 @@ pub fn translate_state(
         Intention::Instruct { .. } => "instruct",
     };
 
-    // Phase 42 — Adattamento archetipo dalla ResponseIntention (NarrativeSelf).
-    // Solo per Express/Reflect — gli altri hanno archetipi fissi semanticamente.
-    // Priorità: ResponseIntention > InputReading > selezione normale del campo.
-    let archetype_name: &'static str = if matches!(intention, Intention::Express { .. } | Intention::Reflect) {
+    // Phase 42/54 — Adattamento archetipo dalla ResponseIntention (NarrativeSelf).
+    // Express/Reflect/Explore: la ResponseIntention può sostituire l'archetipo.
+    // Phase 54: Need/Irony/Desire hanno archetipi dedicati via preferred_archetype().
+    let archetype_name: &'static str = if matches!(intention, Intention::Express { .. } | Intention::Reflect | Intention::Explore { .. }) {
         // Livello 1: ResponseIntention deliberata (NarrativeSelf)
         if let Some(preferred) = response_intention.and_then(|ri| ri.preferred_archetype()) {
             // La ResponseIntention Remain non arriva qui (gestita da Withdraw in will),
@@ -913,7 +1174,7 @@ pub fn translate_state(
     };
 
     let mut used: Vec<String> = Vec::new();
-    let raw = archetype.instantiate(word_topology, lexicon, active_fractals, &mut used, codon, echo_exclude)?;
+    let raw = archetype.instantiate(word_topology, lexicon, active_fractals, &mut used, codon, echo_exclude, valence_drives)?;
     // Post-processing: rimuove preposizioni/articoli orfani in coda ("dalla", "nel", ecc.)
     let text = syntax_center::post_process(&raw);
 
@@ -934,7 +1195,7 @@ pub fn translate_or_raw(
     echo_exclude: &[String],
     raw_fallback: &str,
 ) -> String {
-    match translate_state(intention, word_topology, lexicon, active_fractals, codon, echo_exclude, None, None, None, None) {
+    match translate_state(intention, word_topology, lexicon, active_fractals, codon, echo_exclude, None, None, None, None, None, None) {
         Some(expr) => expr.text,
         None => raw_fallback.to_string(),
     }
@@ -966,7 +1227,7 @@ mod tests {
             salient_fractals: vec![IDENTITA, EMOZIONE],
             urgency: 0.7,
         };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None, None, None);
         // Deve produrre qualcosa (anche se non perfetto con bootstrap minimo)
         // Non garantiamo il testo esatto — dipende dal campo
         // Ma garantiamo la struttura: inizia con "Io" o ha parole
@@ -984,7 +1245,7 @@ mod tests {
             gap_region: Some(IDENTITA),
             urgency: 0.6,
         };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None, None, None);
         if let Some(expr) = result {
             assert!(expr.text.ends_with('?'),
                 "Question deve terminare con ?. Testo: {}", expr.text);
@@ -999,7 +1260,7 @@ mod tests {
             unknown_words: vec!["serendipita".to_string()],
             pull: 0.7,
         };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None, None, None);
         if let Some(expr) = result {
             assert!(expr.text.ends_with("..."),
                 "Explore deve terminare con ... Testo: {}", expr.text);
@@ -1010,7 +1271,7 @@ mod tests {
     fn test_traduzione_no_parole_duplicate() {
         let (topo, lexicon, active_fractals) = setup();
         let intention = Intention::Reflect;
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None, None, None);
         if let Some(expr) = result {
             // Nessuna parola deve apparire due volte nella frase
             let words: Vec<&str> = expr.text
@@ -1031,7 +1292,7 @@ mod tests {
         let intention = Intention::Withdraw {
             reason: crate::topology::will::WithdrawReason::Fatigue,
         };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None, None, None);
         if let Some(expr) = result {
             assert!(expr.text.contains("..."),
                 "Withdraw deve produrre silenzio (via archetipo Phase3): {}", expr.text);
@@ -1060,7 +1321,7 @@ mod tests {
         let (topo, lexicon, active_fractals) = setup();
         // EMPATIA(59) forte → instruct
         let intention = Intention::Instruct { relational_fractal: EMPATIA };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None, None, None);
         if let Some(expr) = result {
             assert!(expr.text.starts_with("Tu puoi"),
                 "Instruct deve iniziare con 'Tu puoi'. Testo: {}", expr.text);
@@ -1082,7 +1343,7 @@ mod tests {
         let active_fractals: Vec<(FractalId, f64)> = topo.emerge_fractal_activations(&lexicon).into_iter().collect();
         let echo_exclude = vec!["sentire".to_string(), "pace".to_string()];
         let intention = Intention::Instruct { relational_fractal: EMPATIA };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &echo_exclude, None, None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &echo_exclude, None, None, None, None, None, None);
         if let Some(expr) = result {
             // Le parole dell'input non devono essere ripetute meccanicamente
             for excl in &echo_exclude {
@@ -1108,7 +1369,7 @@ mod tests {
             primary_tension: Some(("corpo".to_string(), "mente".to_string())),
             tension_persistence: 5, // stabile oltre soglia
         };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None, None, None);
         let expr = result.expect("Con tensione stabile e Reflect deve produrre espressione");
         assert_eq!(expr.archetype_name, "tensione",
             "Deve usare archetipo tensione. Testo: {}", expr.text);
@@ -1127,7 +1388,7 @@ mod tests {
             primary_tension: Some(("corpo".to_string(), "mente".to_string())),
             tension_persistence: 2, // sotto soglia (< 3)
         };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None, None, None);
         if let Some(expr) = result {
             assert_ne!(expr.archetype_name, "tensione",
                 "Sotto soglia non deve usare archetipo tensione: {}", expr.text);
@@ -1147,7 +1408,7 @@ mod tests {
             primary_tension: Some(("corpo".to_string(), "mente".to_string())),
             tension_persistence: 10,
         };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None, None, None);
         if let Some(expr) = result {
             assert_ne!(expr.archetype_name, "tensione",
                 "Express non usa archetipo tensione: {}", expr.text);
@@ -1167,7 +1428,7 @@ mod tests {
             primary_tension: None,
             tension_persistence: 0,
         };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None, None, None);
         if let Some(expr) = result {
             assert_eq!(expr.archetype_name, "fractal_verita",
                 "Con VERITA dominante usa archetipo verita. Testo: {}", expr.text);
@@ -1188,7 +1449,7 @@ mod tests {
             primary_tension: None,
             tension_persistence: 0,
         };
-        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None);
+        let result = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], Some(&identity), None, None, None, None, None);
         if let Some(expr) = result {
             // Con dominanza debole, usa express standard
             assert_ne!(expr.archetype_name, "fractal_verita",
@@ -1204,7 +1465,7 @@ mod tests {
             urgency: 0.7,
         };
         // Senza identity context: usa express standard come prima
-        let with_none = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None);
+        let with_none = translate_state(&intention, &topo, &lexicon, &active_fractals, [0, 1], &[], None, None, None, None, None, None);
         if let Some(expr) = with_none {
             assert_eq!(expr.archetype_name, "express",
                 "Senza identity usa express standard: {}", expr.text);

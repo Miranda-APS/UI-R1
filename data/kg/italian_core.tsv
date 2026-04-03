@@ -21,24 +21,14 @@ materia	IS_A	sostanza
 energia	IS_A	forza
 
 # ─── ESSERI VIVENTI ─────────────────────────────────────────────────────────
-essere_vivente	HAS	vita
-essere_vivente	HAS	corpo
-essere_vivente	DOES	respirare
-essere_vivente	DOES	nutrirsi
-essere_vivente	DOES	crescere
-essere_vivente	DOES	morire
-essere_vivente	DOES	sentire
-essere_vivente	CAUSES	esperienza
 
 # ─── REGNO ANIMALE ──────────────────────────────────────────────────────────
-animale	IS_A	essere_vivente
 animale	DOES	mangiare
 animale	DOES	dormire
 animale	DOES	muoversi
 animale	HAS	corpo
 animale	HAS	sensi
 mammifero	IS_A	animale
-mammifero	HAS	sangue_caldo
 mammifero	HAS	pelo
 mammifero	DOES	allattare
 uccello	IS_A	animale
@@ -53,7 +43,6 @@ pesce	DOES	nuotare
 rettile	IS_A	animale
 rettile	HAS	squame
 insetto	IS_A	animale
-insetto	HAS	sei_zampe
 
 # ─── ANIMALI COMUNI ─────────────────────────────────────────────────────────
 cane	IS_A	mammifero
@@ -83,15 +72,6 @@ serpente	IS_A	rettile
 serpente	DOES	strisciare
 
 # ─── ESSERI UMANI ──────────────────────────────────────────────────────────
-essere_umano	IS_A	mammifero
-essere_umano	IS_A	persona
-essere_umano	HAS	mente
-essere_umano	HAS	linguaggio
-essere_umano	DOES	pensare
-essere_umano	DOES	parlare
-essere_umano	DOES	imparare
-essere_umano	DOES	creare
-persona	IS_A	essere_umano
 persona	HAS	identità
 persona	HAS	emozione
 persona	HAS	coscienza
@@ -171,7 +151,6 @@ mente	DOES	ricordare
 coscienza	IS_A	stato
 coscienza	HAS	percezione
 coscienza	HAS	attenzione
-pensiero	IS_A	processo_mentale
 pensiero	CAUSES	azione
 pensiero	CAUSES	comprensione
 memoria	IS_A	capacità
@@ -179,7 +158,6 @@ memoria	DOES	ricordare
 memoria	DOES	dimenticare
 immaginazione	IS_A	capacità
 immaginazione	DOES	creare
-intuizione	IS_A	processo_mentale
 comprensione	IS_A	stato
 comprensione	CAUSES	saggezza
 intelligenza	IS_A	capacità
@@ -187,7 +165,6 @@ intelligenza	DOES	risolvere
 intelligenza	DOES	imparare
 
 # ─── EMOZIONI ──────────────────────────────────────────────────────────────
-emozione	IS_A	stato_interno
 emozione	HAS	intensità
 emozione	CAUSES	azione
 felicità	IS_A	emozione
@@ -251,7 +228,6 @@ domanda	IS_A	frase
 domanda	CAUSES	risposta
 risposta	IS_A	frase
 saluto	IS_A	comunicazione
-saluto	DOES	aprire_conversazione
 ciao	SIMILAR_TO	saluto
 ciao	SIMILAR_TO	benvenuto
 arrivederci	SIMILAR_TO	addio
@@ -335,7 +311,6 @@ sole	CAUSES	vita
 luna	IS_A	satellite
 luna	DOES	brillare
 luna	HAS	fasi
-stella	IS_A	corpo_celeste
 stella	DOES	brillare
 mare	IS_A	acqua
 mare	HAS	onde
@@ -353,7 +328,6 @@ cielo	HAS	nuvole
 cielo	HAS	stelle
 
 # ─── PIANTE ─────────────────────────────────────────────────────────────────
-pianta	IS_A	essere_vivente
 pianta	DOES	crescere
 pianta	DOES	fiorire
 pianta	HAS	radici
@@ -650,7 +624,6 @@ essere	IS_A	fondamento
 essere	OPPOSITE_OF	niente
 niente	IS_A	assenza
 esistenza	IS_A	stato
-esistenza	OPPOSITE_OF	non_esistenza
 
 # ─── RELAZIONI SOCIALI ──────────────────────────────────────────────────────
 amicizia	IS_A	relazione

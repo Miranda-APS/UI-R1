@@ -13,7 +13,7 @@
 /// Per ogni parola attiva nel campo, restituisce le parole logicamente
 /// correlate da iniettare come boost nel campo topologico.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use crate::topology::knowledge_graph::KnowledgeGraph;
 use crate::topology::relation::RelationType;
 
@@ -191,74 +191,92 @@ impl<'a> InferenceEngine<'a> {
     /// Forza = confidence × field_boost_strength × decay_per_hop
     pub fn field_boosts(&self, word: &str) -> Vec<(String, f32)> {
         if !self.kg.contains(word) { return vec![]; }
-        let mut boosts: Vec<(String, f32)> = Vec::new();
 
-        // IS_A diretti (forza piena)
-        for t in self.kg.query_objects(word, RelationType::IsA) {
-            boosts.push((t.to_string(), RelationType::IsA.field_boost_strength()));
-        }
-        // IS_A transitivi (forza ridotta per hop)
+        // Calcola type_chain UNA SOLA VOLTA e riusa per IS_A, DOES, HAS
         let isa_chain = self.type_chain(word);
+
+        // Boosts diretti per DOES e HAS (per distinguere forza diretta vs ereditata)
+        let direct_does: HashSet<String> = self.kg.query_objects(word, RelationType::Does)
+            .into_iter().map(|s| s.to_string()).collect();
+        let direct_has: HashSet<String> = self.kg.query_objects(word, RelationType::Has)
+            .into_iter().map(|s| s.to_string()).collect();
+
+        // HashMap per deduplicazione O(1) — mantieni il boost massimo
+        let mut map: HashMap<String, f32> = HashMap::new();
+        let mut push = |k: String, v: f32| {
+            if k != word {
+                let e = map.entry(k).or_insert(0.0);
+                if v > *e { *e = v; }
+            }
+        };
+
+        // Phase 48: ogni boost usa confidence per-arco, non costante per tipo.
+        // Forza = field_boost_strength(tipo) × confidence_arco × decay_hop
+
+        // IS_A diretti — con confidence per-arco
+        let isa_base = RelationType::IsA.field_boost_strength();
+        for (t, conf) in self.kg.query_objects_weighted(word, RelationType::IsA) {
+            push(t.to_string(), isa_base * conf);
+        }
+        // IS_A transitivi con decay per hop
         for (i, ancestor) in isa_chain.iter().enumerate().skip(1) {
             let decay = 0.7_f32.powi(i as i32);
-            boosts.push((ancestor.clone(), RelationType::IsA.field_boost_strength() * decay));
+            push(ancestor.clone(), isa_base * decay);
         }
 
-        // DOES diretti + ereditati
-        for action in self.what_does(word) {
-            // Più basso per azioni ereditate
-            let strength = if self.kg.query_objects(word, RelationType::Does).contains(&action.as_str()) {
-                RelationType::Does.field_boost_strength()
-            } else {
-                RelationType::Does.field_boost_strength() * 0.6
-            };
-            boosts.push((action, strength));
+        // DOES diretti + ereditati — con confidence per-arco
+        let does_base = RelationType::Does.field_boost_strength();
+        for (a, conf) in self.kg.query_objects_weighted(word, RelationType::Does) {
+            push(a.to_string(), does_base * conf);
         }
-
-        // HAS diretti + ereditati
-        for prop in self.what_has(word) {
-            let strength = if self.kg.query_objects(word, RelationType::Has).contains(&prop.as_str()) {
-                RelationType::Has.field_boost_strength()
-            } else {
-                RelationType::Has.field_boost_strength() * 0.6
-            };
-            boosts.push((prop, strength));
-        }
-
-        // CAUSES
-        for effect in self.what_causes(word) {
-            boosts.push((effect, RelationType::Causes.field_boost_strength()));
-        }
-
-        // SIMILAR_TO (alta forza — sono quasi sinonimi)
-        for sim in self.similar_to(word) {
-            boosts.push((sim, RelationType::SimilarTo.field_boost_strength()));
-        }
-
-        // OPPOSITE_OF (forza bassa — tensione, non risonanza)
-        for opp in self.opposites(word) {
-            boosts.push((opp, RelationType::OppositeOf.field_boost_strength()));
-        }
-
-        // PART_OF (di cosa è parte)
-        for whole in self.part_of_what(word) {
-            boosts.push((whole, RelationType::PartOf.field_boost_strength()));
-        }
-
-        // Deduplica: mantieni il boost più alto per ogni parola
-        let mut deduped: Vec<(String, f32)> = Vec::new();
-        for (word_b, strength) in boosts {
-            if word_b == word { continue; } // non boostare sé stesso
-            match deduped.iter_mut().find(|(w, _)| w == &word_b) {
-                Some((_, s)) => { if strength > *s { *s = strength; } }
-                None => deduped.push((word_b, strength)),
+        for ancestor in &isa_chain {
+            for a in self.kg.query_objects(ancestor, RelationType::Does) {
+                if !direct_does.contains(a) {
+                    push(a.to_string(), does_base * 0.6);
+                }
             }
         }
 
-        // Ordina per forza decrescente, cap a 20 per parola sorgente
-        deduped.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-        deduped.truncate(20);
-        deduped
+        // HAS diretti + ereditati — con confidence per-arco
+        let has_base = RelationType::Has.field_boost_strength();
+        for (p, conf) in self.kg.query_objects_weighted(word, RelationType::Has) {
+            push(p.to_string(), has_base * conf);
+        }
+        for ancestor in &isa_chain {
+            for p in self.kg.query_objects(ancestor, RelationType::Has) {
+                if !direct_has.contains(p) {
+                    push(p.to_string(), has_base * 0.6);
+                }
+            }
+        }
+
+        // CAUSES, SIMILAR_TO, OPPOSITE_OF, PART_OF, USED_FOR — con confidence per-arco
+        for (effect, conf) in self.kg.query_objects_weighted(word, RelationType::Causes) {
+            push(effect.to_string(), RelationType::Causes.field_boost_strength() * conf);
+        }
+        for (sim, conf) in self.kg.query_objects_weighted(word, RelationType::SimilarTo) {
+            push(sim.to_string(), RelationType::SimilarTo.field_boost_strength() * conf);
+        }
+        for (opp, conf) in self.kg.query_objects_weighted(word, RelationType::OppositeOf) {
+            push(opp.to_string(), RelationType::OppositeOf.field_boost_strength() * conf);
+        }
+        for (whole, conf) in self.kg.query_objects_weighted(word, RelationType::PartOf) {
+            push(whole.to_string(), RelationType::PartOf.field_boost_strength() * conf);
+        }
+        for (obj, conf) in self.kg.query_objects_weighted(word, RelationType::FeelsAs) {
+            push(obj.to_string(), RelationType::FeelsAs.field_boost_strength() * conf);
+        }
+        for (obj, conf) in self.kg.query_objects_weighted(word, RelationType::WondersAbout) {
+            push(obj.to_string(), RelationType::WondersAbout.field_boost_strength() * conf);
+        }
+        for (obj, conf) in self.kg.query_objects_weighted(word, RelationType::RemembersAs) {
+            push(obj.to_string(), RelationType::RemembersAs.field_boost_strength() * conf);
+        }
+
+        let mut result: Vec<(String, f32)> = map.into_iter().collect();
+        result.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        result.truncate(20);
+        result
     }
 
     /// Risposta a "cosa è X?": tipo diretto + caratteristiche principali.

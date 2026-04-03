@@ -12,7 +12,7 @@ use prometeo::topology::persistence::PrometeoState;
 use prometeo::topology::composition::{compose_phrase, analyze_composition};
 use prometeo::topology::dream::SleepPhase;
 use prometeo::topology::locus::MovementKind;
-use prometeo::topology::dual_field::DualField;
+
 
 /// File di stato in formato binario SimplDB (default, veloce).
 const BINARY_STATE: &str = "prometeo_topology_state.bin";
@@ -40,6 +40,7 @@ fn main() {
                 let perturbations = state.total_perturbations;
                 state.restore_lexicon(&mut engine);
                 engine.lexicon.apply_curated_signatures();
+                engine.lexicon.load_phenomenology_signatures();
                 engine.recompute_all_word_affinities();
                 engine.update_semantic_axes();
                 engine.recalibrate_emergent_dimensions();
@@ -76,6 +77,7 @@ fn main() {
                 let perturbations = state.total_perturbations;
                 state.restore_lexicon(&mut engine);
                 engine.lexicon.apply_curated_signatures();
+                engine.lexicon.load_phenomenology_signatures();
                 engine.recompute_all_word_affinities();
                 engine.update_semantic_axes();
                 engine.recalibrate_emergent_dimensions();
@@ -98,6 +100,19 @@ fn main() {
         auto_teach_lessons(&mut engine);
     }
 
+    // Carica il Knowledge Graph — la comprensione semantica del mondo.
+    // Senza KG, la propagazione è cieca: i vicini vengono solo dai simplessi
+    // (co-occorrenze cristallizzate), non dalle relazioni logiche (IS_A, CAUSES...).
+    let kg_path = std::path::PathBuf::from("prometeo_kg.json");
+    if kg_path.exists() {
+        engine.load_kg_from_file(&kg_path);
+        // CRITICO: ricostruire PF1 DOPO il KG — altrimenti i vicini nel campo
+        // non includono le relazioni semantiche (IS_A, CAUSES...).
+        engine.rebuild_pf_field();
+        println!("  [KG caricato: {} archi → PF1 ricostruito con vicini semantici]",
+            engine.kg.edge_count);
+    }
+
     // Phase 43B — Narrativa fondativa: chiamata solo al primo avvio (is_born == false).
     // Se Prometeo è già nato (stato caricato), is_born = true e la funzione esce subito.
     if !engine.narrative_self.is_born {
@@ -118,14 +133,11 @@ fn main() {
     println!("           :know <fatto> [dominio]  :procedures  :save :quit");
     println!("           :read/:leggi <file>  — lettura attiva con analisi e curiosità");
     println!("           :perceive <svg>  — esperimento: percezione visiva SVG");
-    println!("           :dual auto [N]  :dual human <testo>  :dual align  :dual report");
+    println!("           :needs  :desires  — gerarchia bisogni e desideri attivi");
     println!();
 
     let stdin = io::stdin();
     let mut idle_ticks = 0u32;
-    // Campo duale — creato lazy al primo :dual
-    let mut dual_field: Option<DualField> = None;
-
     loop {
         // Mostra prompt con stato del sogno
         let phase_indicator = match engine.dream.phase {
@@ -590,28 +602,6 @@ fn main() {
                         &input[9..]
                     };
                     run_perceive_svg(&mut engine, svg.trim());
-                    continue;
-                }
-                _ if input.starts_with(":dual") => {
-                    let args = input.trim_start_matches(":dual").trim();
-                    // Crea DualField lazy al primo uso
-                    if dual_field.is_none() {
-                        let bin_path = std::path::PathBuf::from(BINARY_STATE);
-                        if !bin_path.exists() {
-                            println!("    [dual: nessuno stato salvato — usa :save prima]");
-                        } else {
-                            match DualField::new(&bin_path) {
-                                Ok(d) => {
-                                    dual_field = Some(d);
-                                    println!("    [campo duale inizializzato — Adamo + Eva nati]");
-                                }
-                                Err(e) => println!("    [dual: errore — {}]", e),
-                            }
-                        }
-                    }
-                    if let Some(ref mut dual) = dual_field {
-                        run_dual_command(dual, args);
-                    }
                     continue;
                 }
                 _ => {
@@ -1799,6 +1789,7 @@ fn reteach_all(engine: &mut PrometeoTopologyEngine) {
         }
         // Ricalibra dopo tutti i batch — applica prima le firme curate
         engine.lexicon.apply_curated_signatures();
+        engine.lexicon.load_phenomenology_signatures();
         engine.recompute_all_word_affinities();
         engine.update_semantic_axes();
         engine.recalibrate_emergent_dimensions();
@@ -2345,85 +2336,6 @@ fn export_json(engine: &PrometeoTopologyEngine) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Phase 30 — DualField CLI
-// ---------------------------------------------------------------------------
-
-/// Esegue un comando :dual <args> su un DualField gia' inizializzato.
-///
-/// Sottocomandi:
-///   (vuoto)         — 1 ciclo automatico
-///   auto [N]        — N cicli automatici (default 11)
-///   human <testo>   — tu parli, Adamo e Eva rispondono
-///   align           — mostra metrica di allineamento
-///   report          — report emergenza completo
-fn run_dual_command(dual: &mut DualField, args: &str) {
-    if args.is_empty() || args == "auto" {
-        dual_auto(dual, 11);
-    } else if let Some(rest) = args.strip_prefix("auto") {
-        let n: usize = rest.trim().parse().unwrap_or(11);
-        dual_auto(dual, n);
-    } else if let Some(text) = args.strip_prefix("human ") {
-        dual_human(dual, text.trim());
-    } else if args == "align" {
-        let a = dual.alignment();
-        let rep = dual.emergence_report();
-        println!();
-        println!("  Allineamento simpliciale:  {:.3}", a);
-        println!("  Stadio emergenza:          {}", rep.status());
-        println!("  Momenti Tiferet:           {}", rep.tiferet_count);
-        println!("  Ciclo:                     {}", rep.cycle);
-        println!();
-    } else if args == "report" {
-        let rep = dual.emergence_report();
-        println!();
-        let stadio = rep.status();
-        let stadio_trunc = if stadio.len() > 26 { &stadio[..26] } else { stadio };
-        println!("  ╔════════════════════════════════════╗");
-        println!("  ║     CAMPO DUALE — Phase 30         ║");
-        println!("  ╠════════════════════════════════════╣");
-        println!("  ║  Ciclo:         {:>5}               ║", rep.cycle);
-        println!("  ║  Allineamento:  {:.3}                ║", rep.alignment);
-        println!("  ║  Div. Codon:    {:>5}               ║", rep.codon_divergence);
-        println!("  ║  Tiferet:       {:>5}               ║", rep.tiferet_count);
-        println!("  ║  Stadio: {:<26}  ║", stadio_trunc);
-        println!("  ╚════════════════════════════════════╝");
-        println!();
-    } else {
-        println!("    [dual: sottocomandi — auto [N] | human <testo> | align | report]");
-    }
-}
-
-fn dual_auto(dual: &mut DualField, n: usize) {
-    println!();
-    println!("  [Campo Duale — {} cicli]", n);
-    println!();
-    for _ in 0..n {
-        let turn = dual.tick();
-        let speaker = turn.speaker_name();
-        let tiferet_mark = if turn.tiferet_this { "  ✦ Tiferet" } else { "" };
-        println!("  {:5}  {}: {}{}", turn.cycle, speaker, turn.text, tiferet_mark);
-        if turn.tiferet_this {
-            let rep = dual.emergence_report();
-            println!("         [align={:.3}  codon-div={}]", rep.alignment, rep.codon_divergence);
-        }
-    }
-    println!();
-    let rep = dual.emergence_report();
-    println!("  [align={:.3}  stadio={}  tiferet={}/{}]",
-        rep.alignment, rep.status(), rep.tiferet_count, rep.cycle);
-    println!();
-}
-
-fn dual_human(dual: &mut DualField, text: &str) {
-    println!();
-    println!("  Tu: {}", text);
-    let (adamo_resp, eva_resp) = dual.human_voice(text);
-    println!("  Adamo: {}", adamo_resp);
-    println!("  Eva:   {}", eva_resp);
-    println!("  [align={:.3}]", dual.alignment());
-    println!();
-}
 
 // ---------------------------------------------------------------------------
 // Phase 31 — Lettura Attiva

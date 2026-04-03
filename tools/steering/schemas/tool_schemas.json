@@ -1,0 +1,182 @@
+{
+  "tools": [
+    {
+      "name": "analyze_field",
+      "description": "Analizza lo stato del campo topologico e identifica anomalie, nodi isolati, o pattern interessanti. Restituisce un report sintetico.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "focus": {
+            "type": "string",
+            "enum": ["isolated_nodes", "dense_clusters", "bridge_concepts", "fractal_drift", "semantic_gaps"],
+            "description": "Area di focus dell'analisi"
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Profondità analisi (1=sintetico, 5=dettagliato)"
+          }
+        },
+        "required": ["focus", "depth"]
+      }
+    },
+    {
+      "name": "query_concept",
+      "description": "Interroga il Knowledge Graph per ottenere relazioni di un concetto specifico.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "concept": {
+            "type": "string",
+            "description": "Il concetto da interrogare (parola italiana)"
+          },
+          "relation_type": {
+            "type": "string",
+            "enum": ["IsA", "SimilarTo", "OppositeOf", "Has", "Does", "PartOf", "Causes", "RelatedTo", "Any"],
+            "description": "Tipo di relazione da cercare, Any per tutte"
+          }
+        },
+        "required": ["concept", "relation_type"]
+      }
+    },
+    {
+      "name": "propose_connection",
+      "description": "Propone una nuova connessione semantica tra concetti. Sarà validata prima dell'inserimento.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string",
+            "description": "Concetto sorgente"
+          },
+          "relation": {
+            "type": "string",
+            "enum": ["IsA", "SimilarTo", "OppositeOf", "Has", "Does", "PartOf", "Causes", "RelatedTo"],
+            "description": "Tipo di relazione"
+          },
+          "object": {
+            "type": "string",
+            "description": "Concetto target"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Confidenza nella connessione (0.0-1.0)"
+          },
+          "reasoning": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Breve spiegazione del perché questa connessione ha senso nel campo topologico"
+          }
+        },
+        "required": ["subject", "relation", "object", "confidence", "reasoning"]
+      }
+    },
+    {
+      "name": "check_fractal_consistency",
+      "description": "Verifica se un concetto è coerente con la firma frattale attesa.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "concept": {
+            "type": "string",
+            "description": "Concetto da verificare"
+          },
+          "expected_fractal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 63,
+            "description": "ID frattale atteso (0-63), null per auto-detect"
+          }
+        },
+        "required": ["concept"]
+      }
+    },
+    {
+      "name": "find_analogies",
+      "description": "Trova pattern analogici: se A è a B come C è a ?",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "concept_a": { "type": "string" },
+          "concept_b": { "type": "string" },
+          "concept_c": { "type": "string" },
+          "max_suggestions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 3
+          }
+        },
+        "required": ["concept_a", "concept_b", "concept_c"]
+      }
+    },
+    {
+      "name": "log_opinion",
+      "description": "Registra un'opinione, osservazione o riflessione sullo stato del sistema. Usa questo per pensieri intermedi.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["observation", "concern", "insight", "suggestion", "meta"],
+            "description": "Tipo di opinione"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Il contenuto dell'opinione/riflessione"
+          },
+          "related_concepts": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Concetti correlati a questa opinione"
+          }
+        },
+        "required": ["category", "content"]
+      }
+    },
+    {
+      "name": "commit_changes",
+      "description": "Applica le modifiche proposte al Knowledge Graph. Richiede conferma esplicita.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "description": "ID del batch di modifiche da committare"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "default": true,
+            "description": "Se true, simula senza modificare"
+          }
+        },
+        "required": ["batch_id"]
+      }
+    },
+    {
+      "name": "pause_loop",
+      "description": "Mette in pausa il loop agentico per N secondi. Usa per rate limiting o attesa risorse.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300,
+            "description": "Secondi di pausa"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Motivo della pausa"
+          }
+        },
+        "required": ["seconds", "reason"]
+      }
+    }
+  ]
+}

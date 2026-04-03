@@ -84,3 +84,11 @@ path = "src/bin/import_kg.rs"
 [[bin]]
 name = "rebuild-semantic-topology"
 path = "src/bin/rebuild_semantic_topology.rs"
+
+[[bin]]
+name = "test-grammar"
+path = "src/bin/test_grammar.rs"
+
+[[bin]]
+name = "chat"
+path = "src/bin/chat.rs"

@@ -3,13 +3,11 @@
 /// Ogni arco nel Knowledge Graph ha un tipo semantico preciso.
 /// Non è co-occorrenza statistica — è relazione logica esplicita.
 ///
-/// Analogia visiva: archi colorati nel grafo
-///   Verde  = IS_A    (tassonomia)
-///   Blu    = HAS     (attributi)
-///   Arancio= DOES    (azioni)
-///   Viola  = PART_OF (composizione)
-///   Rosso  = CAUSES  (causalità)
-///   Grigio = OPPOSITE_OF (antonimia)
+/// Categorie:
+///   🟢 Strutturali: ÈUn, Ha, Fa, ParteDi
+///   🔴 Causali:     Causa, Abilita, Richiede, Diventa
+///   🔵 Semantiche:  SimileA, OppositoDi, UsatoPer, Esprime, Simboleggia, ContestoDi
+///   🟡 Logiche:     Implica, Equivale, Esclude, Coesiste
 
 use serde::{Serialize, Deserialize};
 
@@ -19,59 +17,130 @@ use serde::{Serialize, Deserialize};
 
 /// Tipo di relazione semantica tra due concetti.
 /// Ogni tipo ha un significato logico preciso e supporta inferenze diverse.
+///
+/// I nomi dei variant restano in inglese per backward-compatibility della
+/// serializzazione (Serde), ma `nome()` restituisce il nome italiano.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RelationType {
-    /// X IS_A Y — X è un tipo di Y (tassonomia, ereditarietà)
-    /// "cane IS_A animale", "germania IS_A nazione"
-    /// Permette: X eredita tutte le proprietà di Y
+    // ── Strutturali ──────────────────────────────────────────────────────
+    /// X È_UN Y — tassonomia, ereditarietà
+    /// "cane È_UN animale", "germania È_UN nazione"
     IsA,
-
-    /// X HAS Y — X ha la proprietà/parte Y (attributo)
-    /// "nazione HAS confine", "cane HAS pelo"
+    /// X HA Y — attributo, proprietà
+    /// "nazione HA confine", "cane HA pelo"
     Has,
-
-    /// X DOES Y — X compie/esegue l'azione Y (comportamento)
-    /// "cane DOES abbaiare", "sole DOES brillare"
+    /// X FA Y — comportamento, azione
+    /// "cane FA abbaiare", "sole FA brillare"
     Does,
-
-    /// X PART_OF Y — X è una parte di Y (composizione)
-    /// "berlino PART_OF germania", "mano PART_OF corpo"
+    /// X PARTE_DI Y — composizione
+    /// "berlino PARTE_DI germania", "mano PARTE_DI corpo"
     PartOf,
 
-    /// X CAUSES Y — X causa/produce Y (causalità)
-    /// "fuoco CAUSES calore", "paura CAUSES tremore"
+    // ── Causali ──────────────────────────────────────────────────────────
+    /// X CAUSA Y — causalità diretta
+    /// "fuoco CAUSA calore", "paura CAUSA tremore"
     Causes,
+    /// X ABILITA Y — rende possibile
+    /// "chiave ABILITA aprire", "coraggio ABILITA rischiare"
+    Enables,
+    /// X RICHIEDE Y — prerequisito
+    /// "fuoco RICHIEDE ossigeno", "fiducia RICHIEDE tempo"
+    Requires,
+    /// X DIVENTA Y — trasformazione
+    /// "ghiaccio DIVENTA acqua", "seme DIVENTA pianta"
+    TransformsInto,
 
-    /// X OPPOSITE_OF Y — X è l'opposto di Y (antonimia)
-    /// "caldo OPPOSITE_OF freddo", "luce OPPOSITE_OF buio"
-    OppositeOf,
-
-    /// X SIMILAR_TO Y — X è simile a Y (sinonimia larga)
-    /// "ciao SIMILAR_TO saluto", "camminare SIMILAR_TO muoversi"
+    // ── Semantiche ───────────────────────────────────────────────────────
+    /// X SIMILE_A Y — sinonimia larga
+    /// "ciao SIMILE_A saluto", "camminare SIMILE_A muoversi"
     SimilarTo,
-
-    /// X USED_FOR Y — X è usato per Y (funzione)
-    /// "coltello USED_FOR tagliare", "libro USED_FOR leggere"
+    /// X OPPOSTO_DI Y — antonimia
+    /// "caldo OPPOSTO_DI freddo", "luce OPPOSTO_DI buio"
+    OppositeOf,
+    /// X USATO_PER Y — funzione
+    /// "coltello USATO_PER tagliare", "libro USATO_PER leggere"
     UsedFor,
+    /// X ESPRIME Y — manifestazione, espressione
+    /// "sorriso ESPRIME gioia", "pianto ESPRIME dolore"
+    Expresses,
+    /// X SIMBOLEGGIA Y — significato simbolico
+    /// "colomba SIMBOLEGGIA pace", "fuoco SIMBOLEGGIA passione"
+    Symbolizes,
+    /// X CONTESTO_DI Y — cornice, sfondo
+    /// "inverno CONTESTO_DI neve", "guerra CONTESTO_DI paura"
+    ContextOf,
+
+    // ── Fenomenologiche ed Esistenziali (Self-Awareness) ─────────────────
+    /// X FEELS_AS Y — qualità fenomenologica interna
+    /// "paura FEELS_AS restrizione", "connessione FEELS_AS calore"
+    FeelsAs,
+    /// X WONDERS_ABOUT Y — interrogazione originaria
+    /// "coscienza WONDERS_ABOUT origine"
+    WondersAbout,
+    /// X REMEMBERS_AS Y — memoria episodica qualificata emotivamente
+    /// "passato REMEMBERS_AS malinconia"
+    RemembersAs,
+
+    // ── Logiche ──────────────────────────────────────────────────────────
+    /// X IMPLICA Y — se X allora Y (condizionale)
+    /// "pioggia IMPLICA bagnato", "studio IMPLICA conoscenza"
+    Implies,
+    /// X EQUIVALE Y — equivalenza logica forte
+    /// "felicità EQUIVALE gioia", "inizio EQUIVALE principio"
+    Equivalent,
+    /// X ESCLUDE Y — incompatibilità, mutua esclusione
+    /// "vita ESCLUDE morte", "silenzio ESCLUDE rumore"
+    Excludes,
+    /// X COESISTE Y — complementarietà, co-occorrenza necessaria
+    /// "sale COESISTE pepe", "domanda COESISTE risposta"
+    Coexists,
 }
 
 impl RelationType {
-    /// Parsing da stringa TSV (case-insensitive).
+    /// Tutti i tipi di relazione disponibili.
+    pub const ALL: [RelationType; 21] = [
+        Self::IsA, Self::Has, Self::Does, Self::PartOf,
+        Self::Causes, Self::Enables, Self::Requires, Self::TransformsInto,
+        Self::SimilarTo, Self::OppositeOf, Self::UsedFor, Self::Expresses,
+        Self::Symbolizes, Self::ContextOf,
+        Self::FeelsAs, Self::WondersAbout, Self::RemembersAs,
+        Self::Implies, Self::Equivalent, Self::Excludes, Self::Coexists,
+    ];
+
+    /// Parsing da stringa (case-insensitive). Accetta sia italiano che inglese.
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
-            "IS_A" | "ISA" | "È" | "E_UN" => Some(Self::IsA),
+            // Strutturali
+            "IS_A" | "ISA" | "È" | "E_UN" | "È_UN" | "ÈUN" => Some(Self::IsA),
             "HAS" | "HA" | "HAS_PROPERTY" => Some(Self::Has),
             "DOES" | "FA" | "DOES_ACTION" => Some(Self::Does),
-            "PART_OF" | "PARTOF" | "PARTE_DI" => Some(Self::PartOf),
+            "PART_OF" | "PARTOF" | "PARTE_DI" | "PARTEDI" => Some(Self::PartOf),
+            // Causali
             "CAUSES" | "CAUSA" | "CAUSES_EFFECT" => Some(Self::Causes),
-            "OPPOSITE_OF" | "OPPOSITEOF" | "OPPOSTO_DI" => Some(Self::OppositeOf),
-            "SIMILAR_TO" | "SIMILARTO" | "SIMILE_A" => Some(Self::SimilarTo),
-            "USED_FOR" | "USEDFOR" | "USATO_PER" => Some(Self::UsedFor),
+            "ENABLES" | "ABILITA" | "RENDE_POSSIBILE" => Some(Self::Enables),
+            "REQUIRES" | "RICHIEDE" | "NECESSITA" => Some(Self::Requires),
+            "TRANSFORMS_INTO" | "TRANSFORMSINTO" | "DIVENTA" => Some(Self::TransformsInto),
+            // Semantiche
+            "SIMILAR_TO" | "SIMILARTO" | "SIMILE_A" | "SIMILEA" => Some(Self::SimilarTo),
+            "OPPOSITE_OF" | "OPPOSITEOF" | "OPPOSTO_DI" | "OPPOSTODI" => Some(Self::OppositeOf),
+            "USED_FOR" | "USEDFOR" | "USATO_PER" | "USATOPER" => Some(Self::UsedFor),
+            "EXPRESSES" | "ESPRIME" | "MANIFESTA" => Some(Self::Expresses),
+            "SYMBOLIZES" | "SIMBOLEGGIA" | "SIMBOLO_DI" => Some(Self::Symbolizes),
+            "CONTEXT_OF" | "CONTEXTOF" | "CONTESTO_DI" | "CONTESTODI" => Some(Self::ContextOf),
+            // Fenomenologiche
+            "FEELS_AS" | "FEELSAS" | "SENTE_COME" | "SENTECOME" => Some(Self::FeelsAs),
+            "WONDERS_ABOUT" | "WONDERSABOUT" | "SI_CHIEDE_DI" | "SICHIEDEDI" => Some(Self::WondersAbout),
+            "REMEMBERS_AS" | "REMEMBERSAS" | "RICORDA_COME" | "RICORDACOME" => Some(Self::RemembersAs),
+            // Logiche
+            "IMPLIES" | "IMPLICA" | "SE_ALLORA" => Some(Self::Implies),
+            "EQUIVALENT" | "EQUIVALE" | "UGUALE_A" => Some(Self::Equivalent),
+            "EXCLUDES" | "ESCLUDE" | "INCOMPATIBILE" => Some(Self::Excludes),
+            "COEXISTS" | "COESISTE" | "COMPLEMENTA" => Some(Self::Coexists),
             _ => None,
         }
     }
 
-    /// Rappresentazione leggibile.
+    /// Chiave interna per serializzazione/TSV (backward-compatible).
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::IsA => "IS_A",
@@ -79,9 +148,93 @@ impl RelationType {
             Self::Does => "DOES",
             Self::PartOf => "PART_OF",
             Self::Causes => "CAUSES",
-            Self::OppositeOf => "OPPOSITE_OF",
+            Self::Enables => "ENABLES",
+            Self::Requires => "REQUIRES",
+            Self::TransformsInto => "TRANSFORMS_INTO",
             Self::SimilarTo => "SIMILAR_TO",
+            Self::OppositeOf => "OPPOSITE_OF",
             Self::UsedFor => "USED_FOR",
+            Self::Expresses => "EXPRESSES",
+            Self::Symbolizes => "SYMBOLIZES",
+            Self::ContextOf => "CONTEXT_OF",
+            Self::FeelsAs => "FEELS_AS",
+            Self::WondersAbout => "WONDERS_ABOUT",
+            Self::RemembersAs => "REMEMBERS_AS",
+            Self::Implies => "IMPLIES",
+            Self::Equivalent => "EQUIVALENT",
+            Self::Excludes => "EXCLUDES",
+            Self::Coexists => "COEXISTS",
+        }
+    }
+
+    /// Nome italiano per display nella UI.
+    pub fn nome(&self) -> &'static str {
+        match self {
+            Self::IsA => "è un",
+            Self::Has => "ha",
+            Self::Does => "fa",
+            Self::PartOf => "parte di",
+            Self::Causes => "causa",
+            Self::Enables => "abilita",
+            Self::Requires => "richiede",
+            Self::TransformsInto => "diventa",
+            Self::SimilarTo => "simile a",
+            Self::OppositeOf => "opposto di",
+            Self::UsedFor => "usato per",
+            Self::Expresses => "esprime",
+            Self::Symbolizes => "simboleggia",
+            Self::ContextOf => "contesto di",
+            Self::Implies => "implica",
+            Self::Equivalent => "equivale",
+            Self::Excludes => "esclude",
+            Self::Coexists => "coesiste con",
+            Self::FeelsAs => "si sente come",
+            Self::WondersAbout => "si interroga su",
+            Self::RemembersAs => "ricorda come",
+        }
+    }
+
+    /// Categoria della relazione (per raggruppamento nella UI).
+    pub fn categoria(&self) -> &'static str {
+        match self {
+            Self::IsA | Self::Has | Self::Does | Self::PartOf => "strutturale",
+            Self::Causes | Self::Enables | Self::Requires | Self::TransformsInto => "causale",
+            Self::SimilarTo | Self::OppositeOf | Self::UsedFor
+            | Self::Expresses | Self::Symbolizes | Self::ContextOf => "semantica",
+            Self::Implies | Self::Equivalent | Self::Excludes | Self::Coexists => "logica",
+            Self::FeelsAs | Self::WondersAbout | Self::RemembersAs => "fenomenologica",
+        }
+    }
+
+    /// Colore CSS per la UI (archi nel grafo).
+    pub fn colore(&self) -> &'static str {
+        match self {
+            // Strutturali — verde
+            Self::IsA => "#3fb950",
+            Self::Has => "#58a6ff",
+            Self::Does => "#f0883e",
+            Self::PartOf => "#bc8cff",
+            // Causali — rosso/arancio
+            Self::Causes => "#f85149",
+            Self::Enables => "#da3633",
+            Self::Requires => "#ff7b72",
+            Self::TransformsInto => "#ffa657",
+            // Semantiche — azzurro/grigio
+            Self::SimilarTo => "#79c0ff",
+            Self::OppositeOf => "#8b949e",
+            Self::UsedFor => "#7ee787",
+            Self::Expresses => "#d2a8ff",
+            Self::Symbolizes => "#f778ba",
+            Self::ContextOf => "#a5d6ff",
+            // Logiche — giallo/oro
+            Self::Implies => "#e3b341",
+            Self::Equivalent => "#d29922",
+            Self::Excludes => "#f85149",
+            Self::Coexists => "#56d364",
+            // Fenomenologiche — viola/rosa profondo
+            Self::FeelsAs => "#d2a8ff",
+            Self::WondersAbout => "#bc8cff",
+            Self::RemembersAs => "#f778ba",
         }
     }
 
@@ -90,14 +243,32 @@ impl RelationType {
     /// OPPOSITE_OF è la più debole (crea contrasto, non risonanza).
     pub fn field_boost_strength(&self) -> f32 {
         match self {
+            // Strutturali
             Self::IsA => 0.18,
             Self::Has => 0.14,
             Self::Does => 0.14,
             Self::PartOf => 0.12,
+            // Causali
             Self::Causes => 0.12,
+            Self::Enables => 0.11,
+            Self::Requires => 0.10,
+            Self::TransformsInto => 0.12,
+            // Semantiche
             Self::SimilarTo => 0.16,
             Self::UsedFor => 0.10,
-            Self::OppositeOf => 0.06, // bassa: crea attrito, non risonanza
+            Self::Expresses => 0.13,
+            Self::Symbolizes => 0.11,
+            Self::ContextOf => 0.09,
+            Self::OppositeOf => 0.06,
+            // Logiche
+            Self::Implies => 0.14,
+            Self::Equivalent => 0.17,
+            Self::Excludes => 0.05,
+            Self::Coexists => 0.12,
+            // Fenomenologiche
+            Self::FeelsAs => 0.20,
+            Self::WondersAbout => 0.15,
+            Self::RemembersAs => 0.18,
         }
     }
 }
@@ -119,6 +290,8 @@ pub enum EdgeSource {
     UserTaught,
     /// Derivata per inferenza transitiva
     Inferred,
+    /// Contributo dalla sessione community
+    Community,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -138,6 +311,10 @@ pub struct TypedEdge {
     pub confidence: f32,
     /// Origine della relazione
     pub source: EdgeSource,
+    /// Tramite/mezzo attraverso cui avviene la relazione (opzionale).
+    /// Es: "ghiaccio DIVENTA acqua VIA calore", "fumo CAUSA cancro VIA infiammazione"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<String>,
 }
 
 impl TypedEdge {
@@ -148,6 +325,7 @@ impl TypedEdge {
             object: object.to_lowercase(),
             confidence: 1.0,
             source: EdgeSource::Curated,
+            via: None,
         }
     }
 
@@ -161,7 +339,12 @@ impl TypedEdge {
         self
     }
 
-    /// Parsa una riga TSV: "soggetto\tRELAZIONE\toggetto[\tconfidenza]"
+    pub fn with_via(mut self, via: Option<String>) -> Self {
+        self.via = via.map(|v| v.to_lowercase());
+        self
+    }
+
+    /// Parsa una riga TSV: "soggetto\tRELAZIONE\toggetto[\tconfidenza[\tvia]]"
     pub fn from_tsv_line(line: &str) -> Option<Self> {
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.len() < 3 { return None; }
@@ -173,12 +356,17 @@ impl TypedEdge {
         let confidence = parts.get(3)
             .and_then(|s| s.trim().parse::<f32>().ok())
             .unwrap_or(1.0);
+        let via = parts.get(4)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_lowercase());
         Some(Self {
             subject,
             relation,
             object,
             confidence,
             source: EdgeSource::Curated,
+            via,
         })
     }
 }
@@ -200,12 +388,43 @@ mod tests {
     }
 
     #[test]
+    fn test_relation_from_str_italiano() {
+        assert_eq!(RelationType::from_str("È_UN"), Some(RelationType::IsA));
+        assert_eq!(RelationType::from_str("CAUSA"), Some(RelationType::Causes));
+        assert_eq!(RelationType::from_str("ABILITA"), Some(RelationType::Enables));
+        assert_eq!(RelationType::from_str("IMPLICA"), Some(RelationType::Implies));
+        assert_eq!(RelationType::from_str("ESCLUDE"), Some(RelationType::Excludes));
+        assert_eq!(RelationType::from_str("COESISTE"), Some(RelationType::Coexists));
+        assert_eq!(RelationType::from_str("DIVENTA"), Some(RelationType::TransformsInto));
+    }
+
+    #[test]
+    fn test_nome_italiano() {
+        assert_eq!(RelationType::IsA.nome(), "è un");
+        assert_eq!(RelationType::Causes.nome(), "causa");
+        assert_eq!(RelationType::Implies.nome(), "implica");
+        assert_eq!(RelationType::Coexists.nome(), "coesiste con");
+    }
+
+    #[test]
+    fn test_all_relations_count() {
+        assert_eq!(RelationType::ALL.len(), 21);
+    }
+
+    #[test]
     fn test_tsv_parse() {
         let edge = TypedEdge::from_tsv_line("cane\tIS_A\tanimale\t1.0").unwrap();
         assert_eq!(edge.subject, "cane");
         assert_eq!(edge.relation, RelationType::IsA);
         assert_eq!(edge.object, "animale");
         assert_eq!(edge.confidence, 1.0);
+    }
+
+    #[test]
+    fn test_tsv_parse_italiano() {
+        let edge = TypedEdge::from_tsv_line("coraggio\tABILITA\trischiare\t0.8").unwrap();
+        assert_eq!(edge.relation, RelationType::Enables);
+        assert_eq!(edge.confidence, 0.8);
     }
 
     #[test]

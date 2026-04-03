@@ -1,0 +1,2406 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Il Campo — Prometeo</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #f0ebe3;
+  --bg-warm: #e8e0d4;
+  --surface: #faf7f2;
+  --border: #c8bda8;
+  --border-light: #ddd4c4;
+  --text: #2c2416;
+  --text-muted: #7a6e5a;
+  --text-soft: #9a8e7a;
+
+  --racconto: #c0603a;
+  --connessione: #3a7048;
+  --risposta: #4a6488;
+  --parola: #b89848;
+  --frattale: #8a7e70;
+  --frattale-puro: #5a4e3e;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh; height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── HEADER ── */
+header {
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+.header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.header-left h1 {
+  font-family: 'DM Mono', monospace;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.header-left .dot { color: var(--text-soft); }
+
+.header-left .subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.header-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.header-badge .dot-live {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--connessione);
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── MAIN LAYOUT ── */
+.main-layout {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── CAMPO (canvas a sinistra) ── */
+.panel-campo {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  border-right: 1px solid var(--border);
+}
+
+.campo-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.campo-toolbar .label { flex-shrink: 0; }
+
+.campo-toolbar .spacer { flex: 1; }
+
+.campo-toolbar button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  letter-spacing: 0.5px;
+}
+.campo-toolbar button:hover { border-color: var(--text-muted); color: var(--text); }
+
+.campo-toolbar .timer {
+  font-size: 12px;
+  color: var(--text-soft);
+  min-width: 40px;
+  text-align: right;
+}
+
+#campo-canvas {
+  flex: 1;
+  width: 100%;
+  cursor: crosshair;
+}
+#campo-canvas.modo-3d { cursor: grab; }
+#campo-canvas.modo-3d.dragging { cursor: grabbing; }
+
+.campo-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  border-top: 1px solid var(--border-light);
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.campo-hint {
+  font-style: italic;
+}
+
+.campo-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+
+/* ── PANNELLO AZIONI (destra) ── */
+.panel-azioni {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* Step indicator */
+.step-header {
+  padding: 20px 28px 0;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--text-soft);
+  text-transform: uppercase;
+}
+
+.azioni-titolo {
+  padding: 8px 28px 4px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+.azioni-sottotitolo {
+  padding: 0 28px 20px;
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* ── VISTA: SCEGLI AZIONE ── */
+#vista-scelta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.azione-cards {
+  padding: 0 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.azione-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--surface);
+}
+.azione-card:hover {
+  border-color: var(--text-muted);
+  background: var(--bg);
+}
+
+.azione-icon {
+  width: 40px; height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.azione-icon.racconto { color: var(--racconto); }
+.azione-icon.connessione { color: var(--connessione); }
+.azione-icon.risposta { color: var(--risposta); }
+
+.azione-body { flex: 1; }
+
+.azione-body h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.azione-body p {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.azione-arrow {
+  font-size: 20px;
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+
+/* ── SESSIONE FEED ── */
+.sessione-wrap {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+}
+
+.sessione-header {
+  padding: 10px 28px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.sessione-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 28px;
+}
+
+.sessione-item {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 13px;
+  animation: fadeIn 0.3s ease;
+}
+
+.sessione-tipo {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  width: 90px;
+  font-weight: 500;
+}
+.sessione-tipo.racconto { color: var(--racconto); }
+.sessione-tipo.connessione { color: var(--connessione); }
+.sessione-tipo.risposta { color: var(--risposta); }
+.sessione-tipo.altri { color: var(--parola); }
+
+.sessione-testo {
+  color: var(--text);
+  line-height: 1.5;
+  flex: 1;
+}
+
+.sessione-testo .autore {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.sessione-testo .frattali {
+  font-size: 11px;
+  color: var(--text-soft);
+  font-style: italic;
+}
+
+.sessione-vuota {
+  text-align: center;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-style: italic;
+  padding: 24px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── VISTE AZIONE (racconta, collega, rispondi) ── */
+.vista-azione {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.vista-azione.attiva { display: flex; }
+
+.vista-form {
+  flex: 1;
+  padding: 0 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.vista-form label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 2px;
+  display: block;
+}
+
+.vista-form textarea,
+.vista-form input[type="text"] {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.vista-form textarea {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.vista-form textarea:focus,
+.vista-form input:focus { border-color: var(--text-muted); }
+
+.vista-form select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.char-count {
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-soft);
+  margin-top: -10px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  padding: 0 28px 20px;
+  flex-shrink: 0;
+}
+
+.btn-primary {
+  flex: 1;
+  background: var(--text);
+  color: var(--surface);
+  border: none;
+  border-radius: 6px;
+  padding: 12px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-primary:hover { opacity: 0.85; }
+.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn-primary.loading {
+  background: var(--bg-warm);
+  color: var(--text-muted);
+  cursor: wait;
+}
+
+.btn-back {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.btn-back:hover { border-color: var(--text-muted); color: var(--text); }
+
+/* Risposta dal campo */
+.campo-risposta {
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 14px;
+  display: none;
+}
+.campo-risposta.visibile { display: block; }
+
+.campo-risposta .risp-label {
+  font-size: 11px;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  font-family: 'DM Mono', monospace;
+}
+
+.campo-risposta .risp-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.risp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.risp-tag {
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+
+.risp-tag.nuovo {
+  background: rgba(58, 112, 72, 0.08);
+  border-color: rgba(58, 112, 72, 0.3);
+  color: var(--connessione);
+}
+
+.risp-tag.noto {
+  background: rgba(74, 100, 136, 0.08);
+  border-color: rgba(74, 100, 136, 0.25);
+  color: var(--risposta);
+}
+
+.risp-tag.risonante {
+  background: rgba(184, 152, 72, 0.1);
+  border-color: rgba(184, 152, 72, 0.35);
+  color: var(--parola);
+}
+
+.risp-tag:hover { opacity: 0.7; }
+
+/* Connetti: strength buttons */
+.strength-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.strength-btn {
+  width: 36px; height: 36px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.strength-btn.active {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--surface);
+}
+
+.strength-label {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-style: italic;
+  margin-left: 8px;
+}
+
+/* Rispondi: messaggio Prometeo */
+.prometeo-says {
+  background: var(--bg);
+  border-left: 3px solid var(--border);
+  padding: 14px 16px;
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+  font-style: italic;
+}
+
+.prometeo-says .from {
+  font-size: 11px;
+  color: var(--text-soft);
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: 'DM Mono', monospace;
+  margin-bottom: 6px;
+}
+
+/* ── TOAST ── */
+#toast-area {
+  position: absolute;
+  top: 44px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.toast {
+  background: rgba(250, 247, 242, 0.95);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: slideIn 0.3s ease;
+  backdrop-filter: blur(4px);
+}
+
+.toast.tipo-racconto { border-left: 3px solid var(--racconto); }
+.toast.tipo-connessione { border-left: 3px solid var(--connessione); }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.toast-nome { font-weight: 600; color: var(--text); }
+.toast-testo { color: var(--text-muted); }
+
+/* ── MODAL REGISTRAZIONE ── */
+#modal-reg {
+  position: fixed;
+  inset: 0;
+  background: rgba(240, 235, 227, 0.97);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(6px);
+}
+#modal-reg.nascosto { display: none; }
+
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px 44px;
+  max-width: 480px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.modal-box h2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.modal-box p {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.modal-box label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.modal-box input,
+.modal-box textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  padding: 12px 14px;
+  outline: none;
+}
+
+.modal-box textarea {
+  min-height: 80px;
+  resize: vertical;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.modal-box input:focus,
+.modal-box textarea:focus { border-color: var(--text-muted); }
+
+/* ── INFO PANEL (click su punto) ── */
+#info-panel {
+  position: absolute;
+  bottom: 50px;
+  left: 20px;
+  background: rgba(250, 247, 242, 0.95);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  max-width: 320px;
+  font-size: 13px;
+  display: none;
+  backdrop-filter: blur(4px);
+  z-index: 10;
+}
+#info-panel.visibile { display: block; }
+
+#info-panel .info-title {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+#info-panel .info-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#info-panel .info-close {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  cursor: pointer;
+  color: var(--text-soft);
+  font-size: 16px;
+  background: none;
+  border: none;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  body { height: 100dvh; }
+
+  header { padding: 10px 16px; }
+  .header-left h1 { font-size: 14px; letter-spacing: 2px; }
+  .header-left .subtitle { display: none; }
+
+  .main-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    position: relative;
+  }
+
+  .panel-campo,
+  .panel-azioni {
+    display: none;
+    position: absolute;
+    inset: 0;
+  }
+
+  .panel-campo.mob-attivo,
+  .panel-azioni.mob-attivo {
+    display: flex;
+  }
+
+  .panel-campo { border-right: none; }
+
+  #mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .mob-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 10px;
+    color: var(--text-soft);
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.5px;
+  }
+  .mob-nav-btn.attivo { color: var(--text); font-weight: 500; }
+  .mob-nav-btn svg { width: 20px; height: 20px; }
+
+  .azioni-titolo { font-size: 22px; }
+  .vista-form textarea { font-size: 16px; }
+  .vista-form input[type="text"] { font-size: 16px; }
+
+  .campo-footer { padding: 6px 12px; }
+  .campo-legend { gap: 8px; font-size: 10px; }
+  .legend-dot { width: 6px; height: 6px; }
+}
+
+@media (min-width: 769px) {
+  #mobile-nav { display: none; }
+  .panel-campo,
+  .panel-azioni { display: flex !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── MODAL REGISTRAZIONE ── -->
+<div id="modal-reg">
+  <div class="modal-box">
+    <h2>Entra nel Campo</h2>
+    <p>Ogni cosa che scrivi entra in Prometeo e cambia il modo in cui comprende il mondo. Prima di iniziare, dicci chi sei.</p>
+    <div>
+      <label for="reg-nome">Come ti chiami?</label>
+      <input type="text" id="reg-nome" placeholder="Il tuo nome" maxlength="50" autocomplete="off" />
+    </div>
+    <div>
+      <label for="reg-contesto">Cosa fai nella vita? (facoltativo)</label>
+      <textarea id="reg-contesto" placeholder="Es: Insegnante di storia, musicista, studente di architettura..." maxlength="200"></textarea>
+    </div>
+    <button class="btn-primary" id="btn-entra" onclick="entraInCampo()">Entra nel campo</button>
+  </div>
+</div>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="header-left">
+    <h1>IL CAMPO</h1>
+    <span class="dot">&middot;</span>
+    <span class="subtitle">educazione distribuita</span>
+  </div>
+  <div class="header-badge">
+    <span class="dot-live" id="ws-dot"></span>
+    <span id="partecipanti-count">1 nel campo</span>
+  </div>
+</header>
+
+<!-- ── MAIN ── -->
+<div class="main-layout">
+
+  <!-- CAMPO -->
+  <div class="panel-campo mob-attivo">
+    <div class="campo-toolbar">
+      <span class="label">stato del campo</span>
+      <span class="spacer"></span>
+      <button onclick="toggleCollegaMode()" id="btn-collega">collega</button>
+      <button onclick="ridistribuisci()">ridistribuisci</button>
+      <button onclick="toggle3D()" id="btn-3d">↩ 2D</button>
+      <span class="timer" id="timer">0:00</span>
+    </div>
+    <canvas id="campo-canvas"></canvas>
+    <div id="toast-area"></div>
+    <div id="info-panel">
+      <button class="info-close" onclick="chiudiInfo()">&times;</button>
+      <div class="info-title" id="info-title"></div>
+      <div class="info-meta" id="info-meta"></div>
+    </div>
+    <div class="campo-footer">
+      <span class="campo-hint" id="campo-hint">&larr; clicca un punto per leggere il contributo</span>
+      <div class="campo-legend">
+        <div class="legend-item"><span class="legend-dot" style="background:var(--racconto)"></span> racconto</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--connessione)"></span> connessione</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--risposta)"></span> risposta</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--parola)"></span> parola</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AZIONI -->
+  <div class="panel-azioni">
+
+    <!-- VISTA: SCEGLI AZIONE -->
+    <div id="vista-scelta">
+      <div class="step-header">01 &mdash; scegli un&rsquo;azione</div>
+      <div class="azioni-titolo">Cosa porti al campo?</div>
+      <div class="azioni-sottotitolo">Ogni cosa che scrivi entra in Prometeo e cambia ciò che sa del quartiere.</div>
+
+      <div class="azione-cards">
+        <div class="azione-card" onclick="mostraVista('racconta')">
+          <div class="azione-icon racconto">R</div>
+          <div class="azione-body">
+            <h3>Racconta</h3>
+            <p>Una storia, un ricordo, qualcosa che sai di questo posto</p>
+          </div>
+          <div class="azione-arrow">&rarr;</div>
+        </div>
+
+        <div class="azione-card" onclick="mostraVista('collega')">
+          <div class="azione-icon connessione">C</div>
+          <div class="azione-body">
+            <h3>Collega</h3>
+            <p>Spiega come due parole o idee stanno insieme</p>
+          </div>
+          <div class="azione-arrow">&rarr;</div>
+        </div>
+
+        <div class="azione-card" onclick="mostraVista('rispondi')">
+          <div class="azione-icon risposta">&crarr;</div>
+          <div class="azione-body">
+            <h3>Rispondi</h3>
+            <p>Leggi quello che dice Prometeo e aggiungici qualcosa</p>
+          </div>
+          <div class="azione-arrow">&rarr;</div>
+        </div>
+      </div>
+
+      <!-- SESSION FEED -->
+      <div class="sessione-wrap">
+        <div class="sessione-header">questa sessione</div>
+        <div class="sessione-list" id="sessione-list">
+          <div class="sessione-vuota">La sessione inizierà quando qualcuno condivide qualcosa.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VISTA: RACCONTA -->
+    <div class="vista-azione" id="vista-racconta">
+      <div class="step-header">02 &mdash; racconta</div>
+      <div class="azioni-titolo">Racconta qualcosa</div>
+      <div class="azioni-sottotitolo">Una storia, un'esperienza, qualcosa che hai visto o sentito. Le tue parole entrano nel campo.</div>
+      <div class="vista-form">
+        <div>
+          <label>La tua voce</label>
+          <textarea id="racconta-text" placeholder="Es: I portici di via Po offrono riparo dalla pioggia e dalle giornate di sole..." maxlength="500"></textarea>
+          <div class="char-count"><span id="racconta-count">0</span>/500</div>
+        </div>
+        <div class="campo-risposta" id="racconta-risposta">
+          <div class="risp-label">Il campo ha sentito</div>
+          <div class="risp-content" id="racconta-risp-content"></div>
+          <div class="risp-tags" id="racconta-risp-tags"></div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-back" onclick="tornaScelta()">Indietro</button>
+        <button class="btn-primary" id="racconta-btn" onclick="eseguiRacconta()">Condividi con il campo</button>
+      </div>
+    </div>
+
+    <!-- VISTA: COLLEGA -->
+    <div class="vista-azione" id="vista-collega">
+      <div class="step-header">02 &mdash; collega</div>
+      <div class="azioni-titolo">Collega due idee</div>
+      <div class="azioni-sottotitolo">Spiega come due parole o concetti stanno insieme secondo la tua esperienza.</div>
+      <div class="vista-form">
+        <div>
+          <label>Primo concetto</label>
+          <input type="text" id="conn-from" placeholder="es: tolleranza" />
+        </div>
+        <div>
+          <label>Tipo di connessione</label>
+          <select id="conn-rel">
+            <option value="Causes" selected>causa / porta a</option>
+            <option value="IsA">è un tipo di</option>
+            <option value="PartOf">fa parte di</option>
+            <option value="UsedFor">si usa per</option>
+            <option value="SimilarTo">è simile a</option>
+            <option value="OppositeOf">è l'opposto di</option>
+            <option value="Has">ha come caratteristica</option>
+          </select>
+        </div>
+        <div>
+          <label>Secondo concetto</label>
+          <input type="text" id="conn-to" placeholder="es: qualità" />
+        </div>
+        <div>
+          <label>Quanto è forte questa connessione per te?</label>
+          <div class="strength-row">
+            <button class="strength-btn" data-val="1">1</button>
+            <button class="strength-btn" data-val="2">2</button>
+            <button class="strength-btn active" data-val="3">3</button>
+            <button class="strength-btn" data-val="4">4</button>
+            <button class="strength-btn" data-val="5">5</button>
+            <span class="strength-label" id="strength-label">media</span>
+          </div>
+        </div>
+        <div class="campo-risposta" id="collega-risposta">
+          <div class="risp-label">Connessione aggiunta</div>
+          <div class="risp-content" id="collega-risp-content"></div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-back" onclick="tornaScelta()">Indietro</button>
+        <button class="btn-primary" id="collega-btn" onclick="eseguiCollega()">Aggiungi connessione</button>
+      </div>
+    </div>
+
+    <!-- VISTA: RISPONDI -->
+    <div class="vista-azione" id="vista-rispondi">
+      <div class="step-header">02 &mdash; rispondi</div>
+      <div class="azioni-titolo">Rispondi a Prometeo</div>
+      <div class="azioni-sottotitolo">Leggi quello che il campo ha da dire e aggiungi la tua prospettiva.</div>
+      <div class="vista-form">
+        <div class="prometeo-says" id="prometeo-says">
+          <div class="from">Prometeo dice</div>
+          <div id="prometeo-text">Caricamento...</div>
+        </div>
+        <div>
+          <label>La tua risposta</label>
+          <textarea id="rispondi-text" placeholder="Scrivi la tua risposta a quello che Prometeo ha condiviso..." maxlength="500"></textarea>
+          <div class="char-count"><span id="rispondi-count">0</span>/500</div>
+        </div>
+        <div class="campo-risposta" id="rispondi-risposta">
+          <div class="risp-label">Il campo ha sentito</div>
+          <div class="risp-content" id="rispondi-risp-content"></div>
+          <div class="risp-tags" id="rispondi-risp-tags"></div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-back" onclick="tornaScelta()">Indietro</button>
+        <button class="btn-primary" id="rispondi-btn" onclick="eseguiRispondi()">Condividi con il campo</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MOBILE NAV -->
+<nav id="mobile-nav">
+  <button class="mob-nav-btn attivo" data-panel="campo" onclick="cambiaPannello('campo')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 2"/>
+    </svg>
+    Campo
+  </button>
+  <button class="mob-nav-btn" data-panel="azioni" onclick="cambiaPannello('azioni')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M12 5v14M5 12h14"/>
+    </svg>
+    Contribuisci
+  </button>
+</nav>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// STATO
+// ═══════════════════════════════════════════════════════════════
+
+const S = {
+  userId: localStorage.getItem('campo_uid') || genId(),
+  userName: localStorage.getItem('campo_name') || '',
+  userContext: localStorage.getItem('campo_ctx') || '',
+  ws: null,
+  partecipanti: new Set(),
+  strength: 3,
+  sessionStart: Date.now(),
+  collegaMode: false,
+  collegaSrc: null,
+  modo3D: true,
+
+  // Grafo
+  fractals: [],        // 64 frattali con posizioni calcolate
+  contributi: [],      // contributi degli utenti (un punto per contributo)
+  edges: [],           // archi tra contributi
+  fractalMap: {},      // nome_lower → fractal obj
+};
+
+localStorage.setItem('campo_uid', S.userId);
+
+function genId() { return Math.random().toString(36).slice(2, 10); }
+
+// ── Variabili 3D ──
+let rot3DY = 0;
+let rot3DX = 0.28;
+let drag3D = { active: false, lastX: 0, lastY: 0 };
+
+// Stelle di sfondo statiche (generate una volta sola)
+const STARS_BG = Array.from({ length: 140 }, () => ({
+  x: Math.random(),
+  y: Math.random(),
+  r: 0.3 + Math.random() * 1.4,
+  a: 0.12 + Math.random() * 0.42,
+}));
+
+// ═══════════════════════════════════════════════════════════════
+// REGISTRAZIONE
+// ═══════════════════════════════════════════════════════════════
+
+function entraInCampo() {
+  const nome = document.getElementById('reg-nome').value.trim();
+  const ctx = document.getElementById('reg-contesto').value.trim();
+  if (!nome) {
+    document.getElementById('reg-nome').style.borderColor = 'var(--racconto)';
+    document.getElementById('reg-nome').focus();
+    return;
+  }
+  S.userName = nome;
+  S.userContext = ctx;
+  localStorage.setItem('campo_name', nome);
+  localStorage.setItem('campo_ctx', ctx);
+  document.getElementById('modal-reg').classList.add('nascosto');
+  inizializza();
+}
+
+if (S.userName) {
+  document.getElementById('modal-reg').classList.add('nascosto');
+  inizializza();
+} else {
+  document.getElementById('reg-nome').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('reg-contesto').focus();
+  });
+  document.getElementById('reg-contesto').addEventListener('keydown', e => {
+    if (e.key === 'Enter') entraInCampo();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGAZIONE VISTE
+// ═══════════════════════════════════════════════════════════════
+
+function mostraVista(nome) {
+  document.getElementById('vista-scelta').style.display = 'none';
+  document.querySelectorAll('.vista-azione').forEach(v => v.classList.remove('attiva'));
+  const target = document.getElementById('vista-' + nome);
+  if (target) target.classList.add('attiva');
+  if (nome === 'rispondi') caricaPrometeoSays();
+  if (window.innerWidth <= 768) cambiaPannello('azioni');
+}
+
+function tornaScelta() {
+  document.querySelectorAll('.vista-azione').forEach(v => v.classList.remove('attiva'));
+  document.getElementById('vista-scelta').style.display = '';
+}
+
+function cambiaPannello(nome) {
+  document.querySelector('.panel-campo').classList.toggle('mob-attivo', nome === 'campo');
+  document.querySelector('.panel-azioni').classList.toggle('mob-attivo', nome === 'azioni');
+  document.querySelectorAll('.mob-nav-btn').forEach(b =>
+    b.classList.toggle('attivo', b.dataset.panel === nome));
+  if (nome === 'campo') {
+    requestAnimationFrame(() => {
+      resizeCanvas();
+      if (S.fractals.length) {
+        layoutFractals();
+        S.contributi.forEach(c => layoutContributo(c));
+      }
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CANVAS
+// ═══════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('campo-canvas');
+const ctx2d = canvas.getContext('2d');
+let W = 0, H = 0;
+
+function resizeCanvas() {
+  W = canvas.offsetWidth * (window.devicePixelRatio || 1);
+  H = canvas.offsetHeight * (window.devicePixelRatio || 1);
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = canvas.offsetWidth + 'px';
+  canvas.style.height = canvas.offsetHeight + 'px';
+  ctx2d.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+}
+
+window.addEventListener('resize', () => {
+  resizeCanvas();
+  if (S.fractals.length) layoutFractals();
+});
+
+resizeCanvas();
+
+// Colori RGB per tipi
+const COL = {
+  racconto:    [192, 96, 58],
+  connessione: [58, 112, 72],
+  risposta:    [74, 100, 136],
+  parola:      [184, 152, 72],
+  risonanza:   [184, 152, 72],
+  frattale:    [138, 126, 112],
+  altri:       [170, 140, 90],
+};
+
+// Trigrammi
+const TRIGRAMS = [
+  { name: 'Cielo',    sym: '☰', dim: 'Agency' },
+  { name: 'Terra',    sym: '☷', dim: 'Permanenza' },
+  { name: 'Tuono',    sym: '☳', dim: 'Intensità' },
+  { name: 'Acqua',    sym: '☵', dim: 'Tempo' },
+  { name: 'Montagna', sym: '☶', dim: 'Confine' },
+  { name: 'Vento',    sym: '☴', dim: 'Complessità' },
+  { name: 'Fuoco',    sym: '☲', dim: 'Definizione' },
+  { name: 'Lago',     sym: '☱', dim: 'Valenza' },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// LAYOUT 2D
+// ═══════════════════════════════════════════════════════════════
+
+function layoutFractals() {
+  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+  const cx = cw / 2, cy = ch / 2;
+  const R = Math.min(cx, cy) * 0.75;
+
+  const purePos = [];
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2 - Math.PI / 2;
+    purePos[i] = { x: cx + Math.cos(angle) * R, y: cy + Math.sin(angle) * R };
+  }
+
+  S.fractals.forEach(f => {
+    const lower = Math.floor(f.id / 8);
+    const upper = f.id % 8;
+    f.isPure = lower === upper;
+
+    if (f.isPure) {
+      f.x = purePos[lower].x;
+      f.y = purePos[lower].y;
+      f.radius = 10;
+    } else {
+      const a1 = (lower / 8) * Math.PI * 2 - Math.PI / 2;
+      const a2 = (upper / 8) * Math.PI * 2 - Math.PI / 2;
+      let diff = a2 - a1;
+      if (diff > Math.PI) diff -= Math.PI * 2;
+      if (diff < -Math.PI) diff += Math.PI * 2;
+      const midAngle = a1 + diff * 0.5;
+      const bandIdx = upper < lower ? upper : upper - 1;
+      const rFrac = R * (0.38 + bandIdx * 0.07);
+      f.x = cx + Math.cos(midAngle) * rFrac;
+      f.y = cy + Math.sin(midAngle) * rFrac;
+      f.radius = 5;
+    }
+  });
+
+  // Anti-overlap leggero per i misti
+  for (let iter = 0; iter < 30; iter++) {
+    let moved = false;
+    for (let i = 0; i < S.fractals.length; i++) {
+      for (let j = i + 1; j < S.fractals.length; j++) {
+        const a = S.fractals[i], b = S.fractals[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minDist = a.radius + b.radius + 10;
+        if (dist < minDist && dist > 0.1) {
+          const push = (minDist - dist) * 0.3;
+          const nx = dx / dist, ny = dy / dist;
+          if (!a.isPure) { a.x -= nx * push; a.y -= ny * push; }
+          if (!b.isPure) { b.x += nx * push; b.y += ny * push; }
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+}
+
+// Calcola il centro composito pesato dei frattali attivati
+function getOrbitCenter(c) {
+  const fracts = c.fractalsActivated || [];
+  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+  if (fracts.length === 0) {
+    return { x: cw * 0.5, y: ch * 0.5 };
+  }
+  let totalWeight = 0, cx = 0, cy = 0;
+  fracts.forEach(({ name, activation }) => {
+    const f = S.fractalMap[name?.toLowerCase()];
+    if (f && f.x > 0) {
+      const w = Math.max(0.01, activation || 0.1);
+      cx += f.x * w;
+      cy += f.y * w;
+      totalWeight += w;
+    }
+  });
+  if (totalWeight < 0.01) return { x: cw * 0.5, y: ch * 0.5 };
+  return { x: cx / totalWeight, y: cy / totalWeight };
+}
+
+// Layout iniziale di un contributo
+function layoutContributo(c) {
+  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+  if (cw < 10 || ch < 10) {
+    c._needsLayout = true;
+    c.x = -100; c.y = -100;
+    c.anchorX = 0; c.anchorY = 0;
+    c.orbitDist = 0;
+    return;
+  }
+  c._needsLayout = false;
+  const center = getOrbitCenter(c);
+  c.anchorX = center.x;
+  c.anchorY = center.y;
+  // Posiziona direttamente in orbita — nessun lerp iniziale
+  c.x = center.x + Math.cos(c.orbitAngle) * c.orbitDist;
+  c.y = center.y + Math.sin(c.orbitAngle) * c.orbitDist;
+}
+
+function ridistribuisci() {
+  layoutFractals();
+  S.contributi.forEach(c => layoutContributo(c));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRAW 2D
+// ═══════════════════════════════════════════════════════════════
+
+let time = 0;
+
+function draw2D() {
+  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+  ctx2d.clearRect(0, 0, cw, ch);
+  time++;
+
+  // Sfondo con gradiente radiale caldo
+  const grad = ctx2d.createRadialGradient(cw/2, ch/2, 0, cw/2, ch/2, cw * 0.6);
+  grad.addColorStop(0, 'rgba(200, 185, 160, 0.06)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx2d.fillStyle = grad;
+  ctx2d.fillRect(0, 0, cw, ch);
+
+  // Archi contributi → frattali (linee tratteggiate sottili)
+  S.contributi.forEach(c => {
+    if (!c.anchorX || c.x < -50) return;
+    const alpha = Math.max(0.05, c.glow * 0.22);
+    const col = COL[c.tipo] || COL.parola;
+    // Archi verso tutti i frattali attivati
+    (c.fractalsActivated || []).slice(0, 3).forEach(({ name, activation }, idx) => {
+      const f = S.fractalMap[name?.toLowerCase()];
+      if (!f || f.x <= 0) return;
+      const a = alpha * Math.max(0.3, activation || 0.5) * (1 - idx * 0.25);
+      ctx2d.beginPath();
+      ctx2d.setLineDash([3, 4]);
+      ctx2d.moveTo(c.x, c.y);
+      ctx2d.lineTo(f.x, f.y);
+      ctx2d.strokeStyle = `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${a})`;
+      ctx2d.lineWidth = 0.8;
+      ctx2d.stroke();
+      ctx2d.setLineDash([]);
+    });
+    // Se nessun frattale specifico, linea verso anchorX
+    if (!c.fractalsActivated || c.fractalsActivated.length === 0) {
+      ctx2d.beginPath();
+      ctx2d.setLineDash([3, 4]);
+      ctx2d.moveTo(c.x, c.y);
+      ctx2d.lineTo(c.anchorX, c.anchorY);
+      ctx2d.strokeStyle = `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${alpha})`;
+      ctx2d.lineWidth = 0.8;
+      ctx2d.stroke();
+      ctx2d.setLineDash([]);
+    }
+  });
+
+  // Archi utente (collegamenti manuali)
+  S.edges.forEach(e => {
+    e.age = (e.age || 0) + 1;
+    const fade = Math.max(0, 1 - e.age / 5000);
+    const alpha = e.strength * fade * 0.4;
+    if (alpha < 0.01) return;
+    ctx2d.beginPath();
+    ctx2d.setLineDash([4, 3]);
+    ctx2d.moveTo(e.from.x, e.from.y);
+    ctx2d.lineTo(e.to.x, e.to.y);
+    ctx2d.strokeStyle = `rgba(58, 112, 72, ${alpha})`;
+    ctx2d.lineWidth = 1;
+    ctx2d.stroke();
+    ctx2d.setLineDash([]);
+  });
+
+  // Frattali: cerchi fissi con etichetta
+  S.fractals.forEach(f => {
+    const glowAlpha = (f._glow || 0);
+
+    if (glowAlpha > 0.01) {
+      const g = ctx2d.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.radius * 4);
+      g.addColorStop(0, `rgba(184, 152, 72, ${glowAlpha * 0.35})`);
+      g.addColorStop(1, 'rgba(184, 152, 72, 0)');
+      ctx2d.beginPath();
+      ctx2d.arc(f.x, f.y, f.radius * 4, 0, Math.PI * 2);
+      ctx2d.fillStyle = g;
+      ctx2d.fill();
+      f._glow = glowAlpha * 0.994;
+    }
+
+    if (f.isPure) {
+      ctx2d.beginPath();
+      ctx2d.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+      ctx2d.fillStyle = `rgba(70, 60, 45, ${0.75 + glowAlpha * 0.25})`;
+      ctx2d.fill();
+      ctx2d.strokeStyle = `rgba(50, 42, 30, 0.5)`;
+      ctx2d.lineWidth = 1;
+      ctx2d.stroke();
+      ctx2d.fillStyle = `rgba(60, 50, 35, 0.8)`;
+      ctx2d.font = '500 11px "DM Mono", monospace';
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText(f.name, f.x, f.y - f.radius - 7);
+    } else {
+      // Frattali misti: piccoli e discreti in 2D
+      ctx2d.beginPath();
+      ctx2d.arc(f.x, f.y, 2.5, 0, Math.PI * 2);
+      ctx2d.fillStyle = `rgba(160, 148, 130, ${0.18 + glowAlpha * 0.6})`;
+      ctx2d.fill();
+    }
+  });
+
+  // Relayout contributi che erano stati creati con canvas nascosto
+  S.contributi.forEach(c => {
+    if (c._needsLayout && cw > 10) layoutContributo(c);
+  });
+
+  // Contributi: cerchi colorati con orbita multi-frattale
+  S.contributi.forEach(c => {
+    if (c.x < -50) return;
+
+    // Orbita: il centro segue il composito pesato dei frattali attivi
+    c.orbitAngle += c.orbitSpeed;
+    const center = getOrbitCenter(c);
+    c.anchorX += (center.x - c.anchorX) * 0.04;
+    c.anchorY += (center.y - c.anchorY) * 0.04;
+    c.x = c.anchorX + Math.cos(c.orbitAngle) * c.orbitDist;
+    c.y = c.anchorY + Math.sin(c.orbitAngle) * c.orbitDist;
+
+    // Decay glow
+    c.glow = Math.max(0.2, c.glow * 0.997);
+
+    const col = COL[c.tipo] || COL.parola;
+    const r = 5.5 + c.glow * 4;
+    const alpha = 0.5 + c.glow * 0.5;
+
+    // Alone caldo
+    const g = ctx2d.createRadialGradient(c.x, c.y, 0, c.x, c.y, r * 2.5);
+    g.addColorStop(0, `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${alpha * 0.25})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx2d.beginPath();
+    ctx2d.arc(c.x, c.y, r * 2.5, 0, Math.PI * 2);
+    ctx2d.fillStyle = g;
+    ctx2d.fill();
+
+    // Cerchio pieno
+    ctx2d.beginPath();
+    ctx2d.arc(c.x, c.y, r, 0, Math.PI * 2);
+    ctx2d.fillStyle = `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${alpha})`;
+    ctx2d.fill();
+
+    // Label
+    if (c.glow > 0.35 && c.label) {
+      ctx2d.fillStyle = `rgba(44, 36, 22, ${Math.min(0.85, c.glow * 0.9)})`;
+      ctx2d.font = '500 12px "DM Sans", sans-serif';
+      ctx2d.textAlign = 'center';
+      const labelText = c.label.length > 20 ? c.label.slice(0, 20) + '...' : c.label;
+      ctx2d.fillText(labelText, c.x, c.y - r - 6);
+    }
+  });
+
+  // Pulisci archi vecchi
+  S.edges = S.edges.filter(e => (e.age || 0) < 5000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRAW 3D — UNIVERSO
+// ═══════════════════════════════════════════════════════════════
+
+function project3d(x3d, y3d, z3d, cw, ch, R3D) {
+  // Rotazione attorno all'asse X (inclinazione)
+  const cosX = Math.cos(rot3DX), sinX = Math.sin(rot3DX);
+  const ry  =  y3d * cosX - z3d * sinX;
+  const rz0 =  y3d * sinX + z3d * cosX;
+  // Rotazione attorno all'asse Y (azimut)
+  const cosY = Math.cos(rot3DY), sinY = Math.sin(rot3DY);
+  const rx = x3d * cosY + rz0 * sinY;
+  const rz = -x3d * sinY + rz0 * cosY;
+  // Proiezione prospettica forte: FOV basso = effetto 3D drammatico
+  const fov = 1.2;
+  const scale = fov / (fov + rz + 1.4);
+  return { sx: cw / 2 + rx * scale * R3D, sy: ch / 2 - ry * scale * R3D, z: rz, scale };
+}
+
+function draw3D() {
+  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+  ctx2d.clearRect(0, 0, cw, ch);
+
+  // ── Sfondo cosmico profondo ──
+  ctx2d.fillStyle = '#080612';
+  ctx2d.fillRect(0, 0, cw, ch);
+
+  // Nebula centrale
+  const nebula = ctx2d.createRadialGradient(cw/2, ch/2, 0, cw/2, ch/2, Math.min(cw, ch) * 0.45);
+  nebula.addColorStop(0,   'rgba(60, 30, 90, 0.18)');
+  nebula.addColorStop(0.4, 'rgba(30, 15, 60, 0.10)');
+  nebula.addColorStop(1,   'rgba(0, 0, 0, 0)');
+  ctx2d.fillStyle = nebula;
+  ctx2d.fillRect(0, 0, cw, ch);
+
+  // Stelle di sfondo fisse
+  STARS_BG.forEach(s => {
+    ctx2d.beginPath();
+    ctx2d.arc(s.x * cw, s.y * ch, s.r, 0, Math.PI * 2);
+    ctx2d.fillStyle = `rgba(220, 215, 200, ${s.a})`;
+    ctx2d.fill();
+  });
+
+  // Auto-rotazione
+  if (!drag3D.active) rot3DY += 0.003;
+
+  const R3D = Math.min(cw, ch) * 0.44;
+
+  // ── Anelli della sfera (equatore + due paralleli) ──
+  const ringAngles = [0, Math.PI / 4, -Math.PI / 4];
+  ringAngles.forEach((tiltAngle, ri) => {
+    const steps = 80;
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+      const theta = (i / steps) * Math.PI * 2;
+      const x3 = Math.cos(tiltAngle) * Math.cos(theta);
+      const y3 = Math.sin(tiltAngle);
+      const z3 = Math.cos(tiltAngle) * Math.sin(theta);
+      pts.push(project3d(x3, y3, z3, cw, ch, R3D));
+    }
+    ctx2d.beginPath();
+    pts.forEach((p, i) => {
+      const depth = Math.max(0, Math.min(1, (p.z + 1.4) / 2.8));
+      if (i === 0) ctx2d.moveTo(p.sx, p.sy);
+      else ctx2d.lineTo(p.sx, p.sy);
+    });
+    ctx2d.strokeStyle = `rgba(80, 60, 120, ${ri === 0 ? 0.25 : 0.12})`;
+    ctx2d.lineWidth = ri === 0 ? 0.8 : 0.4;
+    ctx2d.stroke();
+  });
+
+  // ── Proietta tutti i frattali puri per disegnare le connessioni ──
+  const pureFractals = S.fractals.filter(f => f.isPure);
+  const pureProjected = pureFractals.map(f => ({
+    f,
+    ...project3d(f.x3d, f.y3d, f.z3d, cw, ch, R3D)
+  }));
+
+  // Connessioni tra frattali puri adiacenti (anello ottagonale)
+  for (let i = 0; i < pureProjected.length; i++) {
+    const a = pureProjected[i];
+    const b = pureProjected[(i + 1) % pureProjected.length];
+    const depthA = Math.max(0, Math.min(1, (a.z + 2) / 4));
+    const depthB = Math.max(0, Math.min(1, (b.z + 2) / 4));
+    const alpha = Math.min(depthA, depthB) * 0.25;
+    if (alpha < 0.02) continue;
+    const grad = ctx2d.createLinearGradient(a.sx, a.sy, b.sx, b.sy);
+    grad.addColorStop(0, `rgba(180, 150, 80, ${depthA * 0.3})`);
+    grad.addColorStop(1, `rgba(180, 150, 80, ${depthB * 0.3})`);
+    ctx2d.beginPath();
+    ctx2d.moveTo(a.sx, a.sy);
+    ctx2d.lineTo(b.sx, b.sy);
+    ctx2d.strokeStyle = grad;
+    ctx2d.lineWidth = 0.6;
+    ctx2d.setLineDash([4, 6]);
+    ctx2d.stroke();
+    ctx2d.setLineDash([]);
+  }
+
+  // Connessioni raggi dal centro ai puri
+  pureProjected.forEach(({ sx, sy, z }) => {
+    const depth = Math.max(0, Math.min(1, (z + 2) / 4));
+    const grad = ctx2d.createLinearGradient(cw/2, ch/2, sx, sy);
+    grad.addColorStop(0, `rgba(100, 70, 160, ${depth * 0.15})`);
+    grad.addColorStop(1, 'rgba(100, 70, 160, 0)');
+    ctx2d.beginPath();
+    ctx2d.moveTo(cw/2, ch/2);
+    ctx2d.lineTo(sx, sy);
+    ctx2d.strokeStyle = grad;
+    ctx2d.lineWidth = 0.5;
+    ctx2d.stroke();
+  });
+
+  // ── Raccoglie elementi per painter's sort ──
+  const items = [];
+
+  S.fractals.forEach(f => {
+    const p = project3d(f.x3d, f.y3d, f.z3d, cw, ch, R3D);
+    items.push({ kind: 'frac', f, ...p });
+  });
+
+  S.contributi.forEach(c => {
+    c.orbitAngle += c.orbitSpeed * 0.7;
+    c.glow = Math.max(0.15, c.glow * 0.997);
+
+    let tx = 0, ty = 0, tz = 0, tw = 0;
+    (c.fractalsActivated || []).forEach(({ name, activation }) => {
+      const f = S.fractalMap[name?.toLowerCase()];
+      if (f) {
+        const w = Math.max(0.01, activation || 0.1);
+        tx += f.x3d * w; ty += f.y3d * w; tz += f.z3d * w;
+        tw += w;
+      }
+    });
+    if (tw < 0.01) {
+      tx = Math.cos(c._seed * Math.PI * 2) * 0.6;
+      ty = (c._seed2 - 0.5) * 0.8;
+      tz = Math.sin(c._seed * Math.PI * 2) * 0.6;
+      tw = 1;
+    }
+    const cx3 = tx / tw, cy3 = ty / tw, cz3 = tz / tw;
+    const orbR = 0.20;
+    const ox = cx3 + orbR * Math.cos(c.orbitAngle);
+    const oy = cy3 + orbR * Math.sin(c.orbitAngle * 1.4) * 0.65;
+    const oz = cz3 + orbR * Math.sin(c.orbitAngle) * 0.8;
+
+    const p = project3d(ox, oy, oz, cw, ch, R3D);
+    items.push({ kind: 'contrib', c, ...p });
+  });
+
+  items.sort((a, b) => a.z - b.z);
+
+  // ── Disegna ──
+  items.forEach(item => {
+    if (item.kind === 'frac') {
+      const { f, sx, sy, scale, z } = item;
+      const depth = Math.max(0, Math.min(1, (z + 1.4) / 2.8));
+      const glowA = f._glow || 0;
+      if (glowA > 0.01) f._glow = glowA * 0.993;
+
+      if (f.isPure) {
+        const r = scale * 10 + glowA * 8;
+        // Alone esteso
+        const haloR = r * (4 + glowA * 4);
+        const g = ctx2d.createRadialGradient(sx, sy, 0, sx, sy, haloR);
+        g.addColorStop(0,   `rgba(240, 200, 80,  ${(0.10 + glowA * 0.5) * depth})`);
+        g.addColorStop(0.4, `rgba(180, 120, 60,  ${(0.04 + glowA * 0.2) * depth})`);
+        g.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx2d.beginPath(); ctx2d.arc(sx, sy, haloR, 0, Math.PI * 2);
+        ctx2d.fillStyle = g; ctx2d.fill();
+        // Nucleo brillante
+        ctx2d.beginPath(); ctx2d.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx2d.fillStyle = `rgba(255, 235, 140, ${0.4 + depth * 0.6})`;
+        ctx2d.fill();
+        // Corona
+        ctx2d.beginPath(); ctx2d.arc(sx, sy, r * 1.5, 0, Math.PI * 2);
+        ctx2d.strokeStyle = `rgba(255, 220, 100, ${depth * 0.35})`;
+        ctx2d.lineWidth = 1;
+        ctx2d.stroke();
+        // Nome e simbolo
+        if (depth > 0.15) {
+          const trigIdx = Math.floor(f.id / 8);
+          const trig = TRIGRAMS[trigIdx] || {};
+          const a = Math.min(0.95, depth * 1.2);
+          ctx2d.textAlign = 'center';
+          ctx2d.fillStyle = `rgba(230, 210, 150, ${a})`;
+          ctx2d.font = `${Math.max(8, Math.round(scale * 11))}px "DM Mono", monospace`;
+          ctx2d.fillText(f.name, sx, sy - r - 6);
+          ctx2d.font = `${Math.max(10, Math.round(scale * 15))}px sans-serif`;
+          ctx2d.fillStyle = `rgba(200, 180, 100, ${depth * 0.85})`;
+          ctx2d.fillText(trig.sym || '', sx, sy + r + 14);
+        }
+      } else {
+        // Misti: stelle piccole con scintilla
+        const r = Math.max(1, scale * 2.5 + glowA * 2);
+        if (glowA > 0.05) {
+          const g = ctx2d.createRadialGradient(sx, sy, 0, sx, sy, r * 5);
+          g.addColorStop(0, `rgba(184, 152, 72, ${glowA * 0.5})`);
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx2d.beginPath(); ctx2d.arc(sx, sy, r * 5, 0, Math.PI * 2);
+          ctx2d.fillStyle = g; ctx2d.fill();
+        }
+        ctx2d.beginPath(); ctx2d.arc(sx, sy, r, 0, Math.PI * 2);
+        ctx2d.fillStyle = `rgba(170, 155, 115, ${0.15 + depth * 0.5 + glowA * 0.4})`;
+        ctx2d.fill();
+      }
+    } else if (item.kind === 'contrib') {
+      const { c, sx, sy, scale, z } = item;
+      const depth = Math.max(0, Math.min(1, (z + 1.4) / 2.8));
+      const col = COL[c.tipo] || COL.parola;
+      const age = Math.min(1, (Date.now() - (c.birthTime || Date.now())) / 1500);
+      const r = scale * (7 + c.glow * 6) * (0.3 + age * 0.7);
+      const baseAlpha = (0.4 + depth * 0.6) * (0.5 + c.glow * 0.5);
+
+      // Alone grande
+      const haloR = r * 4.5;
+      const g = ctx2d.createRadialGradient(sx, sy, 0, sx, sy, haloR);
+      g.addColorStop(0,   `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${baseAlpha * 0.5})`);
+      g.addColorStop(0.5, `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${baseAlpha * 0.15})`);
+      g.addColorStop(1,   'rgba(0,0,0,0)');
+      ctx2d.beginPath(); ctx2d.arc(sx, sy, haloR, 0, Math.PI * 2);
+      ctx2d.fillStyle = g; ctx2d.fill();
+
+      // Nucleo
+      ctx2d.beginPath(); ctx2d.arc(sx, sy, r, 0, Math.PI * 2);
+      ctx2d.fillStyle = `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${baseAlpha})`;
+      ctx2d.fill();
+      // Bordo bianco
+      ctx2d.strokeStyle = `rgba(255,255,255,${depth * 0.3})`;
+      ctx2d.lineWidth = 0.7;
+      ctx2d.stroke();
+
+      if (c.glow > 0.45 && c.label && depth > 0.25) {
+        const lbl = c.label.length > 20 ? c.label.slice(0, 20) + '…' : c.label;
+        ctx2d.fillStyle = `rgba(230, 215, 180, ${Math.min(0.9, c.glow * depth)})`;
+        ctx2d.font = '12px "DM Sans", sans-serif';
+        ctx2d.textAlign = 'center';
+        ctx2d.fillText(lbl, sx, sy - r - 7);
+      }
+    }
+  });
+
+  // HUD
+  ctx2d.fillStyle = 'rgba(150, 130, 100, 0.3)';
+  ctx2d.font = '10px "DM Mono", monospace';
+  ctx2d.textAlign = 'left';
+  ctx2d.fillText(`UNIVERSO 3D  ·  64 frattali  ·  ${S.contributi.length} voci nel campo`, 16, ch - 14);
+  ctx2d.textAlign = 'right';
+  ctx2d.fillText('trascina per ruotare', cw - 16, ch - 14);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOOP PRINCIPALE
+// ═══════════════════════════════════════════════════════════════
+
+function draw() {
+  if (S.modo3D) {
+    draw3D();
+  } else {
+    draw2D();
+  }
+  requestAnimationFrame(draw);
+}
+
+draw();
+
+// ── Toggle 3D ──
+function toggle3D() {
+  S.modo3D = !S.modo3D;
+  const btn = document.getElementById('btn-3d');
+  btn.textContent = S.modo3D ? '↩ 2D' : '✦ 3D';
+  btn.style.background = S.modo3D ? 'var(--text)' : '';
+  btn.style.color = S.modo3D ? 'var(--surface)' : '';
+  canvas.classList.toggle('modo-3d', S.modo3D);
+  document.getElementById('campo-hint').textContent = S.modo3D
+    ? 'Trascina per ruotare l\'universo'
+    : '← clicca un punto per leggere il contributo';
+}
+
+// Stato iniziale: 3D attivo di default
+window.addEventListener('load', () => {
+  const btn = document.getElementById('btn-3d');
+  if (btn) {
+    btn.style.background = 'var(--text)';
+    btn.style.color = 'var(--surface)';
+  }
+  canvas.classList.add('modo-3d');
+  document.getElementById('campo-hint').textContent = 'Trascina per ruotare l\'universo';
+});
+
+// ── Drag 3D (mouse) ──
+canvas.addEventListener('mousedown', e => {
+  if (!S.modo3D) return;
+  drag3D.active = true;
+  drag3D.lastX = e.clientX;
+  drag3D.lastY = e.clientY;
+  canvas.classList.add('dragging');
+});
+
+window.addEventListener('mousemove', e => {
+  if (!S.modo3D || !drag3D.active) return;
+  const dx = e.clientX - drag3D.lastX;
+  const dy = e.clientY - drag3D.lastY;
+  rot3DY += dx * 0.006;
+  rot3DX += dy * 0.006;
+  rot3DX = Math.max(-1.3, Math.min(1.3, rot3DX));
+  drag3D.lastX = e.clientX;
+  drag3D.lastY = e.clientY;
+});
+
+window.addEventListener('mouseup', () => {
+  drag3D.active = false;
+  canvas.classList.remove('dragging');
+});
+
+// ── Drag 3D (touch) ──
+canvas.addEventListener('touchstart', e => {
+  if (!S.modo3D) return;
+  drag3D.active = true;
+  drag3D.lastX = e.touches[0].clientX;
+  drag3D.lastY = e.touches[0].clientY;
+}, { passive: true });
+
+canvas.addEventListener('touchmove', e => {
+  if (!S.modo3D || !drag3D.active) return;
+  const dx = e.touches[0].clientX - drag3D.lastX;
+  const dy = e.touches[0].clientY - drag3D.lastY;
+  rot3DY += dx * 0.006;
+  rot3DX += dy * 0.006;
+  rot3DX = Math.max(-1.3, Math.min(1.3, rot3DX));
+  drag3D.lastX = e.touches[0].clientX;
+  drag3D.lastY = e.touches[0].clientY;
+}, { passive: true });
+
+canvas.addEventListener('touchend', () => { drag3D.active = false; });
+
+// ── Click su canvas (solo modalità 2D) ──
+canvas.addEventListener('click', function(e) {
+  if (S.modo3D) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  let closest = null, minDist = 20;
+  S.contributi.forEach(c => {
+    const d = Math.sqrt((c.x - mx) ** 2 + (c.y - my) ** 2);
+    if (d < minDist) { closest = c; minDist = d; }
+  });
+
+  if (closest) {
+    if (S.collegaMode) {
+      handleCollegaClick(closest);
+    } else {
+      mostraInfo(closest);
+    }
+    return;
+  }
+
+  let closestF = null; minDist = 15;
+  S.fractals.forEach(f => {
+    const d = Math.sqrt((f.x - mx) ** 2 + (f.y - my) ** 2);
+    if (d < minDist) { closestF = f; minDist = d; }
+  });
+
+  if (closestF) {
+    mostraInfoFrattale(closestF);
+    return;
+  }
+
+  chiudiInfo();
+});
+
+function mostraInfo(c) {
+  const panel = document.getElementById('info-panel');
+  document.getElementById('info-title').textContent = c.label || c.tipo;
+  let meta = '';
+  if (c.userName) meta += `da ${c.userName}`;
+  const fractNames = (c.fractalsActivated || []).map(f => f.name).filter(Boolean);
+  if (fractNames.length > 0) meta += (meta ? ' · ' : '') + `frattali: ${fractNames.slice(0, 3).join(', ')}`;
+  if (c.text) meta += (meta ? '\n' : '') + c.text;
+  document.getElementById('info-meta').textContent = meta;
+  panel.classList.add('visibile');
+}
+
+function mostraInfoFrattale(f) {
+  const panel = document.getElementById('info-panel');
+  const lower = Math.floor(f.id / 8);
+  const upper = f.id % 8;
+  document.getElementById('info-title').textContent = f.name;
+  const lowerT = TRIGRAMS[lower];
+  const upperT = TRIGRAMS[upper];
+  let meta = `${lowerT.sym} ${lowerT.name} (${lowerT.dim})`;
+  if (lower !== upper) meta += ` × ${upperT.sym} ${upperT.name} (${upperT.dim})`;
+  meta += `\n${f.word_count || 0} parole nel lessico`;
+  if (f.isPure) meta += '\nEsagramma puro — attrattore principale';
+  document.getElementById('info-meta').textContent = meta;
+  panel.classList.add('visibile');
+}
+
+function chiudiInfo() {
+  document.getElementById('info-panel').classList.remove('visibile');
+}
+
+// ── Collega mode ──
+function toggleCollegaMode() {
+  S.collegaMode = !S.collegaMode;
+  S.collegaSrc = null;
+  const btn = document.getElementById('btn-collega');
+  btn.style.background = S.collegaMode ? 'var(--text)' : '';
+  btn.style.color = S.collegaMode ? 'var(--surface)' : '';
+  document.getElementById('campo-hint').textContent = S.collegaMode
+    ? 'Clicca due punti per collegarli'
+    : '← clicca un punto per leggere il contributo';
+  canvas.style.cursor = S.collegaMode ? 'pointer' : (S.modo3D ? 'grab' : 'crosshair');
+}
+
+function handleCollegaClick(c) {
+  if (!S.collegaSrc) {
+    S.collegaSrc = c;
+    c.glow = 1.0;
+  } else {
+    S.edges.push({ from: S.collegaSrc, to: c, strength: 0.8, age: 0 });
+    if (S.collegaSrc.label && c.label) {
+      fetch('/api/community/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: S.collegaSrc.label, relation: 'SimilarTo', object: c.label,
+          strength: 3, user_id: S.userId, user_name: S.userName, user_context: S.userContext
+        })
+      }).catch(() => {});
+    }
+    S.collegaSrc = null;
+    toggleCollegaMode();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TIMER
+// ═══════════════════════════════════════════════════════════════
+
+setInterval(() => {
+  const elapsed = Math.floor((Date.now() - S.sessionStart) / 1000);
+  const m = Math.floor(elapsed / 60);
+  const s = elapsed % 60;
+  document.getElementById('timer').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+}, 1000);
+
+// ═══════════════════════════════════════════════════════════════
+// TEXTAREA COUNTERS
+// ═══════════════════════════════════════════════════════════════
+
+['racconta', 'rispondi'].forEach(id => {
+  const el = document.getElementById(id + '-text');
+  if (el) el.addEventListener('input', function() {
+    document.getElementById(id + '-count').textContent = this.value.length;
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// STRENGTH BUTTONS
+// ═══════════════════════════════════════════════════════════════
+
+const strengthLabels = ['', 'molto debole', 'debole', 'media', 'forte', 'molto forte'];
+document.querySelectorAll('.strength-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.strength-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    S.strength = parseInt(btn.dataset.val);
+    document.getElementById('strength-label').textContent = strengthLabels[S.strength];
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// RELAZIONE LABELS
+// ═══════════════════════════════════════════════════════════════
+
+const relLabels = {
+  IsA: 'è un tipo di', PartOf: 'fa parte di', Causes: 'porta a',
+  UsedFor: 'si usa per', SimilarTo: 'è simile a',
+  OppositeOf: "è l'opposto di", Has: 'ha come caratteristica',
+};
+
+// ═══════════════════════════════════════════════════════════════
+// AZIONI
+// ═══════════════════════════════════════════════════════════════
+
+// ── RACCONTA ──
+
+async function eseguiRacconta() {
+  const text = document.getElementById('racconta-text').value.trim();
+  if (!text) return;
+
+  const btn = document.getElementById('racconta-btn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.textContent = 'In elaborazione...';
+
+  try {
+    const r = await fetch('/api/community/teach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text, user_id: S.userId, user_name: S.userName, user_context: S.userContext,
+      }),
+    });
+    const data = await r.json();
+    processTeachResult(data, text, 'racconto');
+
+    const risp = document.getElementById('racconta-risposta');
+    risp.classList.add('visibile');
+    const content = document.getElementById('racconta-risp-content');
+    const tags = document.getElementById('racconta-risp-tags');
+
+    let narrazione = '';
+    if (data.fractals_touched?.length > 0) {
+      narrazione = 'Ha toccato: ' + data.fractals_touched.map(([n]) => n).join(', ') + '.';
+    }
+    if (data.connections_found?.length > 0) {
+      const descs = data.connections_found.slice(0, 3).map(([s, rel, o]) =>
+        `${s} ${relLabels[rel] || rel} ${o}`);
+      narrazione += (narrazione ? ' ' : '') + descs.join('; ') + '.';
+    }
+    if (!narrazione) {
+      narrazione = data.field_energy_delta > 0.01
+        ? `Il campo si è animato (+${(data.field_energy_delta * 100).toFixed(0)}% energia)`
+        : 'Le tue parole sono entrate nel campo.';
+    }
+    content.textContent = narrazione;
+
+    tags.innerHTML = '';
+    (data.words_new || []).slice(0, 8).forEach(w => {
+      const t = document.createElement('span');
+      t.className = 'risp-tag nuovo';
+      t.textContent = w;
+      t.title = 'Parola nuova per Prometeo';
+      t.onclick = () => { document.getElementById('conn-from').value = w; mostraVista('collega'); };
+      tags.appendChild(t);
+    });
+    (data.words_known || []).slice(0, 6).forEach(w => {
+      const t = document.createElement('span');
+      t.className = 'risp-tag noto';
+      t.textContent = w;
+      t.onclick = () => { document.getElementById('conn-from').value = w; mostraVista('collega'); };
+      tags.appendChild(t);
+    });
+    if (data.resonating_words?.length > 0) {
+      (data.resonating_words || []).slice(0, 6).forEach(w => {
+        const t = document.createElement('span');
+        t.className = 'risp-tag risonante';
+        t.textContent = w;
+        t.title = 'Risonanza dal campo';
+        tags.appendChild(t);
+      });
+    }
+
+    aggiungiSessione('racconto', text, data.fractals_touched);
+    document.getElementById('racconta-text').value = '';
+    document.getElementById('racconta-count').textContent = '0';
+
+    if (window.innerWidth <= 768) setTimeout(() => cambiaPannello('campo'), 1200);
+
+  } catch(e) { console.error(e); }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  btn.textContent = 'Condividi con il campo';
+}
+
+// ── COLLEGA ──
+
+async function eseguiCollega() {
+  const from = document.getElementById('conn-from').value.trim().toLowerCase();
+  const rel = document.getElementById('conn-rel').value;
+  const to = document.getElementById('conn-to').value.trim().toLowerCase();
+  if (!from || !to) return;
+
+  const btn = document.getElementById('collega-btn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.textContent = 'In elaborazione...';
+
+  try {
+    await fetch('/api/community/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: from, relation: rel, object: to, strength: S.strength,
+        user_id: S.userId, user_name: S.userName, user_context: S.userContext,
+      }),
+    });
+
+    const risp = document.getElementById('collega-risposta');
+    risp.classList.add('visibile');
+    document.getElementById('collega-risp-content').textContent =
+      `${from} → ${relLabels[rel] || rel} → ${to} (peso: ${S.strength}/5)`;
+
+    // Un unico punto che rappresenta la connessione tra i due concetti
+    addContributo(`${from} ↔ ${to}`, 'connessione', [], S.userName, `${from} ${relLabels[rel] || rel} ${to}`);
+
+    aggiungiSessione('connessione', `${from} → ${relLabels[rel] || rel} → ${to}`);
+
+    document.getElementById('conn-from').value = '';
+    document.getElementById('conn-to').value = '';
+
+    if (window.innerWidth <= 768) setTimeout(() => cambiaPannello('campo'), 1200);
+
+  } catch(e) { console.error(e); }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  btn.textContent = 'Aggiungi connessione';
+}
+
+// ── RISPONDI ──
+
+async function caricaPrometeoSays() {
+  try {
+    const r = await fetch('/api/community/field');
+    const data = await r.json();
+    const words = (data.top_words || []).slice(0, 12);
+    const sessionWords = (data.session_words || []).slice(0, 8);
+
+    let text = '';
+    if (sessionWords.length > 0) {
+      text = `Il campo parla di: ${sessionWords.join(', ')}.`;
+      if (words.length > 0) {
+        const extra = words.filter(w => !sessionWords.includes(w)).slice(0, 6);
+        if (extra.length > 0) text += ` Risuonano anche: ${extra.join(', ')}.`;
+      }
+    } else if (words.length > 0) {
+      text = `Le parole più vive nel campo sono: ${words.join(', ')}.`;
+    } else {
+      text = 'Il campo è ancora silenzioso. Aspetta che qualcuno condivida qualcosa.';
+    }
+
+    document.getElementById('prometeo-text').textContent = text;
+  } catch(e) {
+    document.getElementById('prometeo-text').textContent = 'Il campo è in ascolto...';
+  }
+}
+
+async function eseguiRispondi() {
+  const text = document.getElementById('rispondi-text').value.trim();
+  if (!text) return;
+
+  const btn = document.getElementById('rispondi-btn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.textContent = 'In elaborazione...';
+
+  try {
+    const r = await fetch('/api/community/teach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text, user_id: S.userId, user_name: S.userName, user_context: S.userContext,
+      }),
+    });
+    const data = await r.json();
+    processTeachResult(data, text, 'risposta');
+
+    const risp = document.getElementById('rispondi-risposta');
+    risp.classList.add('visibile');
+    const content = document.getElementById('rispondi-risp-content');
+    const tags = document.getElementById('rispondi-risp-tags');
+
+    let narrazione = data.fractals_touched?.length > 0
+      ? 'Ha toccato: ' + data.fractals_touched.map(([n]) => n).join(', ') + '.'
+      : 'Le tue parole sono entrate nel campo.';
+    content.textContent = narrazione;
+
+    tags.innerHTML = '';
+    [...(data.words_new || []), ...(data.words_known || [])].slice(0, 8).forEach(w => {
+      const t = document.createElement('span');
+      t.className = 'risp-tag noto';
+      t.textContent = w;
+      tags.appendChild(t);
+    });
+
+    aggiungiSessione('risposta', text, data.fractals_touched);
+    document.getElementById('rispondi-text').value = '';
+    document.getElementById('rispondi-count').textContent = '0';
+
+    caricaPrometeoSays();
+
+    if (window.innerWidth <= 768) setTimeout(() => cambiaPannello('campo'), 1200);
+
+  } catch(e) { console.error(e); }
+
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  btn.textContent = 'Condividi con il campo';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTRIBUTI → CANVAS
+// ═══════════════════════════════════════════════════════════════
+
+// fractalsActivated = [{name: string, activation: number}]
+function addContributo(label, tipo, fractalsActivated, userName, text) {
+  fractalsActivated = fractalsActivated || [];
+  const existing = S.contributi.find(c => c.label === label && c.tipo === tipo);
+  if (existing) {
+    existing.glow = 1.0;
+    if (fractalsActivated.length > 0) existing.fractalsActivated = fractalsActivated;
+    return existing;
+  }
+
+  const c = {
+    label, tipo, fractalsActivated, userName, text,
+    x: 0, y: 0,
+    glow: 1.0,
+    orbitAngle: Math.random() * Math.PI * 2,
+    orbitSpeed: 0.004 + Math.random() * 0.005,
+    anchorX: 0, anchorY: 0, orbitDist: 50 + Math.random() * 60,
+    _seed: Math.random(),
+    _seed2: Math.random(),
+    birthTime: Date.now(),
+  };
+  layoutContributo(c);
+  S.contributi.push(c);
+
+  if (S.contributi.length > 120) S.contributi.shift();
+  return c;
+}
+
+// Un solo puntino per ogni teach (non la scomposizione delle parole)
+function processTeachResult(data, text, tipo) {
+  const fractals = data.fractals_touched || [];
+  const fractalsActivated = fractals.map(([name, activation]) => ({ name, activation }));
+
+  // Etichetta: prime 3 parole significative del testo
+  const words = text.trim().split(/\s+/).filter(w => w.length > 2);
+  const label = words.slice(0, 3).join(' ') || text.slice(0, 20);
+  addContributo(label, tipo, fractalsActivated, S.userName, text);
+
+  // Illumina i frattali toccati
+  fractals.forEach(([name, activation]) => {
+    const f = S.fractalMap[name.toLowerCase()];
+    if (f) f._glow = Math.min(1.0, (f._glow || 0) + activation * 2);
+  });
+
+  S.partecipanti.add(S.userName);
+  aggiornaPartecipanti();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SESSIONE FEED
+// ═══════════════════════════════════════════════════════════════
+
+function aggiungiSessione(tipo, testo, fractals) {
+  const list = document.getElementById('sessione-list');
+  const vuota = list.querySelector('.sessione-vuota');
+  if (vuota) vuota.remove();
+
+  const item = document.createElement('div');
+  item.className = 'sessione-item';
+
+  const shortText = testo.length > 80 ? testo.slice(0, 80) + '...' : testo;
+  let fracInfo = '';
+  if (fractals?.length > 0) {
+    fracInfo = `<span class="frattali"> — ${fractals.slice(0, 3).map(([n]) => n).join(', ')}</span>`;
+  }
+
+  item.innerHTML = `
+    <span class="sessione-tipo ${tipo}">${tipo}</span>
+    <span class="sessione-testo">${shortText}${fracInfo}</span>
+  `;
+
+  list.insertBefore(item, list.firstChild);
+  while (list.children.length > 30) list.removeChild(list.lastChild);
+}
+
+function aggiornaPartecipanti() {
+  const n = S.partecipanti.size;
+  document.getElementById('partecipanti-count').textContent = `${n} nel campo`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════════════════════════
+
+function connettiWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  S.ws = ws;
+
+  ws.onopen = () => {
+    document.getElementById('ws-dot').style.background = 'var(--connessione)';
+  };
+
+  ws.onclose = () => {
+    document.getElementById('ws-dot').style.background = 'var(--text-soft)';
+    setTimeout(connettiWS, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type !== 'campo_update') return;
+      const eMio = msg.user_name === S.userName;
+
+      if (msg.event === 'narra' && !eMio) {
+        const fractalsActivated = (msg.fractals_touched || []).map(([name, act]) => ({ name, activation: act }));
+        const words = msg.words_new || [];
+
+        // Un solo punto per il contributo dell'altro utente
+        if (words.length > 0) {
+          const label = words.slice(0, 3).join(' ');
+          addContributo(label, 'altri', fractalsActivated, msg.user_name, null);
+        }
+
+        // Illumina frattali
+        (msg.fractals_touched || []).forEach(([name, act]) => {
+          const f = S.fractalMap[name.toLowerCase()];
+          if (f) f._glow = Math.min(1.0, (f._glow || 0) + act * 2);
+        });
+
+        if (words.length > 0) {
+          mostraToast('racconto', msg.user_name,
+            `ha condiviso: ${words.slice(0, 4).join(', ')}${words.length > 4 ? '...' : ''}`);
+          aggiungiSessione('altri',
+            `${msg.user_name}: ${words.slice(0, 6).join(', ')}`,
+            msg.fractals_touched);
+        }
+
+        S.partecipanti.add(msg.user_name);
+        aggiornaPartecipanti();
+      }
+
+      if (msg.event === 'connetti' && !eMio) {
+        const label = `${msg.subject} ↔ ${msg.object}`;
+        addContributo(label, 'connessione', [], msg.user_name, null);
+        mostraToast('connessione', msg.user_name,
+          `${msg.subject} → ${relLabels[msg.relation] || msg.relation} → ${msg.object}`);
+        aggiungiSessione('altri',
+          `${msg.user_name}: ${msg.subject} → ${relLabels[msg.relation] || msg.relation} → ${msg.object}`);
+        S.partecipanti.add(msg.user_name);
+        aggiornaPartecipanti();
+      }
+    } catch(e) {}
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════════
+
+function mostraToast(tipo, nome, testo) {
+  const area = document.getElementById('toast-area');
+  const toast = document.createElement('div');
+  toast.className = `toast tipo-${tipo}`;
+  toast.innerHTML = `<span class="toast-nome">${nome}</span><span class="toast-testo">${testo}</span>`;
+  area.insertBefore(toast, area.firstChild);
+  setTimeout(() => {
+    toast.style.transition = 'opacity 0.5s';
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 500);
+  }, 4000);
+  while (area.children.length > 3) area.removeChild(area.lastChild);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CARICA FRATTALI
+// ═══════════════════════════════════════════════════════════════
+
+async function loadFractals() {
+  try {
+    const r = await fetch('/api/universe');
+    const data = await r.json();
+    if (!data.fractals) return;
+
+    S.fractals = data.fractals.map(f => {
+      const lower = f.lower ?? Math.floor(f.id / 8);
+      const upper = f.upper ?? (f.id % 8);
+
+      // Coordinate 3D su sfera: lower → latitudine, upper → longitudine
+      const lat = ((lower / 7) * Math.PI - Math.PI / 2) * 0.88; // -79° a +79°
+      const lon = (upper / 8) * Math.PI * 2;
+      const x3d = Math.cos(lat) * Math.cos(lon);
+      const y3d = Math.sin(lat);
+      const z3d = Math.cos(lat) * Math.sin(lon);
+
+      return {
+        id: f.id,
+        name: f.name,
+        word_count: f.word_count || 0,
+        lower,
+        upper,
+        x: 0, y: 0,
+        isPure: false,
+        radius: 3.5,
+        _glow: 0,
+        // Coordinate 3D
+        x3d, y3d, z3d,
+      };
+    });
+
+    S.fractalMap = {};
+    S.fractals.forEach(f => {
+      S.fractalMap[f.name.toLowerCase()] = f;
+    });
+
+    layoutFractals();
+  } catch(e) { console.error('loadFractals error:', e); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════════
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    if (document.getElementById('vista-racconta').classList.contains('attiva'))
+      eseguiRacconta();
+    else if (document.getElementById('vista-collega').classList.contains('attiva'))
+      eseguiCollega();
+    else if (document.getElementById('vista-rispondi').classList.contains('attiva'))
+      eseguiRispondi();
+  }
+  if (e.key === 'Escape') {
+    if (S.collegaMode) toggleCollegaMode();
+    else tornaScelta();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+
+function inizializza() {
+  connettiWS();
+  loadFractals();
+  S.partecipanti.add(S.userName);
+  aggiornaPartecipanti();
+  if (window.innerWidth <= 768) cambiaPannello('campo');
+}
+</script>
+</body>
+</html>

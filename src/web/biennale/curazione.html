@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Curazione KG — Prometeo</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#09090f;color:#e8eeff;font-family:'Courier New',monospace;font-size:14px;line-height:1.5}
+
+/* ── LAYOUT ── */
+#app{display:flex;height:100vh;overflow:hidden}
+#left{width:270px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid rgba(100,120,255,.15);background:#07070e}
+#right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── TABS ── */
+#tabs{display:flex;border-bottom:1px solid rgba(100,120,255,.15);flex-shrink:0}
+.tab{
+  padding:10px 20px;cursor:pointer;font-size:13px;letter-spacing:.06em;
+  color:rgba(180,200,255,.45);border-bottom:2px solid transparent;
+  transition:color .15s,border-color .15s;user-select:none
+}
+.tab:hover{color:rgba(200,215,255,.7)}
+.tab.active{color:#fff;border-bottom-color:#6a8fff}
+
+/* ── SINISTRA ── */
+#search-bar{padding:12px}
+#search-bar input{
+  width:100%;background:#0e0e1e;border:1px solid rgba(100,120,255,.3);
+  border-radius:7px;padding:8px 12px;color:#f0f4ff;
+  font:14px 'Courier New',monospace;outline:none
+}
+#search-bar input::placeholder{color:rgba(150,170,255,.3)}
+#search-bar input:focus{border-color:#5a7fff}
+#list-info{padding:4px 12px 6px;font-size:12px;color:rgba(160,180,255,.4)}
+#word-list{flex:1;overflow-y:auto}
+.word-item{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;cursor:pointer;
+  border-bottom:1px solid rgba(100,120,255,.05);
+  transition:background .1s
+}
+.word-item:hover{background:rgba(100,120,255,.07)}
+.word-item.active{background:rgba(100,120,255,.14);border-left:3px solid #6a8fff}
+.wi-word{flex:1;font-size:14px;color:#e8f0ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wi-right{text-align:right;flex-shrink:0;display:flex;flex-direction:column;gap:1px;align-items:flex-end}
+.wi-stab{font-size:11px;color:#80ff9a}
+.wi-deg{font-size:10px;color:rgba(140,160,220,.5)}
+.wi-frac{font-size:10px;color:rgba(160,130,255,.6);background:rgba(80,40,120,.3);border-radius:8px;padding:0 5px}
+#pagination{display:flex;align-items:center;justify-content:center;gap:10px;padding:8px;border-top:1px solid rgba(100,120,255,.1)}
+.pg-btn{background:#0e0e1e;border:1px solid rgba(100,120,255,.3);border-radius:6px;padding:4px 11px;color:#8aabff;cursor:pointer;font:13px 'Courier New',monospace}
+.pg-btn:hover:not(:disabled){background:rgba(100,120,255,.18)}
+.pg-btn:disabled{opacity:.3;cursor:default}
+#pg-info{font-size:12px;color:rgba(150,170,255,.5);min-width:70px;text-align:center}
+
+/* ── CORPO DETTAGLIO ── */
+#pane-parole,#pane-categorie,#pane-guida{display:none;flex:1;flex-direction:column;overflow:hidden}
+#pane-parole.visible,#pane-categorie.visible,#pane-guida.visible{display:flex}
+
+/* header parola */
+#detail-header{
+  padding:14px 22px 12px;border-bottom:1px solid rgba(100,120,255,.14);
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex-shrink:0
+}
+#dw-word{font-size:1.7rem;color:#fff;letter-spacing:.02em;line-height:1}
+#dw-chips{display:flex;gap:8px;flex-wrap:wrap;flex:1}
+.chip{font-size:12px;font-weight:bold;padding:3px 10px;border-radius:10px;border:1px solid;white-space:nowrap}
+.chip-stab{color:#80ff9a;border-color:rgba(80,220,120,.3);background:rgba(10,60,20,.5)}
+.chip-exp{color:#aabcff;border-color:rgba(80,100,255,.3);background:rgba(10,20,70,.5)}
+.chip-reg{color:#d0a0ff;border-color:rgba(140,80,255,.3);background:rgba(30,10,70,.5)}
+.btn-del-word{background:rgba(200,50,50,.1);border:1px solid rgba(200,50,50,.3);border-radius:7px;padding:6px 14px;color:#ff9090;cursor:pointer;font:13px 'Courier New',monospace;transition:background .1s}
+.btn-del-word:hover{background:rgba(200,50,50,.22)}
+#no-word{display:flex;flex:1;align-items:center;justify-content:center;color:rgba(130,150,255,.3);font-size:16px}
+
+/* body scrollabile */
+#detail-body{flex:1;overflow-y:auto;padding:18px 22px}
+
+/* ── Sezione generica ── */
+.sec-title{font-size:11px;letter-spacing:.24em;color:#8aabff;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-weight:bold}
+.sec-title::after{content:'';flex:1;height:1px;background:rgba(100,140,255,.25)}
+
+/* ── Firma 8D (editing) ── */
+.firma-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px}
+.firma-dim{background:#101020;border:1px solid rgba(130,150,255,.3);border-radius:8px;padding:12px}
+.firma-dim-label{font-size:12px;color:#fff;margin-bottom:8px;letter-spacing:.04em;font-weight:bold}
+.firma-dim-ctrl{display:flex;align-items:center;gap:8px}
+.firma-slider{
+  flex:1;-webkit-appearance:none;height:8px;border-radius:4px;outline:none;cursor:pointer;
+  background:rgba(120,140,255,.25);border:1px solid rgba(120,140,255,.2)
+}
+.firma-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;cursor:pointer;border:2px solid #fff;background:var(--fc,#6a8fff);box-shadow:0 0 4px rgba(0,0,0,.5)}
+.firma-num{width:46px;background:#0a0a1a;border:1px solid rgba(150,170,255,.4);border-radius:5px;padding:4px 5px;color:#fff;font:13px 'Courier New',monospace;text-align:center;outline:none}
+.firma-num:focus{border-color:#8aabff}
+#btn-save-firma{
+  display:block;margin:0 0 22px;
+  background:linear-gradient(135deg,rgba(80,110,240,.7),rgba(100,70,240,.6));
+  border:1px solid rgba(150,170,255,.5);border-radius:7px;
+  padding:8px 20px;color:#fff;cursor:pointer;font-weight:bold;
+  font:13px 'Courier New',monospace;transition:background .15s
+}
+#btn-save-firma:hover{background:linear-gradient(135deg,rgba(100,130,255,.85),rgba(120,90,255,.75))}
+
+/* ── Octalysis (readonly) ── */
+.oct-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:22px}
+.oct-card{background:#101020;border:1px solid rgba(130,150,255,.2);border-radius:8px;padding:10px 11px}
+.oct-label{font-size:10px;letter-spacing:.07em;color:#d0e0ff;text-transform:uppercase;margin-bottom:5px;font-weight:bold}
+.oct-bar-wrap{height:4px;background:rgba(100,120,255,.12);border-radius:2px;overflow:hidden;margin-bottom:4px}
+.oct-bar{height:100%;border-radius:2px;transition:width .35s}
+.oct-val{font-size:12px;font-weight:bold}
+
+/* ── Relazioni ── */
+.rel-section{margin-bottom:20px}
+.rel-row{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px;border-radius:7px;
+  background:#0d0d1e;border:1px solid rgba(100,120,255,.1);
+  margin-bottom:4px;transition:border-color .15s
+}
+.rel-row:hover{border-color:rgba(100,120,255,.25)}
+.rel-row.dimmed{opacity:.38}
+.rel-badge{font-size:11px;font-weight:bold;padding:3px 8px;border-radius:5px;border:1px solid;white-space:nowrap;flex-shrink:0}
+.rel-arrow{color:rgba(150,170,255,.4);flex-shrink:0}
+.rel-target{color:#e8f0ff;flex:1;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.rel-target:hover{color:#fff;text-decoration:underline}
+.rel-via-chip{font-size:11px;color:#90e880;background:rgba(20,70,20,.6);border:1px solid rgba(100,200,80,.4);border-radius:5px;padding:2px 8px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;flex-shrink:0}
+.rel-via-chip:hover{color:#c0ffb0;border-color:rgba(120,220,100,.7)}
+.rel-via-empty{color:#70b860;background:rgba(15,50,15,.5);border:1px dashed rgba(80,160,60,.5)}
+.rel-conf{font-size:12px;font-weight:bold;color:#d8e4ff;flex-shrink:0;min-width:32px;text-align:right;cursor:pointer}
+.rel-conf:hover{color:#6a8fff}
+.btn-del-rel{background:transparent;border:none;cursor:pointer;color:rgba(220,80,80,.4);font-size:16px;padding:0 2px;line-height:1;flex-shrink:0;transition:color .1s}
+.btn-del-rel:hover{color:rgba(255,100,100,.9)}
+.no-rel{font-size:13px;color:rgba(160,185,255,.55);font-style:italic;padding:5px 10px}
+
+/* Inline edit popup */
+#rel-edit-popup{
+  position:fixed;z-index:100;background:#0e0e24;border:1px solid rgba(100,120,255,.35);
+  border-radius:10px;padding:14px;box-shadow:0 8px 32px rgba(0,0,0,.6);
+  min-width:280px;display:none
+}
+#rel-edit-popup h4{font-size:12px;letter-spacing:.12em;color:#a0c0ff;text-transform:uppercase;margin-bottom:12px;font-weight:bold}
+.ep-label{font-size:11px;color:#dde8ff;margin-bottom:4px;font-weight:bold}
+.ep-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ep-input{
+  flex:1;background:#141428;border:1px solid rgba(100,120,255,.25);border-radius:6px;
+  padding:6px 10px;color:#fff;font:13px 'Courier New',monospace;outline:none
+}
+.ep-input:focus{border-color:#6a8fff}
+.ep-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+.ep-btn{background:#0e0e1e;border:1px solid rgba(100,120,255,.3);border-radius:6px;padding:5px 13px;color:#aabcff;cursor:pointer;font:12px 'Courier New',monospace}
+.ep-btn:hover{background:rgba(100,120,255,.18)}
+.ep-btn-save{background:rgba(80,110,240,.4);border-color:rgba(120,140,255,.4);color:#d0dcff}
+.ep-btn-save:hover{background:rgba(100,130,255,.55)}
+.ep-btn-cancel{color:rgba(150,170,255,.6)}
+
+/* ── Form aggiungi relazione ── */
+.add-form{background:#0b0b1e;border:1px solid rgba(100,120,255,.16);border-radius:9px;padding:16px;margin-bottom:20px}
+.form-row{display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
+.form-row:last-child{margin-bottom:0}
+.form-group{display:flex;flex-direction:column;gap:3px}
+.form-label{font-size:11px;color:#dde8ff;letter-spacing:.08em;font-weight:bold}
+.form-input{background:#0e0e1e;border:1px solid rgba(100,120,255,.25);border-radius:6px;padding:7px 11px;color:#f0f4ff;font:14px 'Courier New',monospace;outline:none;transition:border-color .15s}
+.form-input:focus{border-color:#5a7fff}
+.form-input::placeholder{color:rgba(150,170,255,.28)}
+select.form-input option{background:#0e0e1e}
+.form-input-sm{width:72px}
+.form-input-md{width:155px}
+.form-input-lg{flex:1;min-width:100px}
+.btn-add{background:linear-gradient(135deg,rgba(80,110,240,.55),rgba(100,70,240,.45));border:1px solid rgba(120,140,255,.35);border-radius:7px;padding:7px 16px;color:#d0dcff;cursor:pointer;font:14px 'Courier New',monospace;transition:background .15s}
+.btn-add:hover{background:linear-gradient(135deg,rgba(100,130,255,.65),rgba(120,90,255,.55))}
+
+/* ── TAB CATEGORIE ── */
+#pane-categorie .body{flex:1;overflow-y:auto;padding:16px 22px}
+.cat-filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.cat-label{font-size:12px;color:#dde8ff;font-weight:bold}
+.cat-count{font-size:12px;color:rgba(150,170,255,.5);margin-bottom:14px}
+.cat-item{background:#0d0d1e;border:1px solid rgba(100,120,255,.12);border-radius:8px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.cat-item:hover,.cat-item.active{border-color:rgba(100,120,255,.4)}
+.cat-item.active{background:rgba(100,120,255,.07)}
+.cat-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.cat-word{font-size:15px;color:#fff;font-weight:bold}
+.cat-n{font-size:12px;color:#80ff9a;background:rgba(10,60,20,.5);border:1px solid rgba(80,200,100,.2);border-radius:8px;padding:1px 8px}
+.cat-sample{font-size:12px;color:rgba(160,180,255,.6)}
+/* pannello aggiunta bulk */
+#cat-bulk{background:#0b0b1e;border:1px solid rgba(100,120,255,.18);border-radius:9px;padding:14px;margin-top:14px;display:none}
+#cat-bulk h4{font-size:12px;letter-spacing:.12em;color:#a0c0ff;text-transform:uppercase;margin-bottom:10px;font-weight:bold}
+#cat-bulk textarea{
+  width:100%;background:#0e0e1e;border:1px solid rgba(100,120,255,.25);border-radius:7px;
+  padding:10px;color:#f0f4ff;font:13px 'Courier New',monospace;outline:none;resize:vertical;min-height:80px
+}
+#cat-bulk textarea:focus{border-color:#5a7fff}
+#cat-bulk textarea::placeholder{color:rgba(150,170,255,.28)}
+#cat-bulk-info{font-size:12px;color:rgba(150,170,255,.4);margin:6px 0}
+.cat-bulk-btns{display:flex;gap:8px;margin-top:8px}
+.cat-type-sel{background:#0e0e1e;border:1px solid rgba(100,120,255,.25);border-radius:6px;padding:6px 10px;color:#f0f4ff;font:13px 'Courier New',monospace;outline:none}
+
+/* ── TAB GUIDA ── */
+#pane-guida .body{flex:1;overflow-y:auto;padding:20px 28px;max-width:780px}
+.guida-h1{font-size:1.3rem;color:#fff;margin-bottom:6px}
+.guida-h2{font-size:1rem;color:#c8d8ff;margin:22px 0 8px;letter-spacing:.05em}
+.guida-p{font-size:13px;color:#c0ccee;line-height:1.75;margin-bottom:10px}
+.guida-table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px}
+.guida-table th{text-align:left;padding:6px 10px;border-bottom:1px solid rgba(100,120,255,.2);color:#d0dcff;letter-spacing:.06em;font-size:11px;text-transform:uppercase}
+.guida-table td{padding:7px 10px;border-bottom:1px solid rgba(100,120,255,.07);color:#c0ccee;vertical-align:top}
+.guida-table td:first-child{color:#e8f0ff;font-weight:bold;white-space:nowrap}
+.guida-table td em{color:rgba(150,220,120,.8);font-style:normal}
+.nota{background:#0d0d1e;border-left:3px solid #6a8fff;border-radius:0 7px 7px 0;padding:10px 14px;margin:12px 0;font-size:13px;color:#c0ccee;line-height:1.7}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(100,120,255,.2);border-radius:3px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ── SINISTRA ── -->
+<div id="left">
+  <div id="search-bar">
+    <input id="search" type="text" placeholder="Cerca parola..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div id="list-info">caricamento...</div>
+  <div id="word-list"></div>
+  <div id="pagination">
+    <button class="pg-btn" id="pg-prev" disabled>◀</button>
+    <span id="pg-info">—</span>
+    <button class="pg-btn" id="pg-next" disabled>▶</button>
+  </div>
+</div>
+
+<!-- ── DESTRA ── -->
+<div id="right">
+  <div id="tabs">
+    <div class="tab active" data-pane="parole">Parole</div>
+    <div class="tab" data-pane="categorie">Categorie</div>
+    <div class="tab" data-pane="guida">Guida firma 8D</div>
+  </div>
+
+  <!-- TAB PAROLE -->
+  <div id="pane-parole" class="visible">
+    <div id="no-word">← seleziona una parola dalla lista</div>
+    <div id="detail-wrap" style="display:none;flex-direction:column;height:100%">
+      <div id="detail-header">
+        <div id="dw-word">—</div>
+        <div id="dw-chips">
+          <span class="chip chip-stab" id="c-stab"></span>
+          <span class="chip chip-exp" id="c-exp"></span>
+          <span class="chip chip-reg" id="c-reg"></span>
+        </div>
+        <button class="btn-del-word" id="btn-del-word">cancella parola</button>
+      </div>
+      <div id="detail-body">
+
+        <!-- Firma 8D editing -->
+        <div class="sec-title">firma 8 dimensioni <span style="font-size:10px;color:rgba(150,170,255,.4);font-style:italic;letter-spacing:0">(modifica i valori, poi salva)</span></div>
+        <div class="firma-grid" id="firma-grid"></div>
+        <button id="btn-save-firma">salva firma</button>
+
+        <!-- Octalysis derivato -->
+        <div class="sec-title">profilo octalysis <span style="font-size:10px;color:rgba(150,170,255,.4);font-style:italic;letter-spacing:0">(calcolato automaticamente dalla firma)</span></div>
+        <div class="oct-grid" id="oct-grid"></div>
+
+        <!-- Relazioni uscenti -->
+        <div class="rel-section">
+          <div class="sec-title">relazioni uscenti <span style="font-size:10px;font-style:italic;letter-spacing:0;color:rgba(150,170,255,.4)">(clicca % per modificare fiducia/tramite)</span></div>
+          <div id="rel-out"></div>
+        </div>
+
+        <!-- Relazioni entranti -->
+        <div class="rel-section">
+          <div class="sec-title">relazioni entranti</div>
+          <div id="rel-in"></div>
+        </div>
+
+        <!-- Concetti multi-parola -->
+        <div class="add-form" style="background:#0a1010;border-color:rgba(80,200,120,.15);margin-bottom:14px">
+          <div class="sec-title" style="color:#70d880;margin-bottom:8px">concetti multi-parola</div>
+          <p style="font-size:12px;color:#a0c0a0;line-height:1.6;margin-bottom:0">
+            Per concetti come <em style="color:#c0ffb0">"mal di pancia"</em>: crea una parola composta <em style="color:#c0ffb0">mal_di_pancia</em> (usa _ come spazio), poi collegala con relazioni normali.<br>
+            Es: <em style="color:#c0ffb0">indigestione CAUSES mal_di_pancia</em> — oppure modella la catena: <em style="color:#c0ffb0">indigestione CAUSES dolore</em> + <em style="color:#c0ffb0">dolore PART_OF pancia</em>.
+          </p>
+        </div>
+
+        <!-- Aggiungi relazione -->
+        <div class="add-form">
+          <div class="sec-title" style="margin-bottom:12px">aggiungi relazione</div>
+          <div class="form-row">
+            <div class="form-group">
+              <div class="form-label">tipo relazione</div>
+              <select id="add-rel" class="form-input form-input-md">
+                <optgroup label="strutturali">
+                  <option value="IS_A">è un</option>
+                  <option value="HAS">ha</option>
+                  <option value="DOES">fa</option>
+                  <option value="PART_OF">è parte di</option>
+                </optgroup>
+                <optgroup label="causali">
+                  <option value="CAUSES">causa</option>
+                  <option value="ENABLES">rende possibile</option>
+                  <option value="REQUIRES">richiede</option>
+                  <option value="TRANSFORMS_INTO">diventa</option>
+                </optgroup>
+                <optgroup label="semantiche">
+                  <option value="SIMILAR_TO">è simile a</option>
+                  <option value="OPPOSITE_OF">è l'opposto di</option>
+                  <option value="USED_FOR">è usato per</option>
+                  <option value="EXPRESSES">esprime</option>
+                  <option value="SYMBOLIZES">simboleggia</option>
+                </optgroup>
+                <optgroup label="logiche">
+                  <option value="IMPLIES">implica</option>
+                  <option value="EQUIVALENT">è equivalente a</option>
+                  <option value="EXCLUDES">esclude</option>
+                  <option value="COEXISTS">coesiste con</option>
+                </optgroup>
+                <optgroup label="fenomenologiche">
+                  <option value="FEELS_AS">si sente come</option>
+                  <option value="WONDERS_ABOUT">si interroga su</option>
+                  <option value="REMEMBERS_AS">ricorda come</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1">
+              <div class="form-label">parola target</div>
+              <input id="add-to" type="text" class="form-input form-input-lg" placeholder="es. animale" autocorrect="off" autocapitalize="off" spellcheck="false">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="flex:1">
+              <div class="form-label">tramite (opzionale)</div>
+              <input id="add-via" type="text" class="form-input form-input-lg" placeholder="es. combustione, metamorfosi..." autocorrect="off" autocapitalize="off" spellcheck="false">
+            </div>
+            <div class="form-group">
+              <div class="form-label">fiducia</div>
+              <input id="add-conf" type="number" class="form-input form-input-sm" min="0" max="1" step="0.05" value="0.9">
+            </div>
+            <div class="form-group" style="justify-content:flex-end">
+              <button class="btn-add" id="btn-add-rel">+ aggiungi</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB CATEGORIE -->
+  <div id="pane-categorie">
+    <div class="body" style="flex:1;overflow-y:auto;padding:16px 22px">
+      <div class="cat-filters">
+        <span class="cat-label">relazione</span>
+        <select id="cat-rel" class="cat-type-sel">
+          <option value="IS_A">IS_A (è un)</option>
+          <option value="HAS">HAS (ha)</option>
+          <option value="CAUSES">CAUSES (causa)</option>
+          <option value="PART_OF">PART_OF (parte di)</option>
+          <option value="SIMILAR_TO">SIMILAR_TO</option>
+          <option value="OPPOSITE_OF">OPPOSITE_OF</option>
+        </select>
+        <span class="cat-label">minimo figli</span>
+        <input type="number" id="cat-min" class="form-input form-input-sm" value="5" min="1" max="100">
+        <input type="text" id="cat-search" class="form-input" style="width:160px" placeholder="filtra categoria..." autocorrect="off" spellcheck="false">
+        <button class="btn-add" id="cat-load">cerca</button>
+      </div>
+      <!-- Pulizia verbi -->
+      <div style="background:#0c0c1e;border:1px solid rgba(255,160,80,.2);border-radius:9px;padding:14px;margin-bottom:16px">
+        <div class="sec-title" style="color:#ffaa50;margin-bottom:8px">pulizia verbi coniugati</div>
+        <p style="font-size:12px;color:#c0c0a0;margin-bottom:10px;line-height:1.6">Rimuove dal lessico le forme coniugate (imperfetto, futuro, condizionale, gerundio, ecc.) mantenendo solo gli infiniti. Fai prima un'anteprima.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn-add" id="btn-pulizia-preview" style="background:rgba(200,120,40,.35);border-color:rgba(200,140,60,.5)">anteprima (dry run)</button>
+          <button class="btn-add" id="btn-pulizia-esegui" style="background:rgba(200,60,40,.4);border-color:rgba(220,80,60,.5);display:none">esegui pulizia</button>
+          <span id="pulizia-info" style="font-size:12px;color:#d0a060"></span>
+        </div>
+        <div id="pulizia-list" style="margin-top:10px;max-height:180px;overflow-y:auto;font-size:12px;color:#a0c0a0;display:none"></div>
+      </div>
+
+      <div class="cat-count" id="cat-count"></div>
+      <div id="cat-list"></div>
+
+      <!-- Pannello aggiunta bulk -->
+      <div id="cat-bulk">
+        <h4>aggiungi parole a <span id="cat-bulk-word" style="color:#fff"></span></h4>
+        <textarea id="cat-bulk-input" placeholder="una parola per riga&#10;es.&#10;gatto&#10;cane&#10;lupo"></textarea>
+        <div id="cat-bulk-info"></div>
+        <div class="cat-bulk-btns">
+          <select id="cat-bulk-rel" class="cat-type-sel">
+            <option value="IS_A">IS_A — la parola è un [categoria]</option>
+            <option value="HAS">HAS — la categoria ha [parole]</option>
+            <option value="CAUSES">CAUSES — causa</option>
+            <option value="PART_OF">PART_OF — parte di</option>
+          </select>
+          <button class="btn-add" id="cat-bulk-save">aggiungi tutte</button>
+          <button class="ep-btn ep-btn-cancel" id="cat-bulk-cancel">annulla</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB GUIDA -->
+  <div id="pane-guida">
+    <div class="body">
+      <div class="guida-h1">Come scegliere la firma 8D</div>
+      <p class="guida-p" style="margin-top:8px;color:rgba(180,200,255,.5)">La firma descrive la <em style="color:#c8d8ff">qualità</em> fenomenologica di una parola, non la sua definizione. Non serve essere precisi al millimetro — serve che la firma catturi l'<em style="color:#c8d8ff">essenza</em> percettiva del concetto.</p>
+
+      <div class="guida-h2">Le 8 dimensioni</div>
+      <table class="guida-table">
+        <tr><th>dimensione</th><th>0% = ...</th><th>100% = ...</th><th>esempi</th></tr>
+        <tr><td>confine</td><td>aperto, diffuso</td><td>delimitato, preciso</td><td><em>aria 10%, muro 90%, amore 30%, contratto 85%</em></td></tr>
+        <tr><td>valenza</td><td>negativo, doloroso</td><td>positivo, piacevole</td><td><em>dolore 5%, gioia 98%, pietra 50%, guerra 8%</em></td></tr>
+        <tr><td>intensità</td><td>quieto, silenzioso</td><td>intenso, forte</td><td><em>sonno 10%, esplosione 95%, lettura 30%, urlo 90%</em></td></tr>
+        <tr><td>definizione</td><td>vago, sfumato</td><td>preciso, inequivocabile</td><td><em>sentimento 20%, teorema 95%, cultura 25%, numero 98%</em></td></tr>
+        <tr><td>complessità</td><td>semplice, elementare</td><td>complesso, articolato</td><td><em>sasso 5%, filosofia 90%, cane 15%, ecosistema 85%</em></td></tr>
+        <tr><td>permanenza</td><td>effimero, transitorio</td><td>stabile, duraturo</td><td><em>lampo 5%, granito 98%, emozione 20%, montagna 95%</em></td></tr>
+        <tr><td>agency</td><td>passivo, inerte</td><td>agente, autonomo</td><td><em>sasso 2%, animale 80%, vento 65%, idea 40%</em></td></tr>
+        <tr><td>tempo</td><td>atemporale, eterno</td><td>temporale, istantaneo</td><td><em>infinito 5%, momento 95%, storia 70%, legge 15%</em></td></tr>
+      </table>
+
+      <div class="nota">
+        <strong style="color:#e8f0ff">Suggerimento pratico:</strong> chiediti "come senti questa parola nel corpo?" prima ancora di pensarla.
+        <em style="color:#a8e8a0">Paura</em>: confine alto (senti i limiti), valenza bassa, intensità alta, permanenza bassa (passa), agency bassa (subisci).
+        <em style="color:#a8e8a0">Libertà</em>: confine basso (apertura), valenza alta, intensità media, permanenza media, agency alta (sei tu che scegli).
+      </div>
+
+      <div class="guida-h2">L'Octalysis (derivato)</div>
+      <p class="guida-p">L'Octalysis è <strong style="color:#e8f0ff">calcolato automaticamente</strong> dalla firma — non si imposta manualmente. Modifica la firma e l'Octalysis si aggiorna di conseguenza.</p>
+      <table class="guida-table">
+        <tr><th>drive</th><th>formula</th><th>significato</th></tr>
+        <tr><td>significato epico</td><td>agency × permanenza</td><td>fare qualcosa che dura</td></tr>
+        <tr><td>realizzazione</td><td>intensità × definizione</td><td>obiettivo chiaro raggiunto con forza</td></tr>
+        <tr><td>creatività</td><td>complessità × agency</td><td>agire su sistemi complessi</td></tr>
+        <tr><td>possesso</td><td>confine × permanenza</td><td>qualcosa di delimitato e stabile che possiedi</td></tr>
+        <tr><td>influenza sociale</td><td>valenza × (1−confine)</td><td>connessione piacevole e aperta</td></tr>
+        <tr><td>scarsità</td><td>tempo × intensità × (1−perm)</td><td>intenso, fugace, urgente</td></tr>
+        <tr><td>curiosità</td><td>complessità × (1−definizione)</td><td>complesso ma indefinito = attrae esplorazione</td></tr>
+        <tr><td>evitamento perdita</td><td>(1−valenza) × (1−permanenza)</td><td>negativo e fugace = urgenza di non perdere</td></tr>
+      </table>
+
+      <div class="guida-h2">Relazioni: quando usarle</div>
+      <table class="guida-table">
+        <tr><th>relazione</th><th>quando usarla</th><th>NON usare quando</th></tr>
+        <tr><td>IS_A</td><td>gerarchia tassonomica: cane è un animale</td><td>è vaga: "paura è un'emozione" ✓, "cane è un essere" ✗ (troppo generico)</td></tr>
+        <tr><td>HAS</td><td>attributi permanenti: cane ha pelo</td><td>l'attributo è opzionale o contestuale</td></tr>
+        <tr><td>CAUSES</td><td>causalità diretta: fuoco causa calore <em>via combustione</em></td><td>non sai perché — usa IMPLIES invece</td></tr>
+        <tr><td>SIMILAR_TO</td><td>sinonimi reali: ciao ~ salve (ma meglio IS_A saluto)</td><td>fiducia sotto 50% — usa IS_A categoria comune</td></tr>
+        <tr><td>OPPOSITE_OF</td><td>antonimi veri: caldo ↔ freddo, luce ↔ buio</td><td>opposizioni contestuali o metaforiche</td></tr>
+        <tr><td>TRANSFORMS_INTO</td><td>trasformazione fisica/temporale: ghiaccio → acqua <em>via calore</em></td><td>trasformazioni metaforiche vaghe</td></tr>
+      </table>
+
+      <div class="nota">
+        <strong style="color:#e8f0ff">Regola d'oro:</strong> invece di <em style="color:#ffb0b0">ciao SIMILAR_TO addio 25%</em> (rumore),
+        usa <em style="color:#a8e8a0">ciao IS_A saluto</em> + <em style="color:#a8e8a0">addio IS_A saluto</em> al 95%.
+        Il sistema inferirà la similarità tramite la categoria comune — con più potere semantico.
+      </div>
+    </div>
+  </div>
+
+</div><!-- /right -->
+</div><!-- /app -->
+
+<!-- Popup modifica relazione -->
+<div id="rel-edit-popup">
+  <h4>modifica relazione</h4>
+  <div style="font-size:12px;color:rgba(150,170,255,.55);margin-bottom:10px" id="ep-desc"></div>
+  <div class="ep-label">fiducia (0–1)</div>
+  <div class="ep-row"><input type="number" id="ep-conf" class="ep-input" min="0" max="1" step="0.05"></div>
+  <div class="ep-label">tramite (lascia vuoto per rimuovere)</div>
+  <div class="ep-row"><input type="text" id="ep-via" class="ep-input" placeholder="es. combustione" autocorrect="off" spellcheck="false"></div>
+  <div class="ep-btns">
+    <button class="ep-btn ep-btn-cancel" id="ep-cancel">annulla</button>
+    <button class="ep-btn ep-btn-save" id="ep-save">salva</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const DIMS = [
+  {k:'confine',    color:'#6a8fff'},
+  {k:'valenza',    color:'#60ff90'},
+  {k:'intensità',  color:'#ff7a50'},
+  {k:'definizione',color:'#ffda50'},
+  {k:'complessità',color:'#c070ff'},
+  {k:'permanenza', color:'#50d8ff'},
+  {k:'agency',     color:'#ff60a0'},
+  {k:'tempo',      color:'#ffaa50'},
+];
+const OCT = [
+  {k:'significato epico', color:'#ffd060'},
+  {k:'realizzazione',     color:'#70ff80'},
+  {k:'creatività',        color:'#c070ff'},
+  {k:'possesso',          color:'#50d8ff'},
+  {k:'influenza sociale', color:'#ff70a0'},
+  {k:'scarsità',          color:'#ff8040'},
+  {k:'curiosità',         color:'#70c8ff'},
+  {k:'evitamento perdita',color:'#ff5050'},
+];
+
+const PAGE = 50;
+let st = {page:0, query:'', total:0, cur:null, curDetail:null};
+let searchTimer=null, firmaTimer=null;
+// popup state
+let popup = {subject:null, relation:null, object:null};
+
+// ── TABS ─────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const p = t.dataset.pane;
+    document.querySelectorAll('#pane-parole,#pane-categorie,#pane-guida').forEach(x=>x.classList.remove('visible'));
+    document.getElementById('pane-'+p).classList.add('visible');
+  };
+});
+
+// ── LISTA ────────────────────────────────────────────
+async function loadList() {
+  const off = st.page * PAGE;
+  const q = encodeURIComponent(st.query);
+  const r = await fetch(`/api/cura/parole?q=${q}&offset=${off}&limit=${PAGE}`);
+  const d = await r.json();
+  st.total = d.total;
+  renderList(d.words);
+  updatePag();
+}
+
+function renderList(words) {
+  const el = document.getElementById('word-list');
+  document.getElementById('list-info').textContent =
+    `${st.total.toLocaleString('it')} parole${st.query ? ` — "${st.query}"` : ''}`;
+  el.innerHTML = '';
+  words.forEach(w => {
+    const d = document.createElement('div');
+    d.className = 'word-item' + (w.word === st.cur ? ' active' : '');
+    d.dataset.word = w.word;
+    const pct = Math.round(w.stability * 100);
+    const frac = w.fractal_name ? w.fractal_name.split('/')[0] : '';
+    d.innerHTML = `
+      <div class="wi-word">${esc(w.word)}</div>
+      <div class="wi-right">
+        <span class="wi-stab">${pct}%</span>
+        <span class="wi-deg">${w.out_degree}↗ ${w.in_degree}↙</span>
+        ${frac ? `<span class="wi-frac">${esc(frac)}</span>` : ''}
+      </div>`;
+    d.onclick = () => selectWord(w.word);
+    el.appendChild(d);
+  });
+}
+
+function updatePag() {
+  const pages = Math.max(1, Math.ceil(st.total/PAGE));
+  document.getElementById('pg-info').textContent = `${st.page+1}/${pages}`;
+  document.getElementById('pg-prev').disabled = st.page===0;
+  document.getElementById('pg-next').disabled = st.page>=pages-1;
+}
+
+document.getElementById('pg-prev').onclick = () => {if(st.page>0){st.page--;loadList();}};
+document.getElementById('pg-next').onclick = () => {
+  const p=Math.ceil(st.total/PAGE)-1; if(st.page<p){st.page++;loadList();}
+};
+document.getElementById('search').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {st.query=e.target.value.trim();st.page=0;loadList();}, 280);
+});
+
+// ── DETTAGLIO ────────────────────────────────────────
+async function selectWord(word) {
+  st.cur = word;
+  document.querySelectorAll('.word-item').forEach(el=>el.classList.toggle('active',el.dataset.word===word));
+  document.getElementById('no-word').style.display='none';
+  const dw = document.getElementById('detail-wrap');
+  dw.style.display='flex';
+  const r = await fetch(`/api/word_detail?word=${encodeURIComponent(word)}`);
+  st.curDetail = await r.json();
+  renderDetail(st.curDetail);
+}
+
+function computeOct(f) {
+  return [
+    Math.sqrt(f[6]*f[5]),           // epico
+    Math.sqrt(f[2]*f[3]),           // realizzazione
+    Math.sqrt(f[4]*f[6]),           // creatività
+    Math.sqrt(f[0]*f[5]),           // possesso
+    Math.sqrt(f[1]*(1-f[0])),       // sociale
+    Math.cbrt(f[7]*f[2]*(1-f[5])), // scarsità
+    Math.sqrt(f[4]*(1-f[3])),       // curiosità
+    Math.sqrt((1-f[1])*(1-f[5])),   // evitamento
+  ].map(x=>Math.min(1,Math.max(0,x)));
+}
+
+function renderDetail(d) {
+  document.getElementById('dw-word').textContent = d.word;
+  document.getElementById('c-stab').textContent = `${Math.round(d.stability*100)}% stabile`;
+  document.getElementById('c-exp').textContent = `${d.exposure.toLocaleString('it')} esp.`;
+  const cReg = document.getElementById('c-reg');
+  cReg.textContent = d.fractal_name||'';
+  cReg.style.display = d.fractal_name?'':'none';
+
+  renderFirma(d.firma_8d);
+  renderOct(d.firma_8d);
+  renderRels(d.kg_out, d.kg_in, d.word);
+}
+
+function renderFirma(firma) {
+  const fg = document.getElementById('firma-grid');
+  fg.innerHTML='';
+  firma.forEach((v,i) => {
+    const pct = Math.round(v*100);
+    const c = DIMS[i].color;
+    const el = document.createElement('div');
+    el.className='firma-dim';
+    el.innerHTML=`
+      <div class="firma-dim-label" style="color:${c}">${DIMS[i].k}</div>
+      <div class="firma-dim-ctrl">
+        <input type="range" class="firma-slider" min="0" max="100" value="${pct}" data-dim="${i}" style="--fc:${c}">
+        <input type="number" class="firma-num" min="0" max="100" value="${pct}" data-dim="${i}">
+      </div>`;
+    fg.appendChild(el);
+    const slider = el.querySelector('.firma-slider');
+    const num = el.querySelector('.firma-num');
+    slider.oninput = () => { num.value = slider.value; scheduleOctUpdate(); };
+    num.oninput = () => { slider.value = num.value; scheduleOctUpdate(); };
+  });
+}
+
+function scheduleOctUpdate() {
+  clearTimeout(firmaTimer);
+  firmaTimer = setTimeout(() => {
+    const f = readFirma();
+    renderOct(f);
+  }, 80);
+}
+
+function readFirma() {
+  return Array.from(document.querySelectorAll('.firma-slider')).map(s => parseInt(s.value)/100);
+}
+
+function renderOct(firma) {
+  const octVals = computeOct(firma);
+  const og = document.getElementById('oct-grid');
+  og.innerHTML='';
+  octVals.forEach((v,i) => {
+    const pct = Math.round(v*100);
+    const c = OCT[i].color;
+    og.innerHTML+=`
+      <div class="oct-card">
+        <div class="oct-label">${OCT[i].k}</div>
+        <div class="oct-bar-wrap"><div class="oct-bar" style="width:${pct}%;background:${c}80"></div></div>
+        <div class="oct-val" style="color:${c}">${pct}%</div>
+      </div>`;
+  });
+}
+
+document.getElementById('btn-save-firma').onclick = async () => {
+  if (!st.cur) return;
+  const firma = readFirma();
+  const r = await fetch('/api/cura/firma', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({word:st.cur, firma})
+  });
+  const ok = await r.json();
+  if (ok) flashBtn(document.getElementById('btn-save-firma'), 'salvata!');
+};
+
+function flashBtn(btn, msg) {
+  const orig = btn.textContent;
+  btn.textContent = msg;
+  setTimeout(()=>btn.textContent=orig, 1500);
+}
+
+// ── RELAZIONI ────────────────────────────────────────
+function renderRels(kgOut, kgIn, word) {
+  const ro = document.getElementById('rel-out');
+  ro.innerHTML='';
+  if (!kgOut.length) ro.innerHTML='<div class="no-rel">nessuna relazione uscente</div>';
+  else [...kgOut].sort((a,b)=>b.confidence-a.confidence).forEach(e=>ro.appendChild(makeRelRow(e,word,true)));
+
+  const ri = document.getElementById('rel-in');
+  ri.innerHTML='';
+  if (!kgIn.length) ri.innerHTML='<div class="no-rel">nessuna relazione entrante</div>';
+  else [...kgIn].sort((a,b)=>b.confidence-a.confidence).forEach(e=>ri.appendChild(makeRelRow(e,word,false)));
+}
+
+function makeRelRow(e, curWord, isOut) {
+  const row = document.createElement('div');
+  row.className = 'rel-row' + (e.confidence<0.35?' dimmed':'');
+  const confPct = Math.round(e.confidence*100);
+  const viaBit = e.via
+    ? `<span class="rel-via-chip" title="tramite: ${esc(e.via)}. Clicca per modificare">via ${esc(e.via)}</span>`
+    : `<span class="rel-via-chip rel-via-empty" title="aggiungi tramite">+ via</span>`;
+  row.innerHTML=`
+    <span class="rel-badge" style="color:${esc(e.colore)};border-color:${esc(e.colore)}55;background:${esc(e.colore)}16">${esc(e.nome)}</span>
+    <span class="rel-arrow">${isOut?'→':'←'}</span>
+    <span class="rel-target">${esc(e.target)}</span>
+    ${viaBit}
+    <span class="rel-conf" title="clicca per modificare">${confPct}%</span>
+    ${isOut?`<button class="btn-del-rel" title="rimuovi">×</button>`:''}
+  `;
+  row.querySelector('.rel-target').onclick = () => selectWord(e.target);
+  if (isOut) {
+    row.querySelector('.rel-conf').onclick = ev => openEditPopup(ev, curWord, e.relation, e.target, e.confidence, e.via);
+    row.querySelector('.rel-via-chip').onclick = ev => openEditPopup(ev, curWord, e.relation, e.target, e.confidence, e.via);
+    row.querySelector('.btn-del-rel').onclick = ev => {
+      ev.stopPropagation();
+      deleteRelation(curWord, e.relation, e.target, row);
+    };
+  }
+  return row;
+}
+
+// ── POPUP MODIFICA RELAZIONE ─────────────────────────
+function openEditPopup(ev, subject, relation, object, confidence, via) {
+  ev.stopPropagation();
+  popup = {subject, relation, object};
+  document.getElementById('ep-desc').textContent = `${subject} [${relation}] ${object}`;
+  document.getElementById('ep-conf').value = confidence.toFixed(2);
+  document.getElementById('ep-via').value = via||'';
+  const pop = document.getElementById('rel-edit-popup');
+  pop.style.display='block';
+  const rect = ev.target.getBoundingClientRect();
+  pop.style.top = (rect.bottom+6)+'px';
+  pop.style.left = Math.min(rect.left, window.innerWidth-300)+'px';
+}
+document.getElementById('ep-cancel').onclick = () => {
+  document.getElementById('rel-edit-popup').style.display='none';
+};
+document.getElementById('ep-save').onclick = async () => {
+  const conf = parseFloat(document.getElementById('ep-conf').value);
+  const via = document.getElementById('ep-via').value.trim();
+  const body = {
+    subject: popup.subject, relation: popup.relation, object: popup.object,
+    confidence: isNaN(conf)?undefined:conf,
+    via: via||null,
+    clear_via: via===''
+  };
+  const r = await fetch('/api/cura/relazione/modifica', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  document.getElementById('rel-edit-popup').style.display='none';
+  if (await r.json()) selectWord(st.cur); // ricarica
+};
+document.addEventListener('click', e => {
+  const pop = document.getElementById('rel-edit-popup');
+  if (!pop.contains(e.target)) pop.style.display='none';
+});
+
+async function deleteRelation(subject, relation, object, rowEl) {
+  if (!confirm(`Rimuovere:\n  ${subject} [${relation}] → ${object}?`)) return;
+  const r = await fetch('/api/cura/relazione', {
+    method:'DELETE', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({subject, relation, object})
+  });
+  if (await r.json()) {
+    rowEl.style.transition='opacity .18s';
+    rowEl.style.opacity='0';
+    setTimeout(()=>rowEl.remove(),200);
+  }
+}
+
+// ── AGGIUNGI RELAZIONE ───────────────────────────────
+document.getElementById('btn-add-rel').onclick = async () => {
+  const from = st.cur; if(!from) return;
+  const relation = document.getElementById('add-rel').value;
+  const to = document.getElementById('add-to').value.trim().toLowerCase();
+  const via = document.getElementById('add-via').value.trim().toLowerCase()||null;
+  const confidence = parseFloat(document.getElementById('add-conf').value)||0.9;
+  if (!to) {document.getElementById('add-to').focus();return;}
+  const r = await fetch('/api/word_connect',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({from,relation,to,via,confidence})
+  });
+  if (await r.json()) {
+    document.getElementById('add-to').value='';
+    document.getElementById('add-via').value='';
+    selectWord(from);
+  }
+};
+
+// ── CANCELLA PAROLA ──────────────────────────────────
+document.getElementById('btn-del-word').onclick = async () => {
+  if (!st.cur) return;
+  if (!confirm(`Cancellare "${st.cur}" e tutte le sue relazioni dal KG?`)) return;
+  const r = await fetch(`/api/cura/parola?word=${encodeURIComponent(st.cur)}`,{method:'DELETE'});
+  if (await r.json()) {
+    document.getElementById('detail-wrap').style.display='none';
+    document.getElementById('no-word').style.display='';
+    st.cur=null; loadList();
+  }
+};
+
+// ── TAB CATEGORIE ────────────────────────────────────
+let catSelected = null;
+
+document.getElementById('cat-load').onclick = loadCategories;
+document.getElementById('cat-rel').onchange = loadCategories;
+
+async function loadCategories() {
+  const rel = document.getElementById('cat-rel').value;
+  const min = document.getElementById('cat-min').value||5;
+  const q = encodeURIComponent(document.getElementById('cat-search').value.trim());
+  const r = await fetch(`/api/cura/categorie?rel=${rel}&min=${min}&q=${q}`);
+  const d = await r.json();
+  document.getElementById('cat-count').textContent = `${d.total} categorie trovate`;
+  const list = document.getElementById('cat-list');
+  list.innerHTML='';
+  document.getElementById('cat-bulk').style.display='none';
+  d.categories.forEach(c => {
+    const el = document.createElement('div');
+    el.className='cat-item';
+    el.innerHTML=`
+      <div class="cat-head">
+        <span class="cat-word">${esc(c.word)}</span>
+        <span class="cat-n">${c.children_count} figli</span>
+      </div>
+      <div class="cat-sample">${c.sample_children.map(w=>`<span style="cursor:pointer;color:#aabcff" onclick="selectWordTab('${esc(w)}')">${esc(w)}</span>`).join('  ')}</div>
+    `;
+    el.onclick = () => selectCategory(el, c.word);
+    list.appendChild(el);
+  });
+}
+
+function selectWordTab(word) {
+  // Switcha al tab parole e seleziona la parola
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelector('[data-pane="parole"]').classList.add('active');
+  document.querySelectorAll('#pane-parole,#pane-categorie,#pane-guida').forEach(x=>x.classList.remove('visible'));
+  document.getElementById('pane-parole').classList.add('visible');
+  selectWord(word);
+}
+
+function selectCategory(el, word) {
+  document.querySelectorAll('.cat-item').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  catSelected = word;
+  const bulk = document.getElementById('cat-bulk');
+  bulk.style.display='block';
+  document.getElementById('cat-bulk-word').textContent = word;
+  document.getElementById('cat-bulk-input').value='';
+  document.getElementById('cat-bulk-info').textContent='';
+}
+
+document.getElementById('cat-bulk-cancel').onclick = () => {
+  document.getElementById('cat-bulk').style.display='none';
+  catSelected=null;
+};
+
+document.getElementById('cat-bulk-save').onclick = async () => {
+  if (!catSelected) return;
+  const rel = document.getElementById('cat-bulk-rel').value;
+  const rawLines = document.getElementById('cat-bulk-input').value.split('\n').map(l=>l.trim().toLowerCase()).filter(Boolean);
+  if (!rawLines.length) return;
+  const info = document.getElementById('cat-bulk-info');
+  info.textContent = 'aggiunta in corso...';
+  let ok=0, fail=0;
+  for (const word of rawLines) {
+    // Direzione: IS_A significa "word IS_A catSelected" (word è un catSelected)
+    const [from,to] = rel==='HAS' ? [catSelected,word] : [word,catSelected];
+    const r = await fetch('/api/word_connect',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({from,relation:rel,to,confidence:0.9})
+    });
+    if (await r.json()) ok++; else fail++;
+  }
+  info.textContent = `✓ ${ok} aggiunte${fail?', ✗ '+fail+' fallite':''}`;
+  loadCategories();
+};
+
+// ── PULIZIA VERBI ────────────────────────────────────
+let puliziaWords = [];
+document.getElementById('btn-pulizia-preview').onclick = async () => {
+  document.getElementById('pulizia-info').textContent = 'analisi in corso...';
+  const r = await fetch('/api/cura/pulizia-verbi?dry_run=true', {method:'POST'});
+  const d = await r.json();
+  puliziaWords = d.deleted;
+  const info = document.getElementById('pulizia-info');
+  info.textContent = `trovate ${d.count} forme coniugate`;
+  const listEl = document.getElementById('pulizia-list');
+  listEl.style.display = d.count ? 'block' : 'none';
+  listEl.textContent = d.deleted.join('  ·  ');
+  const btn = document.getElementById('btn-pulizia-esegui');
+  btn.style.display = d.count ? '' : 'none';
+};
+document.getElementById('btn-pulizia-esegui').onclick = async () => {
+  if (!confirm(`Eliminare ${puliziaWords.length} forme coniugate dal lessico? L'operazione è irreversibile (il .bin verrà salvato).`)) return;
+  document.getElementById('pulizia-info').textContent = 'pulizia in corso...';
+  const r = await fetch('/api/cura/pulizia-verbi?dry_run=false', {method:'POST'});
+  const d = await r.json();
+  document.getElementById('pulizia-info').textContent = `✓ eliminate ${d.count} parole`;
+  document.getElementById('pulizia-list').style.display = 'none';
+  document.getElementById('btn-pulizia-esegui').style.display = 'none';
+  loadList();
+};
+
+// ── UTILITY ─────────────────────────────────────────
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+
+// boot
+loadList();
+</script>
+</body>
+</html>

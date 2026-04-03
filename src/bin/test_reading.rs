@@ -64,7 +64,7 @@ fn main() {
             .filter(|w| !w.is_empty())
             .collect();
 
-        let r = read_input(&words, text, delta, &kb, &lex);
+        let r = read_input(&words, text, delta, &kb, &lex, None);
 
         let campo = if delta.is_empty() { "vuoto".to_string() }
             else { format!("frac[{}]={:.2}", delta[0].0, delta[0].1) };

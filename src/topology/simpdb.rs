@@ -27,9 +27,10 @@ use crate::topology::fractal::FractalId;
 use crate::topology::grammar::PartOfSpeech;
 use crate::topology::persistence::{
     PrometeoState, LexiconSnapshot, WordSnapshot,
-    ComplexSnapshot, MemorySnapshot, LocusSnapshot,
+    ComplexSnapshot, SimplexSnapshot, SharedFaceSnapshot, MemorySnapshot, LocusSnapshot,
     CurriculumProgress,
 };
+use crate::topology::simplex::SimplexId;
 use crate::topology::lexicon::SemanticAxisSnapshot;
 use crate::topology::knowledge::KnowledgeSnapshot;
 
@@ -53,6 +54,7 @@ pub type WordId = u32;
 // Sezione META — dati non topologici serializzati via bincode
 // ═══════════════════════════════════════════════════════════════
 
+/// MetaSection corrente (Phase 58+): include episodi semantici nominati.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct MetaSection {
     version: String,
@@ -65,20 +67,22 @@ struct MetaSection {
     semantic_axes: Option<Vec<SemanticAxisSnapshot>>,
     knowledge: Option<KnowledgeSnapshot>,
     episodes: Option<crate::topology::episodic::EpisodeSnapshot>,
-    /// Aggiunto dopo i salvataggi precedenti — bincode è posizionale,
-    /// quindi file vecchi non lo contengono. Si usa MetaSectionLegacy come fallback.
     instance_born: Option<u64>,
-    /// Nucleo identitario — Phase 34.
     identity: Option<crate::topology::identity::IdentitySnapshot>,
-    /// Identità narrativa — Phase 42/43.
     narrative: Option<crate::topology::narrative::NarrativeSnapshot>,
+    /// Phase 54: desideri attivi.
+    desire: Option<crate::topology::desire::DesireSnapshot>,
+    /// Phase 54: eco dell'Altro.
+    interlocutor: Option<crate::topology::interlocutor::InterlocutorSnapshot>,
+    /// Phase 54: stato SelfModel (credenze, valori, incertezze).
+    self_model: Option<crate::topology::self_model::SelfModelSnapshot>,
+    /// Phase 58: episodi semantici nominati (la storia vissuta dell'entità).
+    semantic_episodes: Option<crate::topology::semantic_episode::SemanticEpisodeLog>,
 }
 
-/// Versione legacy di MetaSection senza instance_born.
-/// Usata come fallback di deserializzazione per file .bin creati prima
-/// dell'introduzione del campo — bincode non supporta campi opzionali a fine stream.
+/// MetaSection pre-Phase58 — senza semantic_episodes.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct MetaSectionLegacy {
+struct MetaSectionPreP58 {
     version: String,
     total_perturbations: u64,
     dream_cycles: u64,
@@ -89,11 +93,102 @@ struct MetaSectionLegacy {
     semantic_axes: Option<Vec<SemanticAxisSnapshot>>,
     knowledge: Option<KnowledgeSnapshot>,
     episodes: Option<crate::topology::episodic::EpisodeSnapshot>,
+    instance_born: Option<u64>,
+    identity: Option<crate::topology::identity::IdentitySnapshot>,
+    narrative: Option<crate::topology::narrative::NarrativeSnapshot>,
+    desire: Option<crate::topology::desire::DesireSnapshot>,
+    interlocutor: Option<crate::topology::interlocutor::InterlocutorSnapshot>,
+    self_model: Option<crate::topology::self_model::SelfModelSnapshot>,
+}
+
+impl From<MetaSectionPreP58> for MetaSection {
+    fn from(l: MetaSectionPreP58) -> Self {
+        MetaSection {
+            version: l.version,
+            total_perturbations: l.total_perturbations,
+            dream_cycles: l.dream_cycles,
+            complex: l.complex,
+            memory: l.memory,
+            locus: l.locus,
+            curriculum: l.curriculum,
+            semantic_axes: l.semantic_axes,
+            knowledge: l.knowledge,
+            episodes: l.episodes,
+            instance_born: l.instance_born,
+            identity: l.identity,
+            narrative: l.narrative,
+            desire: l.desire,
+            interlocutor: l.interlocutor,
+            self_model: l.self_model,
+            semantic_episodes: None,
+        }
+    }
+}
+
+/// MetaSection pre-Phase54 — senza desire/interlocutor/self_model.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct MetaSectionPreP54 {
+    version: String,
+    total_perturbations: u64,
+    dream_cycles: u64,
+    complex: ComplexSnapshot,
+    memory: MemorySnapshot,
+    locus: Option<LocusSnapshot>,
+    curriculum: Option<CurriculumProgress>,
+    semantic_axes: Option<Vec<SemanticAxisSnapshot>>,
+    knowledge: Option<KnowledgeSnapshot>,
+    episodes: Option<crate::topology::episodic::EpisodeSnapshot>,
+    instance_born: Option<u64>,
+    identity: Option<crate::topology::identity::IdentitySnapshot>,
+    narrative: Option<crate::topology::narrative::NarrativeSnapshot>,
+}
+
+impl From<MetaSectionPreP54> for MetaSection {
+    fn from(l: MetaSectionPreP54) -> Self {
+        MetaSection {
+            version: l.version,
+            total_perturbations: l.total_perturbations,
+            dream_cycles: l.dream_cycles,
+            complex: l.complex,
+            memory: l.memory,
+            locus: l.locus,
+            curriculum: l.curriculum,
+            semantic_axes: l.semantic_axes,
+            knowledge: l.knowledge,
+            episodes: l.episodes,
+            instance_born: l.instance_born,
+            identity: l.identity,
+            narrative: l.narrative,
+            desire: None,
+            interlocutor: None,
+            self_model: None,
+            semantic_episodes: None,
+        }
+    }
+}
+
+/// Versione legacy di MetaSection senza instance_born.
+/// Usata come fallback di deserializzazione per file .bin creati prima
+/// dell'introduzione del campo — bincode non supporta campi opzionali a fine stream.
+/// Usa ComplexSnapshotPreP52 perché i file legacy non hanno source_words.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct MetaSectionLegacy {
+    version: String,
+    total_perturbations: u64,
+    dream_cycles: u64,
+    complex: ComplexSnapshotPreP52,
+    memory: MemorySnapshot,
+    locus: Option<LocusSnapshot>,
+    curriculum: Option<CurriculumProgress>,
+    semantic_axes: Option<Vec<SemanticAxisSnapshot>>,
+    knowledge: Option<KnowledgeSnapshot>,
+    episodes: Option<crate::topology::episodic::EpisodeSnapshot>,
 }
 
 impl From<MetaSectionLegacy> for MetaSection {
     fn from(l: MetaSectionLegacy) -> Self {
-        MetaSection {
+        // Prima converti in MetaSectionPreP52, poi in MetaSection
+        let pre = MetaSectionPreP52 {
             version: l.version,
             total_perturbations: l.total_perturbations,
             dream_cycles: l.dream_cycles,
@@ -107,6 +202,88 @@ impl From<MetaSectionLegacy> for MetaSection {
             instance_born: None,
             identity: None,
             narrative: None,
+        };
+        MetaSection::from(pre)
+    }
+}
+
+/// Pre-Phase52: SimplexSnapshot senza source_words.
+/// Bincode è posizionale — i file salvati prima di Phase 52 non contengono il campo.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct SimplexSnapshotPreP52 {
+    pub id: SimplexId,
+    pub vertices: Vec<FractalId>,
+    pub dimension: usize,
+    pub persistence: f64,
+    pub plasticity: f64,
+    pub activation_count: u64,
+    pub faces: Vec<SharedFaceSnapshot>,
+    pub face_descriptions: Vec<String>,
+    // NO source_words
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ComplexSnapshotPreP52 {
+    pub simplices: Vec<SimplexSnapshotPreP52>,
+    pub next_id: SimplexId,
+    pub activation_threshold: f64,
+}
+
+/// MetaSection pre-Phase52: stessi campi top-level di MetaSection corrente,
+/// ma ComplexSnapshot senza source_words nei simplessi.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct MetaSectionPreP52 {
+    version: String,
+    total_perturbations: u64,
+    dream_cycles: u64,
+    complex: ComplexSnapshotPreP52,
+    memory: MemorySnapshot,
+    locus: Option<LocusSnapshot>,
+    curriculum: Option<CurriculumProgress>,
+    semantic_axes: Option<Vec<SemanticAxisSnapshot>>,
+    knowledge: Option<KnowledgeSnapshot>,
+    episodes: Option<crate::topology::episodic::EpisodeSnapshot>,
+    instance_born: Option<u64>,
+    identity: Option<crate::topology::identity::IdentitySnapshot>,
+    narrative: Option<crate::topology::narrative::NarrativeSnapshot>,
+}
+
+impl From<MetaSectionPreP52> for MetaSection {
+    fn from(l: MetaSectionPreP52) -> Self {
+        // Converte i simplessi aggiungendo source_words: None
+        let simplices = l.complex.simplices.into_iter().map(|s| SimplexSnapshot {
+            id: s.id,
+            vertices: s.vertices,
+            dimension: s.dimension,
+            persistence: s.persistence,
+            plasticity: s.plasticity,
+            activation_count: s.activation_count,
+            faces: s.faces,
+            face_descriptions: s.face_descriptions,
+            source_words: None,
+        }).collect();
+        MetaSection {
+            version: l.version,
+            total_perturbations: l.total_perturbations,
+            dream_cycles: l.dream_cycles,
+            complex: ComplexSnapshot {
+                simplices,
+                next_id: l.complex.next_id,
+                activation_threshold: l.complex.activation_threshold,
+            },
+            memory: l.memory,
+            locus: l.locus,
+            curriculum: l.curriculum,
+            semantic_axes: l.semantic_axes,
+            knowledge: l.knowledge,
+            episodes: l.episodes,
+            instance_born: l.instance_born,
+            identity: l.identity,
+            narrative: l.narrative,
+            desire: None,
+            interlocutor: None,
+            self_model: None,
+            semantic_episodes: None,
         }
     }
 }
@@ -225,6 +402,10 @@ impl SimplDB {
             instance_born: state.instance_born,
             identity: state.identity.clone(),
             narrative: state.narrative.clone(),
+            desire: state.desire.clone(),
+            interlocutor: state.interlocutor.clone(),
+            self_model: state.self_model.clone(),
+            semantic_episodes: state.semantic_episodes.clone(),
         };
         let meta_data = bincode::serialize(&meta)
             .expect("MetaSection deve essere serializzabile");
@@ -264,9 +445,25 @@ impl SimplDB {
 
     /// Converte il SimplDB in PrometeoState (per compatibilità con restore_lexicon).
     pub fn to_state(&self) -> Result<PrometeoState, String> {
-        // Prova il formato corrente; se fallisce (file vecchio senza instance_born)
-        // ritenta con il formato legacy — bincode è posizionale, #[serde(default)] non basta.
+        // Catena fallback — bincode è posizionale, #[serde(default)] non basta.
+        // 1. Formato corrente (Phase 58+: semantic_episodes)
+        // 2. Pre-Phase58 (Phase 54+: desire/interlocutor/self_model, senza semantic_episodes)
+        // 3. Pre-Phase54 (Phase 52+: source_words, senza desire/interlocutor/self_model)
+        // 4. Pre-Phase52 (con instance_born/identity/narrative, senza source_words)
+        // 5. Legacy originale (senza instance_born/identity/narrative)
         let meta: MetaSection = bincode::deserialize(&self.meta_data)
+            .or_else(|_| {
+                bincode::deserialize::<MetaSectionPreP58>(&self.meta_data)
+                    .map(MetaSection::from)
+            })
+            .or_else(|_| {
+                bincode::deserialize::<MetaSectionPreP54>(&self.meta_data)
+                    .map(MetaSection::from)
+            })
+            .or_else(|_| {
+                bincode::deserialize::<MetaSectionPreP52>(&self.meta_data)
+                    .map(MetaSection::from)
+            })
             .or_else(|_| {
                 bincode::deserialize::<MetaSectionLegacy>(&self.meta_data)
                     .map(MetaSection::from)
@@ -329,6 +526,10 @@ impl SimplDB {
             instance_born: meta.instance_born,
             identity: meta.identity,
             narrative: meta.narrative,
+            self_model: meta.self_model,
+            semantic_episodes: meta.semantic_episodes,
+            desire: meta.desire,
+            interlocutor: meta.interlocutor,
         })
     }
 

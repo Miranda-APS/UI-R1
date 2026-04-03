@@ -1,0 +1,37 @@
+{
+  "name": "create_concepts",
+  "description": "Genera nuovi concetti e relazioni a partire da pattern analogici e cluster semantici",
+  "max_iterations": 30,
+  "token_budget_per_turn": 2048,
+  "strategy": {
+    "type": "creative",
+    "phases": [
+      {
+        "name": "find_patterns",
+        "tool": "find_analogies",
+        "seeds": [
+          ["cuore", "amore", "mente"],
+          ["fiume", "acqua", "vento"],
+          ["albero", "foresta", "uomo"]
+        ],
+        "max_calls": 6
+      },
+      {
+        "name": "explore_analogies",
+        "tool": "query_concept",
+        "relation_type": "SimilarTo",
+        "max_calls": 8
+      },
+      {
+        "name": "ground_in_fractals",
+        "tool": "check_fractal_consistency",
+        "max_calls": 10
+      }
+    ]
+  },
+  "constraints": {
+    "avoid_redundancy": true,
+    "prefer_bridging_clusters": true,
+    "min_confidence": 0.65
+  }
+}

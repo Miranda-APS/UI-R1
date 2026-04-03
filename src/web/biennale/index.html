@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#020210">
+<title>Prometeo</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#020210;touch-action:none}
+canvas{position:fixed;top:0;left:0}
+#hud{
+  position:fixed;top:0;left:0;right:0;z-index:20;
+  display:flex;align-items:center;gap:8px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px;
+  background:linear-gradient(180deg,rgba(2,2,22,.92) 60%,transparent);
+  pointer-events:none;
+}
+#hud>*{pointer-events:all}
+#logo{font:.72rem/1 'Courier New',monospace;letter-spacing:.3em;color:rgba(160,180,255,.7);pointer-events:none;white-space:nowrap}
+#sf{flex:1;display:flex;gap:6px;max-width:280px}
+#si{
+  flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(90,108,255,.3);
+  border-radius:20px;color:#dde4ff;padding:8px 14px;
+  font:.8rem/1 'Courier New',monospace;outline:none;
+}
+#si::placeholder{color:rgba(140,155,220,.45)}
+#bgo{background:rgba(55,65,158,.6);border:1px solid rgba(90,108,255,.4);border-radius:20px;color:#c0ccff;font:.8rem/1 'Courier New',monospace;padding:8px 14px;cursor:pointer}
+#bbk{background:none;border:none;color:rgba(160,180,255,.6);font:1rem/1 'Courier New',monospace;cursor:pointer;padding:4px 8px;display:none}
+#chip{
+  position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);
+  z-index:20;background:rgba(4,4,24,.94);border:1px solid rgba(80,98,255,.14);border-radius:20px;
+  padding:10px 22px 9px;text-align:center;font-family:'Courier New',monospace;display:none;
+  box-shadow:0 4px 22px rgba(0,0,40,.5);max-width:82vw;overflow:hidden;white-space:nowrap;
+}
+#cw{font:1.05rem/1.3 'Courier New',monospace;color:#c0cbff;letter-spacing:.03em}
+#cm{font:.48rem/1 'Courier New',monospace;color:rgba(88,108,200,.38);letter-spacing:.12em;margin-top:3px}
+#stats{position:fixed;bottom:calc(8px + env(safe-area-inset-bottom,0px));right:11px;font:.4rem/1.7 'Courier New',monospace;color:rgba(55,65,130,.2);pointer-events:none;z-index:5;text-align:right}
+#hint{display:none}
+#legwrap{
+  position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));right:10px;
+  z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:6px;
+}
+#legtog{
+  background:rgba(2,2,18,.88);border:1px solid rgba(80,100,220,.35);
+  border-radius:20px;color:rgba(180,200,255,.85);
+  font:.72rem/1 'Courier New',monospace;padding:7px 13px;
+  cursor:pointer;pointer-events:all;white-space:nowrap;
+}
+#legend{
+  background:rgba(2,2,18,.88);border:1px solid rgba(80,100,220,.25);
+  border-radius:12px;padding:12px 15px 12px;
+  display:flex;flex-direction:column;gap:6px;
+  backdrop-filter:blur(6px);pointer-events:none;
+  transition:opacity .25s,transform .25s;
+  transform-origin:bottom right;
+}
+#legend.hidden{opacity:0;transform:scale(.85) translateY(8px);pointer-events:none}
+.lt{font:.6rem/1 'Courier New',monospace;color:rgba(160,180,255,.55);
+    letter-spacing:.14em;text-transform:uppercase;margin-bottom:1px}
+.lr{display:flex;align-items:center;gap:8px;font:.72rem/1.3 'Courier New',monospace;color:rgba(220,228,255,.9)}
+.lr b{width:10px;height:10px;border-radius:50%;flex-shrink:0;display:inline-block}
+#lnodes{display:flex;align-items:center;gap:8px}
+#lstrip{
+  width:72px;height:10px;border-radius:5px;flex-shrink:0;
+  background:linear-gradient(to right,
+    hsl(0,70%,62%),hsl(45,70%,62%),hsl(90,70%,62%),
+    hsl(135,70%,62%),hsl(180,70%,62%),hsl(225,70%,62%),
+    hsl(270,70%,62%),hsl(315,70%,62%),hsl(360,70%,62%));
+}
+#lnodes span{font:.72rem/1.3 'Courier New',monospace;color:rgba(220,228,255,.9)}
+.lgs{font:.52rem/1 'Courier New',monospace;color:rgba(120,140,200,.38);letter-spacing:.16em;text-transform:uppercase;margin-top:5px;margin-bottom:2px}
+#legend{overflow-y:auto;max-height:60vh;scrollbar-width:thin}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <span id="logo">PROMETEO</span>
+  <div id="sf">
+    <input id="si" type="text" placeholder="cerca una parola…" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" inputmode="search">
+    <button id="bgo" onclick="doSearch()">→</button>
+  </div>
+  <button id="bbk" onclick="goBack()">←</button>
+</div>
+<div id="chip"><div id="cw">—</div><div id="cm"></div></div>
+<div id="stats"></div>
+<div id="legwrap">
+  <button id="legtog" onclick="toggleLegend()">legenda ▲</button>
+  <div id="legend">
+    <div class="lt">colore nodi = regione semantica</div>
+    <div id="lnodes"><div id="lstrip"></div><span>64 regioni</span></div>
+    <div class="lt" style="margin-top:5px">colore linee = relazione</div>
+    <div class="lgs">strutturali</div>
+    <div class="lr"><b style="background:#3fb950"></b>è un</div>
+    <div class="lr"><b style="background:#58a6ff"></b>ha</div>
+    <div class="lr"><b style="background:#f0883e"></b>fa</div>
+    <div class="lr"><b style="background:#bc8cff"></b>parte di</div>
+    <div class="lgs">causali</div>
+    <div class="lr"><b style="background:#f85149"></b>causa</div>
+    <div class="lr"><b style="background:#da3633"></b>abilita</div>
+    <div class="lr"><b style="background:#ff7b72"></b>richiede</div>
+    <div class="lr"><b style="background:#ffa657"></b>diventa</div>
+    <div class="lgs">semantiche</div>
+    <div class="lr"><b style="background:#79c0ff"></b>simile a</div>
+    <div class="lr"><b style="background:#8b949e"></b>opposto di</div>
+    <div class="lr"><b style="background:#7ee787"></b>usato per</div>
+    <div class="lr"><b style="background:#d2a8ff"></b>esprime</div>
+    <div class="lr"><b style="background:#f778ba"></b>simboleggia</div>
+    <div class="lr"><b style="background:#a5d6ff"></b>contesto di</div>
+    <div class="lgs">logiche</div>
+    <div class="lr"><b style="background:#e3b341"></b>implica</div>
+    <div class="lr"><b style="background:#d29922"></b>equivale</div>
+    <div class="lr"><b style="background:#f85149"></b>esclude</div>
+    <div class="lr"><b style="background:#56d364"></b>coesiste con</div>
+    <div class="lgs" style="color:rgba(210,168,255,.5)">fenomenologiche</div>
+    <div class="lr"><b style="background:#d2a8ff"></b>si sente come</div>
+    <div class="lr"><b style="background:#bc8cff"></b>si interroga su</div>
+    <div class="lr"><b style="background:#f778ba"></b>ricorda come</div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ── Canvas setup with DPR ───────────────────────────────── */
+const C = document.getElementById('c'), ctx = C.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+const TOP = 52, PAD = 24;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 3);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  C.width  = Math.round(W * DPR);
+  C.height = Math.round(H * DPR);
+  C.style.width  = W + 'px';
+  C.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  bgDirty = true;
+}
+window.addEventListener('resize', resize);
+
+/* ── Camera ──────────────────────────────────────────────── */
+let cam  = { x: 0, y: 0, z: 0.85 };
+let camT = { x: 0, y: 0, z: 0.85 };
+
+function w2s(wx, wy) {
+  const ch = H - TOP;
+  const fx = PAD + wx * (W - PAD * 2);
+  const fy = TOP + PAD + (1 - wy) * (ch - PAD * 2);
+  const cy = TOP + ch / 2;
+  return {
+    x: (fx - W / 2) * cam.z + W / 2 + cam.x,
+    y: (fy - cy)  * cam.z + cy   + cam.y,
+  };
+}
+function s2w(sx, sy) {
+  const ch = H - TOP, cy = TOP + ch / 2;
+  const fx = (sx - W / 2 - cam.x) / cam.z + W / 2;
+  const fy = (sy - cy  - cam.y) / cam.z + cy;
+  return { x: (fx - PAD) / (W - PAD * 2), y: 1 - (fy - TOP - PAD) / (ch - PAD * 2) };
+}
+function panTo(wx, wy, tz) {
+  const ch = H - TOP, cy = TOP + ch / 2;
+  const fx = PAD + wx * (W - PAD * 2);
+  const fy = TOP + PAD + (1 - wy) * (ch - PAD * 2);
+  camT.z = tz;
+  camT.x = -(fx - W / 2) * tz;
+  // place word at 40% from top, leaving room below for chip
+  camT.y = H * 0.40 - cy - (fy - cy) * tz;
+}
+
+/* ── Golden-ratio spiral positions within each fractal ───── */
+const PHI_RAD = 137.508 * Math.PI / 180; // golden angle
+
+function computePositions(byFractal) {
+  // Pre-compute fractal centres
+  const centers = new Map();
+  for (const [fid] of byFractal) {
+    centers.set(fid, { cx: 0.08 + (fid % 8) * 0.12, cy: 0.08 + Math.floor(fid / 8) * 0.12 });
+  }
+
+  // Fractals with < 6 words are "lone islands" — absorb into nearest populated neighbour
+  const LONE = 6;
+  const populated = [...byFractal.entries()].filter(([, ws]) => ws.length >= LONE);
+
+  for (const [fid, ws] of byFractal) {
+    ws.sort((a, b) => b.s - a.s);
+    let { cx, cy } = centers.get(fid);
+
+    if (ws.length < LONE && populated.length > 0) {
+      // Find nearest populated fractal and place near its outer edge
+      let best = populated[0], bd = Infinity;
+      for (const [ofid] of populated) {
+        const { cx: ox, cy: oy } = centers.get(ofid);
+        const d = (ox - cx) ** 2 + (oy - cy) ** 2;
+        if (d < bd) { bd = d; best = [ofid]; }
+      }
+      const { cx: ox, cy: oy } = centers.get(best[0] ?? populated[0][0]);
+      // Place at edge of that fractal (radius ~0.045)
+      const ang = Math.atan2(cy - oy, cx - ox);
+      cx = ox + Math.cos(ang) * 0.048;
+      cy = oy + Math.sin(ang) * 0.048;
+    }
+
+    ws.forEach((w, i) => {
+      if (i === 0) { w.wx = cx; w.wy = cy; return; }
+      const r = Math.sqrt(i) * 0.0055;
+      const a = i * PHI_RAD;
+      w.wx = cx + Math.cos(a) * r;
+      w.wy = cy + Math.sin(a) * r;
+    });
+  }
+}
+
+/* ── Colors — tutti 21 tipi da relation.rs ───────────────── */
+const RC = {
+  // Strutturali
+  IS_A:           { l: 'rgba(63,185,80,.55)',  b: '#3fb950' },
+  HAS:            { l: 'rgba(88,166,255,.5)',  b: '#58a6ff' },
+  DOES:           { l: 'rgba(240,136,62,.5)',  b: '#f0883e' },
+  PART_OF:        { l: 'rgba(188,140,255,.5)', b: '#bc8cff' },
+  // Causali
+  CAUSES:         { l: 'rgba(248,81,73,.55)',  b: '#f85149' },
+  ENABLES:        { l: 'rgba(218,54,51,.5)',   b: '#da3633' },
+  REQUIRES:       { l: 'rgba(255,123,114,.5)', b: '#ff7b72' },
+  TRANSFORMS_INTO:{ l: 'rgba(255,166,87,.5)',  b: '#ffa657' },
+  // Semantiche
+  SIMILAR_TO:     { l: 'rgba(121,192,255,.5)', b: '#79c0ff' },
+  OPPOSITE_OF:    { l: 'rgba(139,148,158,.5)', b: '#8b949e' },
+  USED_FOR:       { l: 'rgba(126,231,135,.5)', b: '#7ee787' },
+  EXPRESSES:      { l: 'rgba(210,168,255,.5)', b: '#d2a8ff' },
+  SYMBOLIZES:     { l: 'rgba(247,120,186,.5)', b: '#f778ba' },
+  CONTEXT_OF:     { l: 'rgba(165,214,255,.5)', b: '#a5d6ff' },
+  // Logiche
+  IMPLIES:        { l: 'rgba(227,179,65,.5)',  b: '#e3b341' },
+  EQUIVALENT:     { l: 'rgba(210,153,34,.5)',  b: '#d29922' },
+  EXCLUDES:       { l: 'rgba(248,81,73,.45)',  b: '#f85149' },
+  COEXISTS:       { l: 'rgba(86,211,100,.5)',  b: '#56d364' },
+  // Fenomenologiche
+  FEELS_AS:       { l: 'rgba(210,168,255,.6)', b: '#d2a8ff' },
+  WONDERS_ABOUT:  { l: 'rgba(188,140,255,.6)', b: '#bc8cff' },
+  REMEMBERS_AS:   { l: 'rgba(247,120,186,.6)', b: '#f778ba' },
+};
+const KEEP = new Set(Object.keys(RC));
+function rl(r) { return (RC[r] || { l: 'rgba(80,80,140,.22)' }).l; }
+function rb(r) { return (RC[r] || { b: '#505090' }).b; }
+function fhue(f) { return (f * 137.508) % 360; }
+function fc(f, a) {
+  const h = fhue(f), s = 55 + (f % 4) * 9, l = 58 + (f % 3) * 8;
+  return `hsla(${h},${s}%,${l}%,${a})`;
+}
+
+/* ── Background (cached offscreen, DPR-aware) ────────────── */
+let bgDirty = true, bgCache = null;
+function drawBg() {
+  if (!bgDirty && bgCache) { ctx.drawImage(bgCache, 0, 0, W, H); return; }
+  const off = document.createElement('canvas');
+  off.width = Math.round(W * DPR); off.height = Math.round(H * DPR);
+  const oc = off.getContext('2d');
+  oc.scale(DPR, DPR);
+
+  // Space gradient
+  const g = oc.createRadialGradient(W * .44, H * .44, 0, W * .5, H * .5, Math.max(W, H) * .8);
+  g.addColorStop(0, '#0a0a26'); g.addColorStop(.5, '#050518'); g.addColorStop(1, '#020210');
+  oc.fillStyle = g; oc.fillRect(0, 0, W, H);
+
+  // Tech dot grid
+  const GS = 26; // grid spacing px
+  oc.fillStyle = 'rgba(80,100,255,0.055)';
+  for (let gx = GS / 2; gx < W; gx += GS) {
+    for (let gy = TOP + GS / 2; gy < H; gy += GS) {
+      oc.beginPath(); oc.arc(gx, gy, 0.75, 0, Math.PI * 2); oc.fill();
+    }
+  }
+
+  // Faint star dust
+  for (let i = 0; i < 350; i++) {
+    const sx = ((Math.sin(i * 1.618 + 9) * .5 + .5)) * W;
+    const sy = TOP + ((Math.sin(i * 2.718 + 5) * .5 + .5)) * (H - TOP);
+    const sr = .2 + (i * 7919 % 100) / 100 * .38;
+    const sa = .04 + (i * 6271 % 100) / 100 * .08;
+    oc.beginPath(); oc.arc(sx, sy, sr, 0, Math.PI * 2);
+    oc.fillStyle = `rgba(210,218,255,${sa})`; oc.fill();
+  }
+  bgCache = off; bgDirty = false;
+  ctx.drawImage(off, 0, 0, W, H);
+}
+
+/* ── Pill label helper ───────────────────────────────────── */
+// color = hue number (0-360) OR any CSS color string
+function drawPill(ctx2, text, x, y, color, bold) {
+  const fs = bold ? 14 : 12;
+  ctx2.font = `${bold ? 'bold ' : ''}${fs}px Courier New`;
+  const tw = ctx2.measureText(text).width;
+  const pw = tw + 10, ph = fs + 8, rx = 4;
+  ctx2.fillStyle = 'rgba(3,3,18,0.90)';
+  roundRect(ctx2, x - 1, y - ph / 2, pw + 2, ph, rx); ctx2.fill();
+  ctx2.strokeStyle = (typeof color === 'number')
+    ? `hsla(${color},65%,62%,0.65)` : color;
+  ctx2.lineWidth = 0.9;
+  roundRect(ctx2, x - 1, y - ph / 2, pw + 2, ph, rx); ctx2.stroke();
+  // Text always light — never derived from border color
+  ctx2.fillStyle = bold ? '#f0f4ff' : 'rgba(200,215,255,0.95)';
+  ctx2.textAlign = 'left'; ctx2.textBaseline = 'middle';
+  ctx2.fillText(text, x + 4, y);
+}
+
+function roundRect(ctx2, x, y, w2, h2, r2) {
+  ctx2.beginPath();
+  ctx2.moveTo(x + r2, y);
+  ctx2.lineTo(x + w2 - r2, y);
+  ctx2.quadraticCurveTo(x + w2, y, x + w2, y + r2);
+  ctx2.lineTo(x + w2, y + h2 - r2);
+  ctx2.quadraticCurveTo(x + w2, y + h2, x + w2 - r2, y + h2);
+  ctx2.lineTo(x + r2, y + h2);
+  ctx2.quadraticCurveTo(x, y + h2, x, y + h2 - r2);
+  ctx2.lineTo(x, y + r2);
+  ctx2.quadraticCurveTo(x, y, x + r2, y);
+  ctx2.closePath();
+}
+
+/* ── State ───────────────────────────────────────────────── */
+let words = [], wordMap = {}, fractalNames = {};
+let selWord = null, selNbrs = [], highlighted = new Set();
+let history = [];
+let tapRing = null, nowT = 0;
+let hintGone = false;
+
+/* ── Main loop ───────────────────────────────────────────── */
+requestAnimationFrame(function loop(ts) {
+  requestAnimationFrame(loop);
+  nowT = ts * .001;
+  const L = .10;
+  cam.x += (camT.x - cam.x) * L;
+  cam.y += (camT.y - cam.y) * L;
+  cam.z += (camT.z - cam.z) * L * .9;
+  draw();
+});
+
+/* ── Draw ────────────────────────────────────────────────── */
+function draw() {
+  drawBg();
+  if (!words.length) return;
+
+  const hasHL = selWord !== null;
+  const z = cam.z;
+
+  // 1. Animated relation lines (dashed flow, one per relation type)
+  if (selWord !== null) {
+    const si = wordMap[selWord];
+    if (si != null) {
+      const sp = w2s(words[si].wx, words[si].wy);
+      ctx.save();
+      ctx.setLineDash([5, 4]);
+      ctx.lineDashOffset = -(nowT * 18) % 9;
+      for (const n of selNbrs) {
+        const ni = wordMap[n.w]; if (ni == null) continue;
+        const np = w2s(words[ni].wx, words[ni].wy);
+        ctx.strokeStyle = rl(n.rel); ctx.lineWidth = 1.0;
+        ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(np.x, np.y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // 2. Word dots (no labels yet — collect pills for anti-overlap pass)
+  const pillQ = []; // { sx, sy, r, text, color, bold }
+  for (const w of words) {
+    const p = w2s(w.wx, w.wy);
+    if (p.x < -20 || p.x > W + 20 || p.y < TOP - 20 || p.y > H + 20) continue;
+
+    const isSel = w.w === selWord;
+    const isHL  = !isSel && highlighted.has(w.w);
+    const dim   = hasHL && !isSel && !isHL;
+
+    const stab = Math.min(Math.max(w.s, 0), 1);
+    const zs   = Math.max(0.4, Math.min(z, 3.5));
+    const r    = Math.min((1.4 + stab * 3.2) * zs, isSel ? 13 : isHL ? 8 : 5);
+
+    if (isSel) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, r + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = fc(w.f, .6); ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = fc(w.f, .95); ctx.fill();
+      pillQ.push({ sx: p.x, sy: p.y, r, text: w.w, color: fhue(w.f), bold: true });
+    } else if (isHL) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = fc(w.f, .92); ctx.fill();
+      const nbr = selNbrs.find(n => n.w === w.w);
+      pillQ.push({ sx: p.x, sy: p.y, r, text: w.w,
+        color: nbr ? rb(nbr.rel) : fc(w.f, .75), bold: false });
+    } else {
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = fc(w.f, dim ? .04 : .75); ctx.fill();
+    }
+  }
+
+  // 3. Draw pills with vertical anti-overlap
+  if (pillQ.length) {
+    pillQ.sort((a, b) => a.sy - b.sy);
+    const placed = [];
+    ctx.textBaseline = 'middle';
+    for (const p of pillQ) {
+      const fs = p.bold ? 14 : 12;
+      ctx.font = `${p.bold ? 'bold ' : ''}${fs}px Courier New`;
+      const tw = ctx.measureText(p.text).width;
+      const pw = tw + 12, ph = fs + 8;
+      const gap = p.r + (p.bold ? 9 : 7);
+      const goLeft = p.sx + gap + pw > W - 10;
+      const lx = goLeft ? p.sx - gap - pw : p.sx + gap;
+      let ly = p.sy;
+      // Push down past any overlapping placed pill
+      for (let it = 0; it < 16; it++) {
+        const ovl = placed.find(q =>
+          lx - 2 < q.x2 && lx + pw + 2 > q.x1 &&
+          ly - ph / 2 - 2 < q.y2 && ly + ph / 2 + 2 > q.y1);
+        if (!ovl) break;
+        ly = ovl.y2 + ph / 2 + 3;
+      }
+      placed.push({ x1: lx - 2, y1: ly - ph / 2 - 2, x2: lx + pw + 2, y2: ly + ph / 2 + 2 });
+      drawPill(ctx, p.text, lx, ly, p.color, p.bold);
+    }
+  }
+
+  // 4. Tap feedback ring
+  if (tapRing) {
+    tapRing.r += 3; tapRing.a -= .03;
+    if (tapRing.a <= 0) { tapRing = null; }
+    else {
+      ctx.strokeStyle = `rgba(140,155,255,${tapRing.a})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(tapRing.sx, tapRing.sy, tapRing.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+}
+
+/* ── Navigation ──────────────────────────────────────────── */
+function selectWord(wordStr, data) {
+  selWord = wordStr;
+  selNbrs = (data.neighbors || [])
+    .filter(n => KEEP.has(n.rel) && !n.rel.startsWith('←'))
+    .slice(0, 14);
+  highlighted = new Set([wordStr, ...selNbrs.map(n => n.w)]);
+
+  const wi = wordMap[wordStr];
+  const fid = (wi != null) ? words[wi].f : 0;
+  document.getElementById('cw').textContent = wordStr;
+  document.getElementById('cm').textContent =
+    (fractalNames[fid] || '').toUpperCase() + ' · ' +
+    Math.round((data.stability || 0) * 100) + '%';
+  document.getElementById('chip').style.display = 'block';
+  document.getElementById('bbk').style.display = history.length ? 'inline' : 'none';
+  panToFit();
+}
+
+async function navigateTo(word) {
+  word = word.toLowerCase().trim();
+  if (!word || word === selWord) return;
+  const resp = await fetch('/api/biennale/word?word=' + encodeURIComponent(word));
+  if (!resp.ok) return;
+  const d = await resp.json();
+  if (!d.word) return;
+  if (selWord) history.push(selWord);
+  if (history.length > 30) history.shift();
+  selectWord(word, d);
+  hideHint();
+}
+
+function goBack() {
+  if (!history.length) return;
+  const prev = history.pop();
+  selWord = null;
+  navigateTo(prev);
+}
+
+function panToFit() {
+  // Zoom so ALL highlighted words fit comfortably in view
+  const hws = words.filter(w => highlighted.has(w.w));
+  if (!hws.length) return;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const w of hws) {
+    minX = Math.min(minX, w.wx); maxX = Math.max(maxX, w.wx);
+    minY = Math.min(minY, w.wy); maxY = Math.max(maxY, w.wy);
+  }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  // Add padding so labels don't clip
+  const spanX = maxX - minX + 0.10, spanY = maxY - minY + 0.08;
+  // Available viewport minus HUD + chip + label padding
+  const availW = W - PAD * 4 - 140, availH = H - TOP - PAD * 4 - 90;
+  const puW = W - PAD * 2, puH = H - TOP - PAD * 2;
+  const tzX = availW / (spanX * puW);
+  const tzY = availH / (spanY * puH);
+  const tz = Math.max(Math.min(tzX, tzY, 5.0), 1.2);
+  panTo(cx, cy, tz);
+}
+
+function resetView() {
+  selWord = null; selNbrs = []; highlighted = new Set();
+  document.getElementById('chip').style.display = 'none';
+  document.getElementById('bbk').style.display = 'none';
+  camT = { x: 0, y: 0, z: 0.85 };
+}
+
+function doSearch() {
+  const q = document.getElementById('si').value.trim().toLowerCase();
+  if (q) { document.getElementById('si').blur(); navigateTo(q); }
+}
+
+function hideHint() {}
+
+let legOpen = true;
+function toggleLegend() {
+  legOpen = !legOpen;
+  document.getElementById('legend').classList.toggle('hidden', !legOpen);
+  document.getElementById('legtog').textContent = legOpen ? 'legenda ▲' : 'legenda ▼';
+}
+
+/* ── Hit test ────────────────────────────────────────────── */
+// When no selection: tap does nothing on canvas (use search bar).
+// When selection active: tap only selects highlighted words.
+function nearestHighlighted(wx, wy) {
+  if (!highlighted.size) return null;
+  let best = -1, bd = Infinity;
+  // Larger threshold for highlighted (bigger dots, easier to hit)
+  const th = (0.14 / cam.z) ** 2;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (!highlighted.has(w.w)) continue;
+    const dx = w.wx - wx, dy = w.wy - wy;
+    const d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = i; }
+  }
+  return (bd < th) ? words[best] : null;
+}
+
+/* ── Mouse ───────────────────────────────────────────────── */
+let drag = false, dS = {}, cS = {}, moved = 0;
+C.addEventListener('mousedown', e => {
+  if (e.clientY < TOP) return;
+  drag = true; moved = 0;
+  dS = { x: e.clientX, y: e.clientY }; cS = { x: cam.x, y: cam.y };
+});
+C.addEventListener('mousemove', e => {
+  if (!drag) return;
+  camT.x = cam.x = cS.x + (e.clientX - dS.x);
+  camT.y = cam.y = cS.y + (e.clientY - dS.y);
+  moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+});
+C.addEventListener('mouseup', e => {
+  drag = false;
+  if (moved < 6 && e.clientY > TOP) {
+    const wc = s2w(e.clientX, e.clientY), h = nearestHighlighted(wc.x, wc.y);
+    if (h) { tapRing = { sx: e.clientX, sy: e.clientY, r: 8, a: .85 }; navigateTo(h.w); }
+  }
+});
+C.addEventListener('wheel', e => {
+  if (e.clientY < TOP) return; e.preventDefault();
+  const f = e.deltaY < 0 ? 1.13 : .885;
+  camT.x = e.clientX - (e.clientX - camT.x) * f;
+  camT.y = e.clientY - (e.clientY - camT.y) * f;
+  camT.z = Math.max(.25, Math.min(14, camT.z * f));
+}, { passive: false });
+
+/* ── Touch ───────────────────────────────────────────────── */
+let lpd = null, tt = 0, tS = {}, ctS = {};
+C.addEventListener('touchstart', e => {
+  if ([...e.touches].every(t => t.clientY < TOP)) return;
+  e.preventDefault(); hideHint();
+  if (e.touches.length === 1) {
+    drag = true; moved = 0; tt = Date.now();
+    tS = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    ctS = { x: cam.x, y: cam.y };
+  } else if (e.touches.length === 2) {
+    drag = false;
+    lpd = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                     e.touches[0].clientY - e.touches[1].clientY);
+    ctS = { x: cam.x, y: cam.y };
+  }
+}, { passive: false });
+
+C.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1 && drag) {
+    camT.x = cam.x = ctS.x + (e.touches[0].clientX - tS.x);
+    camT.y = cam.y = ctS.y + (e.touches[0].clientY - tS.y);
+    moved++;
+  } else if (e.touches.length === 2 && lpd) {
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX,
+                         e.touches[0].clientY - e.touches[1].clientY);
+    const f = d / lpd;
+    const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    camT.x = cam.x = mx - (mx - cam.x) * f;
+    camT.y = cam.y = my - (my - cam.y) * f;
+    camT.z = cam.z = Math.max(.25, Math.min(14, cam.z * f));
+    lpd = d;
+  }
+}, { passive: false });
+
+C.addEventListener('touchend', e => {
+  e.preventDefault(); lpd = null;
+  if (e.changedTouches.length === 1 && moved < 14 && Date.now() - tt < 430) {
+    const t2 = e.changedTouches[0];
+    if (t2.clientY > TOP) {
+      const wc = s2w(t2.clientX, t2.clientY), h = nearestHighlighted(wc.x, wc.y);
+      if (h) { tapRing = { sx: t2.clientX, sy: t2.clientY, r: 8, a: .85 }; navigateTo(h.w); }
+    }
+  }
+  drag = false;
+}, { passive: false });
+
+/* ── Keyboard ────────────────────────────────────────────── */
+document.getElementById('si').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') resetView(); });
+
+/* ── Load ────────────────────────────────────────────────── */
+async function loadField() {
+  try {
+    const d = await fetch('/api/biennale/field').then(r => r.json());
+
+    // Filter: length≥3, no digits/underscores
+    const raw = (d.words || []).filter(w => w.w.length >= 3 && !/[\d_]/.test(w.w));
+
+    // Normalise stability to [0,1] — server may send it as an integer 0–100
+    const maxS = raw.length ? Math.max(...raw.map(w => w.s)) : 1;
+    const normS = maxS > 1.5 ? maxS : 1;   // divide only if clearly out of range
+    raw.forEach(w => { w.s = w.s / normS; });
+
+    (d.fractal_names || []).forEach(([id, name]) => { fractalNames[id] = name; });
+
+    // Group by fractal ID
+    const byFractal = new Map();
+    for (const w of raw) {
+      const fid = (w.f != null && !isNaN(w.f)) ? (w.f | 0) : 0;
+      w.f = fid; // normalise to integer
+      if (!byFractal.has(fid)) byFractal.set(fid, []);
+      byFractal.get(fid).push(w);
+    }
+
+    // Assign spiral positions
+    computePositions(byFractal);
+
+    words = raw;
+    words.forEach((w, i) => { wordMap[w.w] = i; });
+
+    // Center camera on actual galaxy centroid
+    if (words.length) {
+      let sx = 0, sy = 0;
+      for (const w of words) { sx += w.wx; sy += w.wy; }
+      const gx = sx / words.length, gy = sy / words.length;
+      panTo(gx, gy, 0.85);
+      cam.x = camT.x; cam.y = camT.y; cam.z = camT.z; // apply immediately
+    }
+
+    document.getElementById('stats').textContent =
+      words.length.toLocaleString('it-IT') + ' stelle  ·  251.454 connessioni';
+  } catch (e) {
+    console.error('loadField error:', e);
+  }
+}
+
+resize();
+loadField();
+</script>
+</body>
+</html>

@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(1);
     }
     println!("Caricando stato da {}...", bin_path.display());
-    let state = PrometeoState::load_from_binary(&bin_path)?;
+    let state = PrometeoState::load_from_binary(&bin_path).map_err(|e| anyhow::anyhow!(e))?;
     println!("Stato caricato: {} parole nel lessico", state.lexicon.words.len());
 
     // 3. Ricostruisce engine
@@ -112,7 +112,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let new_state = PrometeoState::capture(&engine);
-    new_state.save_to_binary(&bin_path)?;
+    new_state.save_to_binary(&bin_path).map_err(|e| anyhow::anyhow!(e))?;
     println!("Stato salvato: {}", bin_path.display());
 
     println!();

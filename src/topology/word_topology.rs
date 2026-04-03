@@ -183,33 +183,94 @@ impl WordTopology {
         // Fase per ogni tipo di relazione
         let phase_for = |rel: RelationType| -> f64 {
             match rel {
-                RelationType::SimilarTo  => 0.00,
+                RelationType::SimilarTo | RelationType::Equivalent => 0.00,
                 RelationType::IsA        => 0.10,
                 RelationType::PartOf     => 0.15,
                 RelationType::Has        => 0.20,
                 RelationType::Does       => 0.20,
                 RelationType::UsedFor    => 0.30,
-                RelationType::Causes     => 0.35,
+                RelationType::Causes | RelationType::Implies => 0.35,
+                RelationType::Enables    => 0.25,
+                RelationType::Requires   => 0.28,
+                RelationType::TransformsInto => 0.40,
+                RelationType::Expresses  => 0.22,
+                RelationType::Symbolizes => 0.18,
+                RelationType::ContextOf  => 0.12,
+                RelationType::Coexists   => 0.05,
+                RelationType::Excludes   => std::f64::consts::FRAC_PI_2,
                 RelationType::OppositeOf => std::f64::consts::PI,
+                // Fenomenologiche
+                RelationType::FeelsAs    => 0.05,  // Intima risonanza
+                RelationType::WondersAbout => 0.15, // Tensione esplorativa
+                RelationType::RemembersAs  => 0.10, // Risonanza episodica
             }
         };
 
-        // Peso base per ogni relazione
-        let weight_for = |rel: RelationType| -> f64 {
+        // Peso base per tipo — modulato poi da confidence e hub_damping per-arco
+        let type_base = |rel: RelationType| -> f64 {
             match rel {
                 RelationType::SimilarTo  => 0.90,
+                RelationType::Equivalent => 0.92,
                 RelationType::IsA        => 0.80,
                 RelationType::PartOf     => 0.75,
                 RelationType::Has        => 0.70,
                 RelationType::Does       => 0.70,
                 RelationType::UsedFor    => 0.55,
                 RelationType::Causes     => 0.65,
+                RelationType::Enables    => 0.60,
+                RelationType::Requires   => 0.58,
+                RelationType::TransformsInto => 0.62,
+                RelationType::Expresses  => 0.65,
+                RelationType::Symbolizes => 0.55,
+                RelationType::ContextOf  => 0.50,
+                RelationType::Implies    => 0.68,
+                RelationType::Coexists   => 0.60,
+                RelationType::Excludes   => 0.45,
                 RelationType::OppositeOf => 0.50,
+                // Fenomenologiche
+                RelationType::FeelsAs    => 0.85,
+                RelationType::WondersAbout => 0.70,
+                RelationType::RemembersAs  => 0.80,
             }
         };
 
-        // Colleziona tutte le parole nel campo come base di lavoro
+        // ── Phase 48: Hub damping ──────────────────────────────────
+        // Calcola il grado totale di ogni nodo nel KG.
+        // Nodi hub (essere, avere, fare) con migliaia di archi vengono
+        // smorzati logaritmicamente: peso_effettivo = base × confidence × hub_factor.
+        // hub_factor = 1.0 / (1.0 + ln(max(deg_a, deg_b) / median_degree).max(0))
+        // Questo dà peso diverso ad OGNI singolo arco, non costante per tipo.
         let all_words: Vec<String> = self.word_to_id.keys().cloned().collect();
+
+        // Pre-calcola gradi per tutte le parole nel lessico
+        let degrees: Vec<(String, usize)> = all_words.iter()
+            .map(|w| (w.clone(), kg.total_degree(w)))
+            .filter(|(_, d)| *d > 0)
+            .collect();
+
+        // Mediana dei gradi (solo parole con archi KG)
+        let median_degree = if degrees.is_empty() {
+            1.0_f64
+        } else {
+            let mut sorted_degrees: Vec<usize> = degrees.iter().map(|(_, d)| *d).collect();
+            sorted_degrees.sort_unstable();
+            sorted_degrees[sorted_degrees.len() / 2] as f64
+        };
+
+        // Lookup rapido grado → f64
+        let degree_map: std::collections::HashMap<&str, f64> = degrees.iter()
+            .map(|(w, d)| (w.as_str(), *d as f64))
+            .collect();
+
+        // Hub damping: penalizza nodi con grado >> mediana
+        let hub_factor = |word_a: &str, word_b: &str| -> f64 {
+            let deg_a = degree_map.get(word_a).copied().unwrap_or(1.0);
+            let deg_b = degree_map.get(word_b).copied().unwrap_or(1.0);
+            let max_deg = deg_a.max(deg_b);
+            // Solo nodi sopra la mediana vengono penalizzati
+            let ratio = (max_deg / median_degree).max(1.0);
+            1.0 / (1.0 + ratio.ln())
+        };
 
         for word in &all_words {
             let id_a = match self.word_to_id.get(word.as_str()) {
@@ -225,7 +286,9 @@ impl WordTopology {
                 };
                 if id_a == id_b { continue; }
 
-                let weight = (weight_for(rel) * confidence as f64).clamp(0.01, 1.0);
+                // Phase 48: peso = base_tipo × confidence_arco × hub_damping
+                let hf = hub_factor(word, target);
+                let weight = (type_base(rel) * confidence as f64 * hf).clamp(0.01, 1.0);
                 let phase = phase_for(rel);
                 let key = if id_a < id_b { (id_a, id_b) } else { (id_b, id_a) };
 
@@ -257,8 +320,9 @@ impl WordTopology {
                 };
                 if id_a == id_anc { continue; }
 
-                // Peso decade con profondità: 0.55, 0.36, 0.23...
-                let weight = (0.80_f64 * 0.65_f64.powi(depth as i32)).clamp(0.01, 1.0);
+                // Peso decade con profondità × hub damping
+                let hf = hub_factor(word, ancestor);
+                let weight = (0.80_f64 * 0.65_f64.powi(depth as i32) * hf).clamp(0.01, 1.0);
                 // Fase leggermente meno risonante con profondità
                 let phase = (0.10 + 0.05 * depth as f64).min(std::f64::consts::FRAC_PI_2);
                 let key = if id_a < id_anc { (id_a, id_anc) } else { (id_anc, id_a) };
@@ -379,6 +443,69 @@ impl WordTopology {
             if !adj.contains(&key.0) {
                 adj.push(key.0);
             }
+        }
+    }
+
+    /// Aggiunge (o rinforza) un arco KG tipato da connessione curata dall'utente.
+    /// Se la parola non è nel lessico viene aggiunta. Se l'arco KG è più forte del
+    /// corrente, lo sovrascrive mantenendo tipo e fase semantica corretti.
+    pub fn add_edge_from_kg(&mut self, word_a: &str, word_b: &str, rel: crate::topology::relation::RelationType) {
+        use crate::topology::relation::RelationType as RT;
+        let phase = match rel {
+            RT::SimilarTo | RT::Equivalent => 0.00,
+            RT::IsA        => 0.10,
+            RT::PartOf     => 0.15,
+            RT::Has        => 0.20,
+            RT::Does       => 0.20,
+            RT::UsedFor    => 0.30,
+            RT::Causes | RT::Implies => 0.35,
+            RT::Enables    => 0.25,
+            RT::Requires   => 0.28,
+            RT::TransformsInto => 0.40,
+            RT::Expresses  => 0.22,
+            RT::Symbolizes => 0.18,
+            RT::ContextOf  => 0.12,
+            RT::Coexists   => 0.05,
+            RT::Excludes   => std::f64::consts::FRAC_PI_2,
+            RT::OppositeOf => std::f64::consts::PI,
+            // Fenomenologiche
+            RT::FeelsAs    => 0.05,  // Molto intimo, risonanza forte
+            RT::WondersAbout => 0.15, // Tensione esplorativa leggera
+            RT::RemembersAs  => 0.10, // Risonanza della memoria
+        };
+        let weight = match rel {
+            RT::SimilarTo  => 0.90,
+            RT::Equivalent => 0.92,
+            RT::IsA        => 0.80,
+            RT::PartOf     => 0.75,
+            RT::Has        => 0.70,
+            RT::Does       => 0.70,
+            RT::UsedFor    => 0.55,
+            RT::Causes     => 0.65,
+            RT::Enables    => 0.60,
+            RT::Requires   => 0.58,
+            RT::TransformsInto => 0.62,
+            RT::Expresses  => 0.65,
+            RT::Symbolizes => 0.55,
+            RT::ContextOf  => 0.50,
+            RT::Implies    => 0.68,
+            RT::Coexists   => 0.60,
+            RT::Excludes   => 0.45,
+            RT::OppositeOf => 0.50,
+            // Fenomenologiche
+            RT::FeelsAs    => 0.85,
+            RT::WondersAbout => 0.70,
+            RT::RemembersAs  => 0.80,
+        };
+        let id_a = self.add_word(word_a);
+        let id_b = self.add_word(word_b);
+        if id_a == id_b { return; }
+        let key = if id_a < id_b { (id_a, id_b) } else { (id_b, id_a) };
+        let existing_w = self.edges.get(&key).map(|e| e.weight).unwrap_or(0.0);
+        if weight > existing_w {
+            self.edges.insert(key, WordEdge { a: key.0, b: key.1, weight, raw_count: 0, phase, relation: Some(rel) });
+            if let Some(adj) = self.adjacency.get_mut(&key.0) { if !adj.contains(&key.1) { adj.push(key.1); } }
+            if let Some(adj) = self.adjacency.get_mut(&key.1) { if !adj.contains(&key.0) { adj.push(key.0); } }
         }
     }
 
@@ -526,7 +653,7 @@ impl WordTopology {
                 } else {
                     continue;
                 }
-                let initial_activation = pattern.stability * 0.08;
+                let initial_activation = pattern.stability * 0.003;
                 self.activate_word(word, initial_activation);
             }
         }
@@ -632,6 +759,16 @@ impl WordTopology {
         let id_b = self.word_to_id.get(&b.to_lowercase())?;
         let key = if id_a < id_b { (*id_a, *id_b) } else { (*id_b, *id_a) };
         self.edges.get(&key).map(|e| e.weight)
+    }
+
+    /// Rimuove un arco tra due parole (se esiste).
+    pub fn remove_edge_between(&mut self, a: &str, b: &str) {
+        let id_a = match self.word_to_id.get(&a.to_lowercase()) { Some(&id) => id, None => return };
+        let id_b = match self.word_to_id.get(&b.to_lowercase()) { Some(&id) => id, None => return };
+        let key = if id_a < id_b { (id_a, id_b) } else { (id_b, id_a) };
+        self.edges.remove(&key);
+        if let Some(adj) = self.adjacency.get_mut(&key.0) { adj.retain(|&id| id != key.1); }
+        if let Some(adj) = self.adjacency.get_mut(&key.1) { adj.retain(|&id| id != key.0); }
     }
 
     /// Tutte le parole con attivazione > soglia minima.
@@ -1334,5 +1471,83 @@ mod tests {
         let neighbors = topo.active_neighbors("gioia");
         assert_eq!(neighbors.len(), 1); // solo felicita e attiva tra i vicini
         assert_eq!(neighbors[0].0, "felicita");
+    }
+
+    #[test]
+    fn test_hub_damping_reduces_hub_weight() {
+        // Phase 48: archi da/verso nodi hub devono avere peso minore
+        // rispetto ad archi tra nodi con pochi archi
+        use crate::topology::knowledge_graph::KnowledgeGraph;
+        use crate::topology::relation::RelationType;
+
+        let mut kg = KnowledgeGraph::new();
+
+        // "essere" è un hub — connesso a molte cose
+        for i in 0..100 {
+            kg.add(&format!("cosa_{}", i), RelationType::IsA, "essere");
+        }
+        // "cane" è specifico — pochi archi
+        kg.add("cane", RelationType::IsA, "animale");
+        kg.add("cane", RelationType::Does, "abbaiare");
+
+        let mut topo = WordTopology::new();
+        topo.add_word("essere");
+        topo.add_word("cane");
+        topo.add_word("animale");
+        topo.add_word("abbaiare");
+        for i in 0..100 {
+            topo.add_word(&format!("cosa_{}", i));
+        }
+
+        let (added, _) = topo.build_from_knowledge_graph(&kg);
+        assert!(added > 0, "deve aver aggiunto archi");
+
+        // L'arco cane→animale (nodi specifici) deve avere peso maggiore
+        // di cosa_0→essere (nodo hub)
+        let id_cane = *topo.word_to_id.get("cane").unwrap();
+        let id_animale = *topo.word_to_id.get("animale").unwrap();
+        let id_cosa0 = *topo.word_to_id.get("cosa_0").unwrap();
+        let id_essere = *topo.word_to_id.get("essere").unwrap();
+
+        let key_spec = if id_cane < id_animale { (id_cane, id_animale) } else { (id_animale, id_cane) };
+        let key_hub = if id_cosa0 < id_essere { (id_cosa0, id_essere) } else { (id_essere, id_cosa0) };
+
+        let w_spec = topo.edges.get(&key_spec).map(|e| e.weight).unwrap_or(0.0);
+        let w_hub = topo.edges.get(&key_hub).map(|e| e.weight).unwrap_or(0.0);
+
+        assert!(w_spec > w_hub,
+            "arco specifico ({:.4}) deve pesare più di arco hub ({:.4})",
+            w_spec, w_hub);
+    }
+
+    #[test]
+    fn test_per_edge_confidence_varies_weight() {
+        // Phase 48: due archi IS_A con confidence diversa → peso diverso
+        use crate::topology::knowledge_graph::KnowledgeGraph;
+        use crate::topology::relation::{RelationType, TypedEdge};
+
+        let mut kg = KnowledgeGraph::new();
+        // cane IS_A animale con confidence alta
+        kg.add_edge(TypedEdge::new("cane", RelationType::IsA, "animale").with_confidence(0.95));
+        // tavolo IS_A oggetto con confidence bassa
+        kg.add_edge(TypedEdge::new("tavolo", RelationType::IsA, "oggetto").with_confidence(0.40));
+
+        let mut topo = WordTopology::new();
+        for w in &["cane", "animale", "tavolo", "oggetto"] {
+            topo.add_word(w);
+        }
+
+        topo.build_from_knowledge_graph(&kg);
+
+        let id = |w: &str| *topo.word_to_id.get(w).unwrap();
+        let key1 = { let (a, b) = (id("cane"), id("animale")); if a < b { (a, b) } else { (b, a) } };
+        let key2 = { let (a, b) = (id("tavolo"), id("oggetto")); if a < b { (a, b) } else { (b, a) } };
+
+        let w1 = topo.edges.get(&key1).map(|e| e.weight).unwrap_or(0.0);
+        let w2 = topo.edges.get(&key2).map(|e| e.weight).unwrap_or(0.0);
+
+        assert!(w1 > w2,
+            "cane→animale (conf=0.95, peso={:.4}) deve pesare più di tavolo→oggetto (conf=0.40, peso={:.4})",
+            w1, w2);
     }
 }

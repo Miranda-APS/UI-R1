@@ -574,6 +574,11 @@ impl Lexicon {
         self.patterns.len()
     }
 
+    /// Iteratore su tutte le parole nel lessico.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &WordPattern)> {
+        self.patterns.iter().map(|(k, v)| (k.as_str(), v))
+    }
+
     /// Parole piu stabili.
     pub fn most_stable(&self, n: usize) -> Vec<&WordPattern> {
         let mut sorted: Vec<&WordPattern> = self.patterns.values().collect();
@@ -614,6 +619,11 @@ impl Lexicon {
     /// Usato dal restore per ripristinare lo stato esatto salvato.
     pub fn insert_pattern(&mut self, word: &str, pattern: WordPattern) {
         self.patterns.insert(word.to_lowercase(), pattern);
+    }
+
+    /// Rimuove una parola dal lessico. Ritorna true se la parola era presente.
+    pub fn remove_word(&mut self, word: &str) -> bool {
+        self.patterns.remove(&word.to_lowercase()).is_some()
     }
 
     /// Iteratore su tutti i pattern del lessico.
@@ -801,6 +811,52 @@ impl Lexicon {
             if let Some(pat) = self.patterns.get_mut(word) {
                 pat.signature = PrimitiveCore::new(sig);
             }
+        }
+    }
+
+    /// Carica il vocabolario fenomenologico da `data/kg/phenomenology.tsv`.
+    /// Formato: `parola\tSIG\tconf,val,int,def,cpx,perm,age,tempo`
+    /// Solo parole singole (senza spazi). Aggiunge parole nuove o aggiorna firme esistenti.
+    /// Stability = 0.75 (alta — firme calibrate, non apprese).
+    /// Chiamare dopo apply_curated_signatures() e prima di recompute_all_word_affinities().
+    pub fn load_phenomenology_signatures(&mut self) {
+        let path = std::path::Path::new("data/kg/phenomenology.tsv");
+        let content = match std::fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => return, // silenzioso se file non presente
+        };
+        let mut added = 0usize;
+        let mut updated = 0usize;
+        for line in content.lines() {
+            if line.starts_with('#') || line.trim().is_empty() { continue; }
+            let parts: Vec<&str> = line.splitn(3, '\t').collect();
+            if parts.len() != 3 || parts[1] != "SIG" { continue; }
+            let word = parts[0].trim().to_lowercase();
+            // Solo parole singole (nessuno spazio)
+            if word.contains(' ') { continue; }
+            if word.len() < 2 { continue; }
+            // Parsa firma 8D
+            let vals: Vec<f64> = parts[2].split(',')
+                .filter_map(|s| s.trim().parse::<f64>().ok())
+                .collect();
+            if vals.len() != 8 { continue; }
+            if !vals.iter().all(|&v| v >= 0.0 && v <= 1.0) { continue; }
+            let sig = PrimitiveCore::new([vals[0], vals[1], vals[2], vals[3],
+                                          vals[4], vals[5], vals[6], vals[7]]);
+            if let Some(pat) = self.patterns.get_mut(&word) {
+                pat.signature = sig;
+                updated += 1;
+            } else {
+                let mut pat = WordPattern::new_unknown(&word);
+                pat.signature = sig;
+                pat.stability = 0.75;
+                pat.exposure_count = 10; // stabilita garantita
+                self.patterns.insert(word, pat);
+                added += 1;
+            }
+        }
+        if added + updated > 0 {
+            eprintln!("[PHENO] vocabolario fenomenologico: {} nuovi, {} aggiornati", added, updated);
         }
     }
 

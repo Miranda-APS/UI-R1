@@ -23,6 +23,18 @@ pub enum ThoughtKind {
     Disconnection,
     /// Simplice recente in STM, non ancora in LTM — ipotesi in verifica
     Hypothesis,
+    /// Phase 50: abduzione autonoma — "quale frattale spiega lo stato corrente?"
+    AbductiveHypothesis,
+    /// Phase 53: l'entità si è sorpresa dal proprio output
+    SelfDiscovery,
+    /// Phase 53: bisogno in crisi (satisfaction < 0.35)
+    Need,
+    /// Phase 53: desiderio attivo con intensità significativa
+    Desire,
+    /// Phase 53: eco dell'Altro rilevato nel campo
+    Interlocutor,
+    /// Phase 53: configurazione umoristica (ironia, bisociazione)
+    Humor,
 }
 
 #[derive(Debug, Clone)]
@@ -43,8 +55,18 @@ pub enum ThoughtData {
     TensionData     { phase: f64, word_a: String, word_b: String },
     GapData         { simplex_count: usize, word_count: usize, activation_count: u64 },
     MissingBridgeData { proximity: f64, shared_simplices: usize },
-    DisconnectionData { components: Vec<Vec<String>> }, // nomi frattali per componente
+    DisconnectionData { components: Vec<Vec<String>> },
     HypothesisData  { simplex_id: u32, dimension: usize, activation_count: u64 },
+    /// Phase 53: dati della scoperta dal self-listening
+    SelfDiscoveryData { divergence: f64, emergent_fractals: Vec<String>, trigger_words: Vec<String> },
+    /// Phase 53: bisogno in crisi
+    NeedData { level: String, satisfaction: f64 },
+    /// Phase 53: desiderio attivo
+    DesireData { name: String, intensity: f64, distance: f64 },
+    /// Phase 53: eco dell'Altro
+    InterlocutorData { presence: f64, pattern: String, resonance: f64 },
+    /// Phase 53: umorismo topologico
+    HumorData { incongruity: f64, irony_pairs: Vec<(String, String)>, bisociation: Option<(u32, u32)> },
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -59,6 +81,13 @@ pub fn generate_thoughts(engine: &PrometeoTopologyEngine) -> Vec<Thought> {
     thoughts.extend(detect_missing_bridges(engine));
     thoughts.extend(detect_disconnections(engine));
     thoughts.extend(detect_hypotheses(engine));
+
+    // Phase 53: pensieri dai nuovi sistemi
+    thoughts.extend(engine.pending_self_discoveries.iter().cloned());
+    thoughts.extend(detect_needs(engine));
+    thoughts.extend(detect_desires(engine));
+    thoughts.extend(detect_interlocutor(engine));
+    thoughts.extend(detect_humor(engine));
 
     thoughts.sort_by(|a, b| b.strength.partial_cmp(&a.strength)
         .unwrap_or(std::cmp::Ordering::Equal));
@@ -324,6 +353,107 @@ fn detect_hypotheses(engine: &PrometeoTopologyEngine) -> Vec<Thought> {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// 6. BISOGNI — livelli in crisi
+// ═══════════════════════════════════════════════════════════════
+
+fn detect_needs(engine: &PrometeoTopologyEngine) -> Vec<Thought> {
+    let state = match &engine.last_needs_state {
+        Some(s) => s,
+        None => return vec![],
+    };
+    engine.needs.crisis_thoughts(state).into_iter().map(|(level, sat)| {
+        Thought {
+            kind: ThoughtKind::Need,
+            fractal_names: vec![],
+            words: vec![level.name().to_string()],
+            strength: 1.0 - sat,
+            data: ThoughtData::NeedData {
+                level: level.name().to_string(),
+                satisfaction: sat,
+            },
+        }
+    }).collect()
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 7. DESIDERI — desideri attivi con intensità significativa
+// ═══════════════════════════════════════════════════════════════
+
+fn detect_desires(engine: &PrometeoTopologyEngine) -> Vec<Thought> {
+    engine.desire.desires.iter().filter(|d| d.intensity > 0.3).map(|d| {
+        Thought {
+            kind: ThoughtKind::Desire,
+            fractal_names: vec![],
+            words: vec![d.name.clone()],
+            strength: d.intensity,
+            data: ThoughtData::DesireData {
+                name: d.name.clone(),
+                intensity: d.intensity,
+                distance: 0.0, // calcolato lazy se necessario
+            },
+        }
+    }).collect()
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 8. INTERLOCUTORE — eco dell'Altro nel campo
+// ═══════════════════════════════════════════════════════════════
+
+fn detect_interlocutor(engine: &PrometeoTopologyEngine) -> Vec<Thought> {
+    let m = &engine.interlocutor;
+    if m.presence < 0.3 { return vec![]; }
+    let pattern_str = match &m.detected_pattern {
+        crate::topology::interlocutor::InteractionPattern::None => "nessuno",
+        crate::topology::interlocutor::InteractionPattern::Converging => "convergenza",
+        crate::topology::interlocutor::InteractionPattern::Diverging => "divergenza",
+        crate::topology::interlocutor::InteractionPattern::Oscillating => "oscillazione",
+    };
+    vec![Thought {
+        kind: ThoughtKind::Interlocutor,
+        fractal_names: vec![],
+        words: vec![],
+        strength: m.presence,
+        data: ThoughtData::InterlocutorData {
+            presence: m.presence,
+            pattern: pattern_str.to_string(),
+            resonance: m.cumulative_resonance,
+        },
+    }]
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 9. UMORISMO — configurazione sorprendente nel campo
+// ═══════════════════════════════════════════════════════════════
+
+fn detect_humor(engine: &PrometeoTopologyEngine) -> Vec<Thought> {
+    let h = &engine.last_humor_state;
+    if !h.is_active() { return vec![]; }
+
+    let mut names = Vec::new();
+    if let Some((fa, fb)) = h.bisociation_pair {
+        if let Some(f) = engine.registry.get(fa) { names.push(f.name.clone()); }
+        if let Some(f) = engine.registry.get(fb) { names.push(f.name.clone()); }
+    }
+
+    let words: Vec<String> = h.irony_pairs.iter()
+        .flat_map(|(a, b, _)| vec![a.clone(), b.clone()])
+        .chain(h.crossroad_words.iter().cloned())
+        .collect();
+
+    vec![Thought {
+        kind: ThoughtKind::Humor,
+        fractal_names: names,
+        words,
+        strength: h.incongruity_score,
+        data: ThoughtData::HumorData {
+            incongruity: h.incongruity_score,
+            irony_pairs: h.irony_pairs.iter().map(|(a, b, _)| (a.clone(), b.clone())).collect(),
+            bisociation: h.bisociation_pair,
+        },
+    }]
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Test — usa lo stato REALE (.bin), non il bootstrap
 // ═══════════════════════════════════════════════════════════════
 
@@ -397,6 +527,12 @@ mod tests {
                 ThoughtKind::MissingBridge => "PONTE?  ",
                 ThoughtKind::Disconnection => "ISOLA   ",
                 ThoughtKind::Hypothesis    => "IPOTESI ",
+                ThoughtKind::AbductiveHypothesis => "ABDUZ.  ",
+                ThoughtKind::SelfDiscovery => "SCOPERTA",
+                ThoughtKind::Need          => "BISOGNO ",
+                ThoughtKind::Desire        => "DESIDERI",
+                ThoughtKind::Interlocutor  => "ALTRO   ",
+                ThoughtKind::Humor         => "UMORISMO",
             };
             let frattali = if t.fractal_names.is_empty() { "—".to_string() }
                 else { t.fractal_names.join(" ↔ ") };
@@ -417,6 +553,16 @@ mod tests {
                 },
                 ThoughtData::HypothesisData { simplex_id, dimension, activation_count } =>
                     format!(" id={simplex_id} dim={dimension} att={activation_count}"),
+                ThoughtData::SelfDiscoveryData { divergence, .. } =>
+                    format!(" div={divergence:.3}"),
+                ThoughtData::NeedData { level, satisfaction } =>
+                    format!(" {level} sat={satisfaction:.2}"),
+                ThoughtData::DesireData { name, intensity, .. } =>
+                    format!(" {name} int={intensity:.2}"),
+                ThoughtData::InterlocutorData { presence, pattern, resonance } =>
+                    format!(" pres={presence:.2} pat={pattern} ris={resonance:.2}"),
+                ThoughtData::HumorData { incongruity, .. } =>
+                    format!(" inc={incongruity:.2}"),
             };
             println!("  [{kind}] str={:.2}  {frattali}{parole}{extra}", t.strength);
         }

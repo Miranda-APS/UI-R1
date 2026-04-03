@@ -7,3 +7,4 @@ pub mod state;
 pub mod api;
 pub mod ws;
 pub mod server;
+pub mod conversations;

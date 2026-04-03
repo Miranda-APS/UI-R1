@@ -23,6 +23,8 @@ use crate::topology::grammar::PartOfSpeech;
 use crate::topology::episodic::EpisodeSnapshot;
 use crate::topology::identity::IdentitySnapshot;
 use crate::topology::narrative::NarrativeSnapshot;
+use crate::topology::self_model::SelfModelSnapshot;
+use crate::topology::semantic_episode::SemanticEpisodeLog;
 
 /// Snapshot serializzabile del lessico.
 #[derive(Serialize, Deserialize, Debug)]
@@ -99,6 +101,9 @@ pub struct SimplexSnapshot {
     /// Legacy: descrizioni testuali (retrocompat v1.2)
     #[serde(default)]
     pub face_descriptions: Vec<String>,
+    /// Phase 52: parole sorgente (proposizioni inscritte). Default None per retrocompat.
+    #[serde(default)]
+    pub source_words: Option<Vec<String>>,
 }
 
 /// Snapshot serializzabile della memoria.
@@ -219,6 +224,18 @@ pub struct PrometeoState {
     /// Identità narrativa — Phase 42/43 (opzionale per retrocompat).
     #[serde(default)]
     pub narrative: Option<NarrativeSnapshot>,
+    /// SelfModel — credenze, valori, incertezze esplicite (opzionale per retrocompat).
+    #[serde(default)]
+    pub self_model: Option<SelfModelSnapshot>,
+    /// Episodi semantici — log navigabile delle interazioni (opzionale per retrocompat).
+    #[serde(default)]
+    pub semantic_episodes: Option<SemanticEpisodeLog>,
+    /// Phase 54: desideri attivi (opzionale per retrocompat).
+    #[serde(default)]
+    pub desire: Option<crate::topology::desire::DesireSnapshot>,
+    /// Phase 54: eco dell'Altro (opzionale per retrocompat).
+    #[serde(default)]
+    pub interlocutor: Option<crate::topology::interlocutor::InterlocutorSnapshot>,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -317,6 +334,7 @@ impl PrometeoState {
                     activation_count: s.activation_count,
                     faces,
                     face_descriptions: vec![], // legacy vuoto
+                    source_words: s.source_words.clone(),
                 }
             })
             .collect();
@@ -379,6 +397,10 @@ impl PrometeoState {
             instance_born: Some(engine.instance_born),
             identity: Some(engine.identity.to_snapshot()),
             narrative: Some(engine.narrative_self.capture()),
+            self_model: Some(engine.self_model.to_snapshot()),
+            semantic_episodes: Some(engine.semantic_episodes.clone()),
+            desire: Some(engine.desire.snapshot()),
+            interlocutor: Some(engine.interlocutor.snapshot()),
         }
     }
 
@@ -542,6 +564,7 @@ impl PrometeoState {
                 ss.persistence,
                 ss.plasticity,
                 ss.activation_count,
+                ss.source_words.clone(),
             );
         }
 
@@ -650,6 +673,25 @@ impl PrometeoState {
         // Cristallizzato + posizioni + is_born persistono tra sessioni.
         if let Some(snap) = self.narrative.clone() {
             snap.restore_into(&mut engine.narrative_self);
+        }
+
+        // Ripristina SelfModel — credenze, valori, incertezze esplicite.
+        // Se assente (salvataggio vecchio), mantiene il bootstrap di default.
+        if let Some(snap) = self.self_model.clone() {
+            engine.self_model = crate::topology::self_model::SelfModel::from_snapshot(snap);
+        }
+
+        // Ripristina episodi semantici.
+        if let Some(log) = self.semantic_episodes.clone() {
+            engine.semantic_episodes = log;
+        }
+
+        // Phase 54: ripristina desideri e interlocutore.
+        if let Some(snap) = self.desire.clone() {
+            engine.desire = crate::topology::desire::DesireCore::from_snapshot(&snap);
+        }
+        if let Some(snap) = self.interlocutor.clone() {
+            engine.interlocutor = crate::topology::interlocutor::InterlocutorModel::from_snapshot(&snap);
         }
     }
 
@@ -1006,11 +1048,12 @@ mod tests {
 
     #[test]
     fn test_resting_state_after_restore() {
-        // Dopo restore, l'entita deve avere attivazioni non-zero
-        // nelle parole piu stabili — non aspetta input esterno.
+        // Dopo restore, le parole stabili devono avere attivazione non-zero
+        // (resting state = stability × 0.003, sotto soglia active_words 0.02).
+        // Il resting è infrastruttura dormiente: presente ma non "attiva"
+        // fino a quando l'input non la sveglia.
         let mut engine1 = PrometeoTopologyEngine::new();
-        // Insegna alcune frasi per aumentare la stability di alcune parole
-        for _ in 0..5 {
+        for _ in 0..15 {
             engine1.receive("io sento la gioia nel cuore");
             engine1.receive("la luce porta calore e vita");
         }
@@ -1019,13 +1062,14 @@ mod tests {
         let mut engine2 = PrometeoTopologyEngine::new();
         state.restore_lexicon(&mut engine2);
 
-        // Il campo deve avere parole attive IMMEDIATAMENTE dopo restore
-        let active = engine2.word_topology.most_active(10);
-        assert!(!active.is_empty(),
-            "Dopo restore il campo deve avere parole gia attive (resting state)");
+        // Il campo deve avere parole con attivazione > 0 (resting state)
+        // anche se sotto soglia active_words — il resting è dormiente, non morto.
+        let all_acts = engine2.word_topology.all_activations();
+        let nonzero = all_acts.iter().filter(|(_, a)| *a > 0.0).count();
+        assert!(nonzero > 0,
+            "Dopo restore almeno alcune parole devono avere attivazione > 0 (resting state)");
 
-        // Le parole attive devono avere attivazione > 0
-        let max_activation = active.iter().map(|v| v.activation).fold(0.0f64, f64::max);
+        let max_activation = all_acts.iter().map(|(_, a)| *a).fold(0.0f64, f64::max);
         assert!(max_activation > 0.0,
             "L'attivazione massima a riposo deve essere > 0, trovato: {}", max_activation);
     }

@@ -294,6 +294,61 @@ impl TopologicalMemory {
         }
     }
 
+    /// Phase 52: consolidamento leggero — promuove pattern STM ricorrenti (3+ occorrenze)
+    /// senza attendere il DeepSleep completo. Apprendimento continuo durante la veglia.
+    pub fn consolidate_light(&mut self) {
+        if self.short_term.len() < 5 { return; }
+
+        let mut simplex_count: std::collections::HashMap<SimplexId, u64> =
+            std::collections::HashMap::new();
+        for imprint in &self.short_term {
+            for &(sid, _) in &imprint.active_simplices {
+                *simplex_count.entry(sid).or_insert(0) += 1;
+            }
+        }
+
+        // Soglia leggera: 3 occorrenze (vs 5 per il consolidamento pieno)
+        let recurring: Vec<SimplexId> = simplex_count.iter()
+            .filter(|(_, count)| **count >= 3)
+            .map(|(sid, _)| *sid)
+            .collect();
+
+        if recurring.is_empty() { return; }
+
+        // Evita duplicati: non creare MTM se esiste già un'impronta con gli stessi simplessi
+        let existing_sids: std::collections::HashSet<SimplexId> = self.medium_term.iter()
+            .flat_map(|imp| imp.active_simplices.iter().map(|(sid, _)| *sid))
+            .collect();
+        let truly_new: Vec<SimplexId> = recurring.into_iter()
+            .filter(|sid| !existing_sids.contains(sid))
+            .collect();
+
+        if truly_new.is_empty() { return; }
+
+        let active: Vec<(SimplexId, f64)> = truly_new.iter()
+            .map(|sid| (*sid, *simplex_count.get(sid).unwrap() as f64 / self.stm_capacity as f64))
+            .collect();
+
+        let mut fractals = Vec::new();
+        for imprint in &self.short_term {
+            for &fid in &imprint.involved_fractals {
+                if !fractals.contains(&fid) {
+                    fractals.push(fid);
+                }
+            }
+        }
+
+        let consolidated = FieldImprint {
+            active_simplices: active,
+            involved_fractals: fractals,
+            tick: self.current_tick,
+            strength: 0.5, // più leggero del consolidamento pieno (0.8)
+            origin: "consolidamento_leggero".to_string(),
+        };
+
+        self.medium_term.push(consolidated);
+    }
+
     /// Decadimento: le impronte perdono forza nel tempo.
     pub fn decay(&mut self, rate: f64) {
         for imprint in self.medium_term.iter_mut() {

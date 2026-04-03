@@ -1,4 +1,5 @@
 /// API REST — Handler per tutti gli endpoint.
+/// UI refresh: theme toggle + font sizes
 
 use axum::{
     extract::State,
@@ -19,9 +20,35 @@ use super::state::*;
 // ═══════════════════════════════════════════════════════════════
 
 static INDEX_HTML: &str = include_str!("index.html");
+static COMMUNITY_HTML: &str = include_str!("community/index.html");
+static UNIVERSO_HTML: &str = include_str!("universo/index.html");
+static BIENNALE_HTML: &str = include_str!("biennale/index.html");
+static BIENNALE_HOME_HTML: &str = include_str!("biennale/home.html");
+static DIALOGO_HTML: &str = include_str!("biennale/dialogo.html");
+static CURAZIONE_HTML: &str = include_str!("biennale/curazione.html");
 
 pub async fn index() -> Html<&'static str> {
+    Html(BIENNALE_HOME_HTML)
+}
+
+pub async fn admin_index() -> Html<&'static str> {
     Html(INDEX_HTML)
+}
+
+pub async fn universo_index() -> Html<&'static str> {
+    Html(UNIVERSO_HTML)
+}
+
+pub async fn biennale_index() -> Html<&'static str> {
+    Html(BIENNALE_HTML)
+}
+
+pub async fn dialogo_index() -> Html<&'static str> {
+    Html(DIALOGO_HTML)
+}
+
+pub async fn curazione_index() -> Html<&'static str> {
+    Html(CURAZIONE_HTML)
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -70,6 +97,7 @@ pub async fn post_input(
             keywords: Vec::new(),
             state: StateSnapshot::default(),
             stance: "Open".to_string(),
+            valence_label: "aperto".to_string(),
             intention: "Express".to_string(),
             topic_continuity: 0.5,
         }),
@@ -215,7 +243,7 @@ pub async fn get_why(State(state): State<AppState>) -> Json<WhyDto> {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// GET /api/ask — Domande curiosita
+// GET /api/ask — Incertezze aperte (domande reali dell'entità)
 // ═══════════════════════════════════════════════════════════════
 
 pub async fn get_ask(State(state): State<AppState>) -> Json<Vec<QuestionDto>> {
@@ -224,6 +252,66 @@ pub async fn get_ask(State(state): State<AppState>) -> Json<Vec<QuestionDto>> {
     match rx.await {
         Ok(dto) => Json(dto),
         Err(_) => Json(Vec::new()),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/open-questions — Incertezze aperte (versione diretta)
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_open_questions(State(state): State<AppState>) -> Json<Vec<UncertaintyDto>> {
+    let (tx, rx) = oneshot::channel::<Vec<UncertaintyDto>>();
+    let _ = state.cmd_tx.send(EngineCommand::GetOpenQuestions { reply: tx }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(Vec::new()),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/thought-chain — Ultima catena di ragionamento autonomo
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_thought_chain(State(state): State<AppState>) -> Json<Option<ThoughtChainDto>> {
+    let (tx, rx) = oneshot::channel::<Option<ThoughtChainDto>>();
+    let _ = state.cmd_tx.send(EngineCommand::GetLastThoughtChain { reply: tx }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(None),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/clarity — L'utente illumina un'incertezza dell'entità
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct ClarityRequest {
+    pub topic: String,
+    pub illumination: String,
+}
+
+pub async fn post_clarity(
+    State(state): State<AppState>,
+    Json(req): Json<ClarityRequest>,
+) -> Json<ClarityResponseDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::Clarity {
+        topic: req.topic.clone(),
+        illumination: req.illumination.clone(),
+        reply: tx,
+    }).await;
+    match rx.await {
+        Ok(true) => Json(ClarityResponseDto {
+            acknowledged: true,
+            topic: req.topic.clone(),
+            message: format!("Comprensione ricevuta su '{}'. Il campo si aggiorna.", req.topic),
+        }),
+        _ => Json(ClarityResponseDto {
+            acknowledged: false,
+            topic: req.topic,
+            message: "Impossibile elaborare la comprensione.".to_string(),
+        }),
     }
 }
 
@@ -411,10 +499,15 @@ pub async fn get_narrative(State(state): State<AppState>) -> Json<super::state::
     let _ = state.cmd_tx.send(EngineCommand::GetNarrative { reply: tx }).await;
     Json(rx.await.unwrap_or(NarrativeDto {
         stance: "aperto".into(),
+        valence_label: "aperto".into(),
         pending_intention: None,
         topic_continuity: 0.5,
         is_born: false,
         turn_count: 0,
+        valence: None,
+        commitment: None,
+        coherence_integrity: 1.0,
+        attributed_intent: "Unknown".to_string(),
         recent_turns: vec![],
         crystallized: vec![],
         positions: vec![],
@@ -481,6 +574,391 @@ pub async fn get_word_neighbors(
 }
 
 // ═══════════════════════════════════════════════════════════════
+// GET /api/word_detail?word=xxx — Dettaglio completo parola
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_word_detail(
+    State(state): State<AppState>,
+    Query(params): Query<WordQuery>,
+) -> Json<WordDetailDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetWordDetail {
+        word: params.word,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/word_connect — Aggiunge connessione curata
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn post_word_connect(
+    State(state): State<AppState>,
+    Json(body): Json<WordConnectBody>,
+) -> Json<bool> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::AddWordConnect {
+        from: body.from,
+        relation: body.relation,
+        to: body.to,
+        via: body.via,
+        confidence: body.confidence,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/cura/parole?q=&offset=&limit= — Lista parole paginata
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct WordListQuery {
+    pub q: Option<String>,
+    pub offset: Option<usize>,
+    pub limit: Option<usize>,
+}
+
+pub async fn get_word_list(
+    State(state): State<AppState>,
+    Query(params): Query<WordListQuery>,
+) -> Json<crate::web::state::WordListDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetWordList {
+        query: params.q.unwrap_or_default(),
+        offset: params.offset.unwrap_or(0),
+        limit: params.limit.unwrap_or(50),
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DELETE /api/cura/relazione — Rimuove una relazione specifica
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct DeleteRelationBody {
+    pub subject: String,
+    pub relation: String,
+    pub object: String,
+}
+
+pub async fn delete_word_relation(
+    State(state): State<AppState>,
+    Json(body): Json<DeleteRelationBody>,
+) -> Json<bool> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::DeleteWordRelation {
+        subject: body.subject,
+        relation: body.relation,
+        object: body.object,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DELETE /api/cura/parola?word= — Rimuove una parola dal KG
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn delete_word(
+    State(state): State<AppState>,
+    Query(params): Query<WordQuery>,
+) -> Json<bool> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::DeleteWord {
+        word: params.word,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/cura/firma — Aggiorna firma 8D di una parola
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn post_update_firma(
+    State(state): State<AppState>,
+    Json(body): Json<crate::web::state::UpdateFirmaBody>,
+) -> Json<bool> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::UpdateWordFirma {
+        word: body.word,
+        firma: body.firma,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/cura/relazione/modifica — Aggiorna confidence e/o via
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn post_update_edge(
+    State(state): State<AppState>,
+    Json(body): Json<crate::web::state::UpdateEdgeBody>,
+) -> Json<bool> {
+    let via_update: Option<Option<String>> = if body.clear_via == Some(true) {
+        Some(None)
+    } else if let Some(v) = body.via {
+        if v.trim().is_empty() { None } else { Some(Some(v)) }
+    } else {
+        None
+    };
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::UpdateEdge {
+        subject: body.subject,
+        relation: body.relation,
+        object: body.object,
+        confidence: body.confidence,
+        via: via_update,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/cura/categorie?rel=IS_A&min=3&q=
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct CategoriesQuery {
+    pub rel: Option<String>,
+    pub min: Option<usize>,
+    pub q: Option<String>,
+}
+
+pub async fn get_categories(
+    State(state): State<AppState>,
+    Query(params): Query<CategoriesQuery>,
+) -> Json<crate::web::state::CategoriesDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetCategories {
+        relation: params.rel.unwrap_or_else(|| "IS_A".to_string()),
+        min_children: params.min.unwrap_or(3),
+        query: params.q.unwrap_or_default(),
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/cura/pulizia-verbi?dry_run=true — Rimuove forme verbali coniugate
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct PuliziaQuery {
+    pub dry_run: Option<bool>,
+}
+
+pub async fn post_pulizia_verbi(
+    State(state): State<AppState>,
+    Query(params): Query<PuliziaQuery>,
+) -> Json<crate::web::state::PuliziaDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::PuliziaVerbi {
+        dry_run: params.dry_run.unwrap_or(false),
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(crate::web::state::PuliziaDto {
+        deleted: vec![], count: 0, dry_run: true
+    }))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/concept?word=xxx — Tutto ciò che il sistema sa di un concetto
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_concept(
+    State(state): State<AppState>,
+    Query(params): Query<WordQuery>,
+) -> Json<ConceptDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetConcept {
+        word: params.word,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/self — Identità esplicita: credenze, valori, incertezze
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_self(State(state): State<AppState>) -> Json<SelfDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetSelf { reply: tx }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/episodes?n=20 — Episodi semantici recenti
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct EpisodeQuery { pub n: Option<usize> }
+
+pub async fn get_episodes(
+    State(state): State<AppState>,
+    Query(params): Query<EpisodeQuery>,
+) -> Json<Vec<EpisodeDto>> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetEpisodes {
+        n: params.n.unwrap_or(20),
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/episodes/recall?concepts=cane,animale — Recall per concetti
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct RecallQuery { pub concepts: String }
+
+pub async fn recall_episodes(
+    State(state): State<AppState>,
+    Query(params): Query<RecallQuery>,
+) -> Json<Vec<EpisodeDto>> {
+    let concepts: Vec<String> = params.concepts
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::RecallEpisodes { concepts, reply: tx }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Community Session API
+// ═══════════════════════════════════════════════════════════════
+
+/// GET /community — UI community HTML
+pub async fn community_index() -> Html<&'static str> {
+    Html(COMMUNITY_HTML)
+}
+
+/// POST /api/community/teach — insegna testo (da partecipante)
+pub async fn post_community_teach(
+    State(state): State<AppState>,
+    Json(req): Json<CommunityTeachRequest>,
+) -> Json<CommunityTeachDto> {
+    let user_id = req.user_id.unwrap_or_else(|| "anonimo".to_string());
+    let user_name = req.user_name.unwrap_or_else(|| "Anonimo".to_string());
+    let user_context = req.user_context.unwrap_or_default();
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::CommunityTeach {
+        text: req.text,
+        user_id,
+        user_name,
+        user_context,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_else(|_| CommunityTeachDto {
+        words_new: Vec::new(),
+        words_known: Vec::new(),
+        resonating_words: Vec::new(),
+        fractals_touched: Vec::new(),
+        connections_found: Vec::new(),
+        field_energy_delta: 0.0,
+    }))
+}
+
+/// POST /api/community/connect — aggiungi connessione KG curata
+pub async fn post_community_connect(
+    State(state): State<AppState>,
+    Json(req): Json<CommunityConnectRequest>,
+) -> Json<bool> {
+    let user_id = req.user_id.unwrap_or_else(|| "anonimo".to_string());
+    let user_name = req.user_name.unwrap_or_else(|| "Anonimo".to_string());
+    let user_context = req.user_context.unwrap_or_default();
+    // Converti strength 1-5 in confidenza 0.2-1.0
+    let confidence = req.strength
+        .map(|s| (s.clamp(1, 5) as f32) / 5.0)
+        .unwrap_or(0.8);
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::CommunityValidateEdge {
+        subject: req.subject,
+        relation: req.relation,
+        object: req.object,
+        confidence,
+        user_id,
+        user_name,
+        user_context,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+/// POST /api/community/validate — valida/aggiusta confidenza connessione
+pub async fn post_community_validate(
+    State(state): State<AppState>,
+    Json(req): Json<CommunityValidateRequest>,
+) -> Json<bool> {
+    let user_id = req.user_id.unwrap_or_else(|| "anonimo".to_string());
+    let user_name = req.user_name.unwrap_or_else(|| "Anonimo".to_string());
+    let user_context = req.user_context.unwrap_or_default();
+    let confidence = (req.resonance.clamp(1, 5) as f32) / 5.0;
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::CommunityValidateEdge {
+        subject: req.subject,
+        relation: req.relation,
+        object: req.object,
+        confidence,
+        user_id,
+        user_name,
+        user_context,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+/// GET /api/community/session — stato sessione corrente
+pub async fn get_community_session(State(state): State<AppState>) -> Json<SessionStateDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetSessionState { reply: tx }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+/// GET /api/community/field — campo parole sessione (parole insegnate)
+pub async fn get_community_field(State(state): State<AppState>) -> Json<serde_json::Value> {
+    // Restituisce le parole attive + stato sessione combinati
+    let (tx_field, rx_field) = oneshot::channel();
+    let (tx_session, rx_session) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetWordField { reply: tx_field }).await;
+    let _ = state.cmd_tx.send(EngineCommand::GetSessionState { reply: tx_session }).await;
+    let field = rx_field.await.unwrap_or_default();
+    let session = rx_session.await.unwrap_or_default();
+    Json(serde_json::json!({
+        "top_words": field.top_words.iter().map(|w| &w.word).collect::<Vec<_>>(),
+        "total_energy": field.total_energy,
+        "session_words": session.teach_entries.iter()
+            .flat_map(|e| e.words_new.iter().cloned())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter().collect::<Vec<_>>(),
+        "connections": session.community_edges,
+    }))
+}
+
+/// POST /api/community/reset — nuova sessione
+pub async fn post_community_reset(
+    State(state): State<AppState>,
+    Json(body): Json<serde_json::Value>,
+) -> Json<bool> {
+    let name = body.get("community_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("comunita")
+        .to_string();
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::ResetSession { community_name: name, reply: tx }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Default per StateSnapshot (usato in caso di errore)
 // ═══════════════════════════════════════════════════════════════
 
@@ -514,4 +992,195 @@ impl Default for StateSnapshot {
             field_signature: vec![0.5; 8],
         }
     }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Phase 52: Dialogo Interiore
+// ═══════════════════════════════════════════════════════════════
+
+/// GET /api/inner-dialogue — Aggregato di pensieri, domande e proposizioni
+pub async fn get_inner_dialogue(
+    State(state): State<AppState>,
+) -> Json<InnerDialogueDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetInnerDialogue { reply: tx }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(InnerDialogueDto {
+            thoughts: vec![],
+            questions: vec![],
+            propositions: vec![],
+        }),
+    }
+}
+
+/// POST /api/respond — L'utente risponde a un item del dialogo interiore
+pub async fn post_respond(
+    State(state): State<AppState>,
+    Json(req): Json<RespondRequest>,
+) -> Json<RespondResult> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::RespondToInsight {
+        item_type: req.item_type,
+        item_id: req.item_id,
+        response: req.response,
+        action: req.action,
+        reply: tx,
+    }).await;
+    match rx.await {
+        Ok(result) => Json(result),
+        Err(_) => Json(RespondResult {
+            success: false,
+            effect: "Errore comunicazione con engine".to_string(),
+        }),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/will/focus — Modula la volontà focalizzando su un topic
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+pub struct WillFocusRequest {
+    pub topic: String,
+}
+
+pub async fn post_will_focus(
+    State(state): State<AppState>,
+    Json(req): Json<WillFocusRequest>,
+) -> Json<WillDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::WillFocus {
+        topic: req.topic,
+        reply: tx,
+    }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(WillDto::default()),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/dream/report — Report dettagliato del sogno
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_dream_report(State(state): State<AppState>) -> Json<DreamReportDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetDreamReport { reply: tx }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(DreamReportDto::default()),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/relations — Lista tutti i tipi di relazione (per menu)
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_relations() -> Json<Vec<serde_json::Value>> {
+    use crate::topology::relation::RelationType;
+    let list: Vec<serde_json::Value> = RelationType::ALL.iter().map(|r| {
+        serde_json::json!({
+            "key": r.as_str(),
+            "nome": r.nome(),
+            "categoria": r.categoria(),
+            "colore": r.colore(),
+        })
+    }).collect();
+    Json(list)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DELETE /api/edge — Cancella un arco KG
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+pub struct EdgeDeleteRequest {
+    pub subject: String,
+    pub relation: String,
+    pub object: String,
+}
+
+pub async fn delete_edge(
+    State(state): State<AppState>,
+    Json(req): Json<EdgeDeleteRequest>,
+) -> Json<bool> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::DeleteEdge {
+        subject: req.subject,
+        relation: req.relation,
+        object: req.object,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PATCH /api/edge — Modifica confidence di un arco KG
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+pub struct EdgePatchRequest {
+    pub subject: String,
+    pub relation: String,
+    pub object: String,
+    pub confidence: f32,
+}
+
+pub async fn patch_edge(
+    State(state): State<AppState>,
+    Json(req): Json<EdgePatchRequest>,
+) -> Json<bool> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::PatchEdgeConfidence {
+        subject: req.subject,
+        relation: req.relation,
+        object: req.object,
+        confidence: req.confidence,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/biennale/field — Campo semantico 2D (galassia)
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_biennale_field(State(state): State<AppState>) -> Json<BiennaleFieldDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetBiennaleField { reply: tx }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/biennale/word?word=X — Dettaglio parola con vicini KG
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_biennale_word(
+    State(state): State<AppState>,
+    Query(params): Query<BiennaleWordQuery>,
+) -> Json<BiennaleWordDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetBiennaleWord {
+        word: params.word,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/biennale/journey?from=X&to=Y — Percorso BFS nel KG
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_biennale_journey(
+    State(state): State<AppState>,
+    Query(params): Query<BiennaleJourneyQuery>,
+) -> Json<BiennaleJourneyDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetBiennaleJourney {
+        from: params.from,
+        to: params.to,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
 }

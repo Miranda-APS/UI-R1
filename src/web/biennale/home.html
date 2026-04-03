@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#020210">
+<title>Prometeo</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{background:#020210;color:#c8d4ff;font-family:'Courier New',monospace;min-height:100vh;overflow-x:hidden}
+
+#bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.page{position:relative;z-index:1}
+
+/* ── HERO ── */
+#hero{
+  min-height:100svh;
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
+  padding:calc(env(safe-area-inset-top,0px) + 56px) 32px 56px;
+}
+#hero-title{
+  font:clamp(2.6rem,11vw,5rem)/1.04 'Courier New',monospace;
+  color:#e8eeff;margin-bottom:20px;
+}
+#hero-title em{
+  font-style:normal;
+  background:linear-gradient(135deg,#6a8fff,#b06aff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+#hero-sub{
+  font:clamp(.9rem,3.5vw,1.15rem)/1.7 'Courier New',monospace;
+  color:rgba(180,200,255,.75);max-width:420px;margin-bottom:44px;
+}
+.cta-group{display:flex;flex-direction:column;gap:14px;width:100%;max-width:360px}
+.cta{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 24px;border-radius:16px;
+  font:clamp(.85rem,3vw,1rem)/1 'Courier New',monospace;
+  text-decoration:none;transition:transform .18s,box-shadow .18s;
+  -webkit-tap-highlight-color:transparent;
+}
+.cta:active{transform:scale(.97)}
+.cta-primary{
+  background:linear-gradient(135deg,rgba(60,80,200,.65),rgba(100,60,200,.55));
+  border:1px solid rgba(100,120,255,.4);
+  color:#e0e8ff;box-shadow:0 6px 32px rgba(60,80,255,.25);
+}
+.cta-secondary{
+  background:rgba(16,18,50,.65);border:1px solid rgba(80,100,200,.22);
+  color:rgba(170,188,255,.85);
+}
+.cta-arrow{font-size:1.2rem;opacity:.8}
+
+#scroll-hint{
+  position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+  font:.58rem/1 'Courier New',monospace;letter-spacing:.22em;
+  color:rgba(100,120,200,.3);text-transform:uppercase;
+  animation:bob 2.6s ease-in-out infinite;
+}
+@keyframes bob{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(6px)}}
+
+/* ── SECTIONS ── */
+.section{padding:72px 32px;border-top:1px solid rgba(60,80,180,.1)}
+.section-label{
+  font:.62rem/1 'Courier New',monospace;letter-spacing:.28em;
+  color:rgba(110,130,255,.4);text-transform:uppercase;margin-bottom:20px;
+}
+.section-title{
+  font:clamp(1.5rem,6vw,2.4rem)/1.15 'Courier New',monospace;
+  color:#dde6ff;margin-bottom:32px;
+}
+
+/* ── DIFFERENZE ── */
+.diff-list{display:flex;flex-direction:column;gap:20px;max-width:500px}
+.diff-item{
+  background:rgba(10,12,40,.6);
+  border:1px solid rgba(60,80,200,.16);
+  border-left:3px solid rgba(90,120,255,.35);
+  border-radius:0 14px 14px 0;padding:20px 22px;
+  transition:border-left-color .3s;
+}
+.diff-item:hover{border-left-color:rgba(130,160,255,.6)}
+.diff-head{
+  font:clamp(.85rem,3vw,1rem)/1 'Courier New',monospace;
+  color:#b8ccff;margin-bottom:10px;
+}
+.diff-body{
+  font:clamp(.78rem,2.8vw,.9rem)/1.7 'Courier New',monospace;
+  color:rgba(160,182,235,.7);
+}
+.diff-vs{
+  font:.62rem/1 'Courier New',monospace;
+  color:rgba(255,130,90,.38);margin-top:8px;
+}
+
+/* ── NUMERI ── */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:460px}
+.stat-box{
+  background:rgba(10,12,40,.6);border:1px solid rgba(60,80,200,.16);
+  border-radius:14px;padding:22px 18px;
+  position:relative;overflow:hidden;
+}
+.stat-box::before{
+  content:'';position:absolute;top:-20px;right:-20px;
+  width:80px;height:80px;border-radius:50%;
+  background:radial-gradient(circle,rgba(80,100,255,.08),transparent 70%);
+}
+.stat-num{
+  font:clamp(1.6rem,7vw,2.4rem)/1 'Courier New',monospace;
+  color:#8aabff;display:block;margin-bottom:8px;
+}
+.stat-label{
+  font:clamp(.65rem,2.5vw,.78rem)/1.5 'Courier New',monospace;
+  color:rgba(140,162,225,.55);
+}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<section id="hero" class="page">
+  <h1 id="hero-title">Un'entità<br>cognitiva<br><em>topologica</em></h1>
+  <p id="hero-sub">
+    Prometeo non predice parole. Naviga un campo di 25.870 concetti connessi da relazioni logiche e pensa per topologia.
+  </p>
+  <div class="cta-group">
+    <a class="cta cta-primary" href="/biennale">
+      <span>Esplora il campo semantico</span>
+      <span class="cta-arrow">→</span>
+    </a>
+    <a class="cta cta-secondary" href="/dialogo">
+      <span>Parla con Prometeo</span>
+      <span class="cta-arrow">→</span>
+    </a>
+  </div>
+  <div id="scroll-hint">scorri</div>
+</section>
+
+<section class="section page">
+  <div class="section-label">perché è diverso</div>
+  <h2 class="section-title">Non è un modello linguistico</h2>
+  <div class="diff-list">
+    <div class="diff-item">
+      <div class="diff-head">Relazioni logiche, non statistiche</div>
+      <div class="diff-body">Ogni connessione è un fatto: <em>fuoco causa calore</em>, <em>coraggio è opposto di paura</em>. Non frequenze ricavate da miliardi di testi.</div>
+      <div class="diff-vs">altri sistemi: predicono il token più probabile</div>
+    </div>
+    <div class="diff-item">
+      <div class="diff-head">Comprende o chiede</div>
+      <div class="diff-body">Se una parola è fuori dal campo semantico, Prometeo non inventa una risposta plausibile. Dice "non capisco, cosa intendi?" e impara dalla risposta.</div>
+      <div class="diff-vs">altri sistemi: allucinano con sicurezza</div>
+    </div>
+    <div class="diff-item">
+      <div class="diff-head">Nasce da una comunità</div>
+      <div class="diff-body">Non è addestrato su un dataset anonimo. Il campo che costruite insieme diventa una nuova istanza, un'entità nata da questa esperienza collettiva.</div>
+      <div class="diff-vs">altri sistemi: dati opachi, nessuna tracciabilità</div>
+    </div>
+    <div class="diff-item">
+      <div class="diff-head">8 drive emotivi attivi</div>
+      <div class="diff-body">Curiosità, connessione, urgenza, stabilità. Questi drive colorano quali parole emergono, come l'umore colora il pensiero.</div>
+      <div class="diff-vs">altri sistemi: parametri numerici senza significato</div>
+    </div>
+  </div>
+</section>
+
+<section class="section page" style="padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))">
+  <div class="section-label">il campo oggi</div>
+  <h2 class="section-title">I numeri di Prometeo</h2>
+  <div class="stats-grid">
+    <div class="stat-box">
+      <span class="stat-num">25.870</span>
+      <span class="stat-label">parole nel campo semantico</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-num">251.454</span>
+      <span class="stat-label">connessioni logiche</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-num">64</span>
+      <span class="stat-label">regioni semantiche (esagrammi I Ching)</span>
+    </div>
+    <div class="stat-box">
+      <span class="stat-num">8D</span>
+      <span class="stat-label">spazio topologico in cui ogni parola esiste</span>
+    </div>
+  </div>
+</section>
+
+<script>
+'use strict';
+const cv = document.getElementById('bg');
+const cx = cv.getContext('2d');
+let W, H, DPR;
+const particles = [];
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio||1,2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  cv.style.width = W+'px'; cv.style.height = H+'px';
+  cx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+// Floating particles
+for(let i=0;i<55;i++) particles.push({
+  x: Math.random()*1, y: Math.random()*1,
+  vx:(Math.random()-.5)*.00012, vy:(Math.random()-.5)*.00008,
+  r:.8+Math.random()*1.8, a:.04+Math.random()*.12,
+  hue: 200+Math.random()*120,
+});
+
+let lastT=0;
+function drawBg(t) {
+  const dt = t - lastT; lastT = t;
+  // Background gradient
+  const g = cx.createRadialGradient(W*.42,H*.38,0,W*.5,H*.5,Math.max(W,H)*.9);
+  g.addColorStop(0,'#0c0c2a'); g.addColorStop(.5,'#060618'); g.addColorStop(1,'#020210');
+  cx.fillStyle=g; cx.fillRect(0,0,W,H);
+  // Dot grid
+  cx.fillStyle='rgba(80,100,255,0.038)';
+  const GS=30;
+  for(let x=GS/2;x<W;x+=GS)
+    for(let y=GS/2;y<H;y+=GS){
+      cx.beginPath();cx.arc(x,y,.65,0,Math.PI*2);cx.fill();
+    }
+  // Animated particles
+  for(const p of particles){
+    p.x = (p.x+p.vx*dt+1)%1;
+    p.y = (p.y+p.vy*dt+1)%1;
+    cx.beginPath();cx.arc(p.x*W,p.y*H,p.r,0,Math.PI*2);
+    cx.fillStyle=`hsla(${p.hue},70%,70%,${p.a})`;cx.fill();
+  }
+  requestAnimationFrame(drawBg);
+}
+
+window.addEventListener('resize',resize);
+resize();
+requestAnimationFrame(drawBg);
+</script>
+</body>
+</html>

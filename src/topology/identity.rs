@@ -44,7 +44,12 @@ pub struct IdentitySnapshot {
     pub tension_persistence: u32,
     /// Numero di aggiornamenti totali.
     pub update_count: u64,
+    /// Phase 55: integrità della coerenza interna [0, 1].
+    #[serde(default = "default_coherence")]
+    pub coherence_integrity: f64,
 }
+
+fn default_coherence() -> f64 { 1.0 }
 
 // ═══════════════════════════════════════════════════════════════════════
 // IdentityCore
@@ -84,9 +89,17 @@ pub struct IdentityCore {
     /// Numero totale di aggiornamenti (REM cycles).
     pub update_count: u64,
 
+    /// Phase 55: integrità della coerenza interna [0, 1].
+    /// 1.0 = coerente; scende quando si rilevano inversioni brusche
+    /// nella valenza (contraddizioni interne). Recupera lentamente.
+    /// Un'identità invulnerabile non è un'identità — è una maschera.
+    pub coherence_integrity: f64,
+
     // Privati — non serializzati
     projection_history: VecDeque<[f64; 64]>,
     candidate_tension: Option<(String, String, u32)>,
+    /// Phase 55: ultima valenza registrata (per rilevare inversioni).
+    last_valence_snapshot: Option<[f64; 8]>,
 }
 
 impl Default for IdentityCore {
@@ -99,8 +112,10 @@ impl Default for IdentityCore {
             tension_persistence: 0,
             projection_delta: [0.0; 64],
             update_count: 0,
+            coherence_integrity: 1.0,
             projection_history: VecDeque::new(),
             candidate_tension: None,
+            last_valence_snapshot: None,
         }
     }
 }
@@ -219,6 +234,27 @@ impl IdentityCore {
         0.7 + relative * 0.6  // [0.7, 1.3]
     }
 
+    // ─── Assorbimento espressivo ──────────────────────────────────────────────
+
+    /// Deriva il baricentro identitario verso la proiezione frattale di ciò che è stato
+    /// appena espresso. NON è un aggiornamento completo (quello avviene in REM): è una
+    /// micro-deriva che accumula il carattere attraverso le espressioni nel tempo.
+    ///
+    /// `expressed`: proiezione [f64;64] calcolata dalle affinità frattali delle parole dette.
+    /// `weight`: quanto l'espressione corrente pesa (tipicamente 0.012–0.020 per turno).
+    ///
+    /// Effetto: dopo N espressioni i frattali "parlati" crescono nel profilo identitario.
+    /// Questo si integra con identity.update() al prossimo REM, creando continuità coerente.
+    pub fn absorb_expression(&mut self, expressed: &[f64; 64], weight: f64) {
+        let w = weight.clamp(0.005, 0.05);
+        let norm: f64 = expressed.iter().copied().sum::<f64>().max(1e-9);
+        for i in 0..64 {
+            let e = expressed[i] / norm; // normalizza per evitare drift dipendente dal volume
+            self.personal_projection[i] =
+                self.personal_projection[i] * (1.0 - w) + e * w;
+        }
+    }
+
     // ─── Stato identitario ────────────────────────────────────────────────────
 
     /// Il frattale più presente nell'identità personale.
@@ -241,9 +277,45 @@ impl IdentityCore {
             .map(|(i, &v)| (i as FractalId, v))
     }
 
-    /// True se l'identità è in crisi (cambia troppo velocemente).
+    /// True se l'identità è in crisi (cambia troppo velocemente o è ferita).
     pub fn is_in_crisis(&self) -> bool {
-        self.update_count >= 3 && self.continuity < 0.65
+        self.update_count >= 3
+            && (self.continuity < 0.65 || self.coherence_integrity < 0.5)
+    }
+
+    /// Phase 55: registra uno shift di valenza. Rileva inversioni brusche
+    /// (drive che flippano segno con magnitudine significativa) e riduce
+    /// `coherence_integrity`. Ogni inversione è una piccola ferita identitaria.
+    ///
+    /// Chiamato dall'engine dopo ogni `Valence::compute()`.
+    pub fn register_valence_shift(&mut self, current_drives: &[f64; 8]) {
+        if let Some(ref prev) = self.last_valence_snapshot {
+            let mut contradiction_count = 0u32;
+            let mut max_flip = 0.0f64;
+
+            for d in 0..8 {
+                let old = prev[d];
+                let new = current_drives[d];
+                // Inversione: segno diverso, entrambi significativi
+                if old * new < 0.0 && old.abs() > 0.15 && new.abs() > 0.15 {
+                    contradiction_count += 1;
+                    let flip_magnitude = (old - new).abs();
+                    max_flip = max_flip.max(flip_magnitude);
+                }
+            }
+
+            if contradiction_count > 0 {
+                // Danno proporzionale al numero e magnitudine delle inversioni
+                let damage = (contradiction_count as f64) * 0.03
+                    + max_flip * 0.05;
+                self.coherence_integrity = (self.coherence_integrity - damage).max(0.0);
+            } else {
+                // Nessuna contraddizione: recupero lento
+                self.coherence_integrity = (self.coherence_integrity + 0.003).min(1.0);
+            }
+        }
+
+        self.last_valence_snapshot = Some(*current_drives);
     }
 
     /// True se l'identità è stagnante (non si muove).
@@ -262,6 +334,7 @@ impl IdentityCore {
             primary_tension:     self.primary_tension.clone(),
             tension_persistence: self.tension_persistence,
             update_count:        self.update_count,
+            coherence_integrity: self.coherence_integrity,
         }
     }
 
@@ -274,10 +347,11 @@ impl IdentityCore {
         if snap.self_signature.len() == 8 {
             core.self_signature.copy_from_slice(&snap.self_signature);
         }
-        core.continuity          = snap.continuity;
-        core.primary_tension     = snap.primary_tension.clone();
-        core.tension_persistence = snap.tension_persistence;
-        core.update_count        = snap.update_count;
+        core.continuity           = snap.continuity;
+        core.primary_tension      = snap.primary_tension.clone();
+        core.tension_persistence  = snap.tension_persistence;
+        core.update_count         = snap.update_count;
+        core.coherence_integrity  = snap.coherence_integrity;
 
         // Inizializza storia con la proiezione corrente (ripristino parziale)
         core.projection_history.push_back(core.personal_projection);
@@ -495,5 +569,72 @@ mod tests {
             assert!(fid < 64, "FractalId dominante fuori range: {}", fid);
             assert!(strength > 0.0, "Forza dominante deve essere > 0");
         }
+    }
+
+    // ── Phase 55: Vulnerabilità ────────────────────────────────────────
+
+    #[test]
+    fn test_coherence_starts_at_one() {
+        let core = IdentityCore::default();
+        assert!((core.coherence_integrity - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_valence_shift_no_contradiction_recovers() {
+        let mut core = IdentityCore::default();
+        core.coherence_integrity = 0.8;
+        // Due valenze simili: nessuna inversione → recupero
+        let v1 = [0.3, 0.2, 0.0, 0.1, 0.4, 0.0, 0.1, -0.1];
+        let v2 = [0.35, 0.25, 0.05, 0.15, 0.45, 0.0, 0.1, -0.05];
+        core.register_valence_shift(&v1);
+        core.register_valence_shift(&v2);
+        assert!(core.coherence_integrity > 0.8,
+            "senza contraddizioni, coerenza deve recuperare: {}", core.coherence_integrity);
+    }
+
+    #[test]
+    fn test_valence_shift_contradiction_damages() {
+        let mut core = IdentityCore::default();
+        // Inversione brusca: CD4 (Ownership) da +0.5 a -0.5
+        let v1 = [0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0];
+        let v2 = [0.0, 0.0, 0.0, -0.5, 0.0, 0.0, 0.0, 0.0];
+        core.register_valence_shift(&v1);
+        core.register_valence_shift(&v2);
+        assert!(core.coherence_integrity < 1.0,
+            "inversione brusca deve danneggiare coerenza: {}", core.coherence_integrity);
+    }
+
+    #[test]
+    fn test_multiple_contradictions_deeper_damage() {
+        let mut core = IdentityCore::default();
+        // Multiple inversioni: CD1, CD4, CD5 tutti flippano
+        let v1 = [0.4, 0.0, 0.0, 0.5, 0.3, 0.0, 0.0, 0.0];
+        let v2 = [-0.4, 0.0, 0.0, -0.5, -0.3, 0.0, 0.0, 0.0];
+        core.register_valence_shift(&v1);
+        let before = core.coherence_integrity;
+        core.register_valence_shift(&v2);
+        let damage = before - core.coherence_integrity;
+        assert!(damage > 0.1,
+            "3 inversioni brusche devono fare danno significativo: damage={}", damage);
+    }
+
+    #[test]
+    fn test_crisis_triggered_by_low_coherence() {
+        let mut core = IdentityCore::default();
+        core.update_count = 5;
+        core.continuity = 0.8; // alta continuità
+        core.coherence_integrity = 0.4; // ma bassa coerenza
+        assert!(core.is_in_crisis(),
+            "coherence_integrity < 0.5 deve triggerare crisi");
+    }
+
+    #[test]
+    fn test_coherence_persists_in_snapshot() {
+        let mut core = IdentityCore::default();
+        core.coherence_integrity = 0.72;
+        let snap = core.to_snapshot();
+        assert!((snap.coherence_integrity - 0.72).abs() < f64::EPSILON);
+        let restored = IdentityCore::from_snapshot(&snap);
+        assert!((restored.coherence_integrity - 0.72).abs() < f64::EPSILON);
     }
 }

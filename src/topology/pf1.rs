@@ -193,6 +193,13 @@ impl ActivationState {
         }
     }
 
+    /// Imposta l'attivazione di una parola per nome (SET, non ADD).
+    pub fn set_by_name(&mut self, field: &PrometeoField, name: &str, val: f32) {
+        if let Some(id) = field.word_id(name) {
+            self.activations[id as usize] = val.clamp(0.0, 1.0);
+        }
+    }
+
     /// Decadimento globale. rate = 0.15 → mantiene 85% dell'attivazione.
     pub fn decay_all(&mut self, rate: f32) {
         let keep = 1.0 - rate;
@@ -232,6 +239,18 @@ impl ActivationState {
     pub fn propagate(&mut self, field: &PrometeoField) {
         let damping = 0.15_f32;
 
+        // Decadimento: le attivazioni sopra soglia scendono gradualmente.
+        // Senza input esterno, il campo torna a riposo in ~30 tick (~90s).
+        // Il resting state (sotto soglia) non viene toccato.
+        let decay_rate = 0.92_f32;
+        for act in self.activations.iter_mut() {
+            if *act > self.threshold {
+                *act *= decay_rate;
+                // Se scende sotto soglia, lasciagli il floor di riposo
+                if *act < self.threshold { *act = self.threshold * 0.5; }
+            }
+        }
+
         // Raccogli solo le parole attive — il fronte di attivazione
         let hot: Vec<(u32, f32)> = self.activations.iter().enumerate()
             .filter(|(_, &a)| a > self.threshold)
@@ -265,15 +284,33 @@ impl ActivationState {
                 if contribution.abs() < 0.001 { continue; }
 
                 if contribution > 0.0 {
-                    // Risonanza: attiva solo parole sotto soglia (evita retroazione)
-                    if self.activations[nid] < self.threshold {
-                        deltas[nid] += contribution;
-                    }
+                    // Phase 55: rinforzo positivo con rendimenti decrescenti.
+                    // Parole già attive ricevono meno boost (evita retroazione)
+                    // ma NON sono bloccate completamente — altrimenti i vicini
+                    // semantici dell'input non vengono amplificati dalla propagazione.
+                    let current = self.activations[nid];
+                    let diminish = if current <= self.threshold {
+                        1.0  // sotto soglia: pieno effetto
+                    } else {
+                        // rendimento decrescente: 1/(1 + 4*current)
+                        // a 0.15 → 0.63, a 0.30 → 0.45, a 0.50 → 0.33
+                        1.0 / (1.0 + 4.0 * current)
+                    };
+                    deltas[nid] += contribution * diminish;
                 } else {
                     // Opposizione: inibisce a qualsiasi livello
                     deltas[nid] += contribution;
                 }
             }
+        }
+
+        // Cap positivo: previene convergenza hub.
+        // Parole con molti archi entranti accumulano delta enormi;
+        // il cap assicura che nessuna parola venga "eletta" dalla propagazione
+        // più forte del segnale diretto dell'input (tipicamente 0.3-0.5).
+        const MAX_POSITIVE_DELTA: f32 = 0.15;
+        for delta in deltas.iter_mut() {
+            if *delta > MAX_POSITIVE_DELTA { *delta = MAX_POSITIVE_DELTA; }
         }
 
         // Applica tutti i delta
@@ -335,12 +372,16 @@ impl ActivationState {
     /// Seme dello stato di riposo — l'entità "esiste" anche senza input.
     ///
     /// Le parole più stabili hanno una presenza minima nel campo.
-    /// Formula: activation = stability × 0.08
+    /// Formula: activation = stability × 0.02
+    /// Il baseline è volutamente basso: il segnale semantico dell'input (0.5-0.8)
+    /// deve dominare sul rumore di fondo. Un baseline di 0.02 × 0.9 = 0.018
+    /// è 30× più debole → il campo risponde a ciò che viene detto, non a ciò
+    /// che è stato letto più spesso nei testi didattici.
     pub fn seed_resting_state(&mut self, field: &PrometeoField) {
         for id in 0..field.word_count {
             let record = field.record(id);
             if record.stability > 0.20 {
-                let initial = record.stability * 0.08;
+                let initial = record.stability * 0.002;
                 self.activate(id, initial);
             }
         }
@@ -348,24 +389,43 @@ impl ActivationState {
 
     /// Attivazioni frattali emergenti dallo stato corrente.
     ///
-    /// COMPLESSITÀ: O(parole_attive × MAX_FRACTALS) = O(attive × 16)
-    /// Array fisso [f32; 16] — zero allocazioni.
+    /// Ogni parola attiva vota per i suoi top-3 frattali (affinità più alta).
+    /// Questo produce differenziazione netta: solo i frattali nella regione
+    /// semantica dell'input emergono come dominanti.
+    /// Il risultato è normalizzato al massimo → [0, 1].
     pub fn emerge_fractal_activations(&self, field: &PrometeoField) -> [f32; MAX_FRACTALS] {
         let mut scores = [0.0f32; MAX_FRACTALS];
-        let mut counts = [0.0f32; MAX_FRACTALS];
 
         for (id, &act) in self.activations.iter().enumerate() {
             if act <= self.threshold { continue; }
             let record = field.record(id as u32);
+
+            // Trova i top-3 frattali per affinità di questa parola
+            let mut top3 = [(0usize, 0.0f32); 3];
             for f in 0..MAX_FRACTALS {
-                scores[f] += act * record.affinities[f];
-                counts[f] += 1.0;
+                let aff = record.affinities[f];
+                // Inserisci nel top-3 se meglio del minimo corrente
+                if aff > top3[2].1 {
+                    top3[2] = (f, aff);
+                    // Bubble sort di 3 elementi
+                    if top3[2].1 > top3[1].1 { top3.swap(1, 2); }
+                    if top3[1].1 > top3[0].1 { top3.swap(0, 1); }
+                }
+            }
+
+            // Vota solo per i top-3
+            for &(f, aff) in &top3 {
+                if aff > 0.0 {
+                    scores[f] += act * aff;
+                }
             }
         }
 
-        for f in 0..MAX_FRACTALS {
-            if counts[f] > 0.0 {
-                scores[f] /= counts[f];
+        // Normalizza al massimo → il frattale dominante è 1.0
+        let max_score = scores.iter().cloned().fold(0.0f32, f32::max);
+        if max_score > 0.0 {
+            for s in scores.iter_mut() {
+                *s /= max_score;
             }
         }
         scores
@@ -527,6 +587,12 @@ impl PrometeoField {
             HashMap::new()
         };
 
+        // Pre-computazione cache: frattale → top-5 simplessi ordinati per persistenza.
+        // Costo: O(N_frattali × sort) — una sola volta invece di O(N_parole × 3 × sort).
+        // Elimina ~700M HashMap lookup durante il loop parole (il vero bottleneck del secondo build).
+        let fractal_simplex_cache: Option<HashMap<u32, Vec<u32>>> =
+            complex.map(|cx| cx.build_fractal_simplex_cache(5));
+
         // Per ogni parola, trova i top-8 vicini per peso
         for pf1_id in 0..data.len() {
             let word = {
@@ -540,43 +606,59 @@ impl PrometeoField {
                 None => continue,
             };
 
-            // Raccoglie vicini: prima dal simplicial complex (pensieri cristallizzati),
-            // poi dalla word_topology come fallback per riempire gli slot rimanenti.
-            let mut neighbors_raw: Vec<(u32, f32, f32)> = Vec::new(); // (pf1_id, weight, phase)
+            // I vicini vengono dalla word_topology (KG semantico) come PRIMA fonte.
+            // Il simplicial complex (pensieri cristallizzati) rinforza i pesi
+            // ma NON sostituisce le relazioni logiche.
+            //
+            // Principio: un bambino impara prima CHE "cane IS_A animale" (KG),
+            // poi conferma con l'esperienza (co-attivazione nei simplessi).
+            // La comprensione logica guida, la statistica rinforza.
+            let mut neighbor_scores: HashMap<u32, (f32, f32)> = HashMap::new(); // pf1_id → (weight, phase)
 
+            // 1. Vicini semantici dalla word_topology (KG: IS_A, CAUSES, SIMILAR_TO...)
+            for neighbor_word in neighbor_words(topology, topo_id) {
+                let pf1_neighbor = match word_to_id.get(&neighbor_word) {
+                    Some(&id) => id,
+                    None => continue,
+                };
+                if pf1_neighbor == pf1_id as u32 { continue; }
+                let weight = topology.edge_weight_between(&word, &neighbor_word).unwrap_or(0.0) as f32;
+                let phase  = topology.edge_phase(&word, &neighbor_word)
+                    .unwrap_or(std::f64::consts::FRAC_PI_2) as f32;
+                if weight > 0.01 {
+                    neighbor_scores.insert(pf1_neighbor, (weight, phase));
+                }
+            }
+
+            // 2. Simplicial complex rinforza (bonus +30% se confermato da esperienza)
             if let Some(cx) = complex {
-                neighbors_raw = simplex_based_neighbors(
+                let cache = fractal_simplex_cache.as_ref().unwrap();
+                let simplex_neighbors = simplex_based_neighbors(
                     pf1_id as u32,
                     &data[pf1_id].affinities,
                     &data[pf1_id].signature,
                     cx,
+                    cache,
                     &fractal_word_map,
                     &data,
                 );
-            }
-
-            // Se vicini insufficienti (< MAX_NEIGHBORS), integra con quelli della topology
-            if neighbors_raw.len() < MAX_NEIGHBORS {
-                let already: std::collections::HashSet<u32> =
-                    neighbors_raw.iter().map(|&(id, _, _)| id).collect();
-                for neighbor_word in neighbor_words(topology, topo_id) {
-                    if neighbors_raw.len() >= MAX_NEIGHBORS { break; }
-                    let pf1_neighbor = match word_to_id.get(&neighbor_word) {
-                        Some(&id) => id,
-                        None => continue,
-                    };
-                    if already.contains(&pf1_neighbor) { continue; }
-                    let weight = topology.edge_weight_between(&word, &neighbor_word).unwrap_or(0.0) as f32;
-                    let phase  = topology.edge_phase(&word, &neighbor_word)
-                        .unwrap_or(std::f64::consts::FRAC_PI_2) as f32;
-                    if weight > 0.01 {
-                        neighbors_raw.push((pf1_neighbor, weight, phase));
+                for (nid, sx_weight, sx_phase) in simplex_neighbors {
+                    let entry = neighbor_scores.entry(nid).or_insert((0.0, sx_phase));
+                    // Se già presente nel KG: rinforza. Se solo nel complex: aggiungilo con peso ridotto.
+                    if entry.0 > 0.0 {
+                        entry.0 = (entry.0 + sx_weight * 0.3).min(1.0); // KG + rinforzo esperienza
+                    } else {
+                        entry.0 = sx_weight * 0.5; // Solo esperienza, peso dimezzato
                     }
                 }
-                // Ordina solo i vicini aggiunti dalla topology
-                neighbors_raw.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-                neighbors_raw.truncate(MAX_NEIGHBORS);
             }
+
+            // Ordina per peso decrescente, prendi top-8
+            let mut neighbors_raw: Vec<(u32, f32, f32)> = neighbor_scores.into_iter()
+                .map(|(id, (w, p))| (id, w, p))
+                .collect();
+            neighbors_raw.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            neighbors_raw.truncate(MAX_NEIGHBORS);
 
             let record = &mut data[pf1_id];
             record.neighbor_count = neighbors_raw.len() as u8;
@@ -753,6 +835,7 @@ fn simplex_based_neighbors(
     affinities_a: &[f32; MAX_FRACTALS],  // affinità frattali della parola sorgente
     sig_a: &[f32; 8],                     // firma 8D della parola sorgente
     complex: &SimplicialComplex,
+    fractal_simplex_cache: &HashMap<u32, Vec<u32>>,  // frattale → top-5 simplessi pre-ordinati
     fractal_word_map: &HashMap<u32, Vec<(u32, f32)>>,
     data: &[WordRecord],
 ) -> Vec<(u32, f32, f32)> {
@@ -771,17 +854,13 @@ fn simplex_based_neighbors(
     let mut candidates: HashMap<u32, f32> = HashMap::new();
 
     for (src_fid, src_aff) in &top_frac {
-        // Simplici che contengono questo frattale
-        let mut sids = complex.simplices_of(*src_fid);
-        // Ordina per persistenza decrescente — i pensieri più stabili prima
-        sids.sort_unstable_by(|&a, &b| {
-            let pa = complex.get(a).map(|s| s.persistence).unwrap_or(0.0);
-            let pb = complex.get(b).map(|s| s.persistence).unwrap_or(0.0);
-            pb.partial_cmp(&pa).unwrap_or(std::cmp::Ordering::Equal)
-        });
-        sids.truncate(5);  // top-5 simplici per frattale
+        // Usa cache pre-computata: top-5 simplessi per persistenza (zero sort, zero HashMap lookup)
+        let sids = match fractal_simplex_cache.get(src_fid) {
+            Some(v) => v.as_slice(),
+            None => continue,
+        };
 
-        for sid in sids {
+        for &sid in sids {
             let simplex = match complex.get(sid) {
                 Some(s) => s,
                 None => continue,

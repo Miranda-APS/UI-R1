@@ -24,12 +24,14 @@ use serde::{Serialize, Deserialize};
 // KgNode — informazioni aggregate su un concetto
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Target di un arco: oggetto + confidenza.
+/// Target di un arco: oggetto + confidenza + via opzionale.
 #[derive(Debug, Clone)]
 pub struct KgTarget {
     pub object: String,
     pub confidence: f32,
     pub source: EdgeSource,
+    /// Tramite/mezzo della relazione (opzionale).
+    pub via: Option<String>,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -81,6 +83,7 @@ impl KnowledgeGraph {
                 object: obj.clone(),
                 confidence: edge.confidence,
                 source: edge.source,
+                via: edge.via.clone(),
             });
             self.edge_count += 1;
 
@@ -109,6 +112,15 @@ impl KnowledgeGraph {
             .unwrap_or_default()
     }
 
+    /// Come query_objects ma restituisce anche la confidence per-arco.
+    /// Es: query_objects_weighted("cane", IsA) → [("animale", 0.95), ("mammifero", 1.0)]
+    pub fn query_objects_weighted<'a>(&'a self, subject: &str, rel: RelationType) -> Vec<(&'a str, f32)> {
+        self.outgoing.get(subject)
+            .and_then(|m| m.get(&rel))
+            .map(|v| v.iter().map(|t| (t.object.as_str(), t.confidence)).collect())
+            .unwrap_or_default()
+    }
+
     /// Tutti i soggetti che hanno `rel` verso `object`.
     /// Es: query_subjects("animale", IsA) → ["cane", "gatto", "uccello", ...]
     pub fn query_subjects<'a>(&'a self, object: &str, rel: RelationType) -> Vec<&'a str> {
@@ -134,9 +146,178 @@ impl KnowledgeGraph {
         }
     }
 
+    /// Come all_outgoing ma include anche `via`. Usato dalla UI di curation.
+    pub fn all_outgoing_full(&self, subject: &str) -> Vec<(RelationType, &str, f32, Option<&str>)> {
+        match self.outgoing.get(subject) {
+            None => vec![],
+            Some(m) => {
+                let mut result = Vec::new();
+                for (rel, targets) in m {
+                    for t in targets {
+                        result.push((*rel, t.object.as_str(), t.confidence, t.via.as_deref()));
+                    }
+                }
+                result
+            }
+        }
+    }
+
+    /// Rimuove tutte le relazioni di una parola dal grafo (sia uscenti che entranti).
+    pub fn remove_word(&mut self, word: &str) {
+        // 1. Rimuovi archi uscenti: word → Y
+        if let Some(rel_map) = self.outgoing.remove(word) {
+            for (rel, targets) in &rel_map {
+                for t in targets {
+                    if let Some(in_map) = self.incoming.get_mut(&t.object) {
+                        if let Some(subjects) = in_map.get_mut(rel) {
+                            subjects.retain(|s| s != word);
+                        }
+                    }
+                    self.edge_count = self.edge_count.saturating_sub(1);
+                }
+            }
+        }
+        // 2. Rimuovi archi entranti: Z → word
+        if let Some(rel_map) = self.incoming.remove(word) {
+            for (rel, subjects) in &rel_map {
+                for subj in subjects {
+                    if let Some(out_map) = self.outgoing.get_mut(subj.as_str()) {
+                        if let Some(targets) = out_map.get_mut(rel) {
+                            let before = targets.len();
+                            targets.retain(|t| t.object != word);
+                            self.edge_count = self.edge_count.saturating_sub(before - targets.len());
+                        }
+                    }
+                }
+            }
+        }
+        // 3. Ricalcola node_count
+        let all: std::collections::HashSet<&String> =
+            self.outgoing.keys().chain(self.incoming.keys()).collect();
+        self.node_count = all.len();
+    }
+
+    /// Tutti i nodi presenti nel grafo (come soggetti o oggetti).
+    pub fn all_nodes(&self) -> Vec<&str> {
+        let mut nodes: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for k in self.outgoing.keys() { nodes.insert(k.as_str()); }
+        for k in self.incoming.keys() { nodes.insert(k.as_str()); }
+        nodes.into_iter().collect()
+    }
+
+    /// Tutti gli archi entranti verso `object` (qualunque relazione).
+    /// Restituisce (relazione, soggetto, confidenza).
+    pub fn all_incoming(&self, object: &str) -> Vec<(RelationType, &str, f32)> {
+        match self.incoming.get(object) {
+            None => vec![],
+            Some(m) => {
+                let mut result = Vec::new();
+                for (rel, subjects) in m {
+                    for subj in subjects {
+                        // Recupera confidenza dal lato outgoing
+                        let conf = self.outgoing.get(subj.as_str())
+                            .and_then(|om| om.get(rel))
+                            .and_then(|targets| targets.iter().find(|t| t.object == object))
+                            .map(|t| t.confidence)
+                            .unwrap_or(1.0);
+                        result.push((*rel, subj.as_str(), conf));
+                    }
+                }
+                result
+            }
+        }
+    }
+
+    /// Esiste un arco KG in qualunque direzione tra `a` e `b`?
+    pub fn has_any_edge(&self, a: &str, b: &str) -> bool {
+        self.outgoing.get(a).map(|m| m.values().any(|v| v.iter().any(|t| t.object == b))).unwrap_or(false)
+        || self.outgoing.get(b).map(|m| m.values().any(|v| v.iter().any(|t| t.object == a))).unwrap_or(false)
+    }
+
+    /// Rimuove un arco specifico (soggetto, relazione, oggetto).
+    pub fn remove_edge(&mut self, subject: &str, rel: RelationType, object: &str) {
+        let mut removed = false;
+        if let Some(rel_map) = self.outgoing.get_mut(subject) {
+            if let Some(targets) = rel_map.get_mut(&rel) {
+                let before = targets.len();
+                targets.retain(|t| t.object != object);
+                if targets.len() < before {
+                    removed = true;
+                }
+            }
+        }
+        if let Some(rel_map) = self.incoming.get_mut(object) {
+            if let Some(subjects) = rel_map.get_mut(&rel) {
+                subjects.retain(|s| s != subject);
+            }
+        }
+        if removed {
+            self.edge_count = self.edge_count.saturating_sub(1);
+        }
+    }
+
+    /// Aggiorna il campo `via` di un arco esistente.
+    pub fn update_edge_via(&mut self, subject: &str, rel: RelationType, object: &str, new_via: Option<String>) -> bool {
+        if let Some(rel_map) = self.outgoing.get_mut(subject) {
+            if let Some(targets) = rel_map.get_mut(&rel) {
+                if let Some(target) = targets.iter_mut().find(|t| t.object == object) {
+                    target.via = new_via;
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Aggiorna confidence e/o via di un arco. Ritorna true se trovato.
+    pub fn update_edge(&mut self, subject: &str, rel: RelationType, object: &str, new_confidence: Option<f32>, new_via: Option<Option<String>>) -> bool {
+        if let Some(rel_map) = self.outgoing.get_mut(subject) {
+            if let Some(targets) = rel_map.get_mut(&rel) {
+                if let Some(target) = targets.iter_mut().find(|t| t.object == object) {
+                    if let Some(c) = new_confidence { target.confidence = c.clamp(0.0, 1.0); }
+                    if let Some(v) = new_via { target.via = v; }
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Aggiorna la confidence di un arco. Ritorna true se trovato e aggiornato.
+    pub fn update_confidence(&mut self, subject: &str, rel: RelationType, object: &str, new_confidence: f32) -> bool {
+        if let Some(rel_map) = self.outgoing.get_mut(subject) {
+            if let Some(targets) = rel_map.get_mut(&rel) {
+                if let Some(target) = targets.iter_mut().find(|t| t.object == object) {
+                    target.confidence = new_confidence.clamp(0.0, 1.0);
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Il nodo esiste nel grafo?
     pub fn contains(&self, word: &str) -> bool {
         self.outgoing.contains_key(word) || self.incoming.contains_key(word)
+    }
+
+    /// Grado uscente totale di un nodo (tutte le relazioni).
+    pub fn out_degree(&self, word: &str) -> usize {
+        self.outgoing.get(word)
+            .map(|m| m.values().map(|v| v.len()).sum())
+            .unwrap_or(0)
+    }
+
+    /// Grado entrante totale di un nodo (tutte le relazioni).
+    pub fn in_degree(&self, word: &str) -> usize {
+        self.incoming.get(word)
+            .map(|m| m.values().map(|v| v.len()).sum())
+            .unwrap_or(0)
+    }
+
+    /// Grado totale (entrante + uscente) di un nodo.
+    pub fn total_degree(&self, word: &str) -> usize {
+        self.out_degree(word) + self.in_degree(word)
     }
 
     // ─── Caricamento da TSV ──────────────────────────────────────────────────
@@ -195,6 +376,71 @@ impl KnowledgeGraph {
             .collect()
     }
 
+    /// Corteccia prefrontale topologica: IS_A upward = riconoscimento categoria, CAUSES = intento.
+    ///
+    /// Per ogni parola input, risale la catena IS_A (fino a 2 hop).
+    /// Un nodo diventa attrattore se ha almeno `min_isa_children` figli IS_A entranti
+    /// (cioè è una vera categoria, non un nodo terminale).
+    /// I `causes` dell'attrattore dicono cosa l'entità dovrebbe fare.
+    ///
+    /// Esempio:
+    ///   "ciao" → IS_A → "saluto" (20 figli IS_A) → CAUSES → "benvenuto"
+    ///   "paura" → IS_A → "emozione" (80 figli IS_A) → CAUSES → "cautela"
+    pub fn find_activated_attractors(
+        &self,
+        input_words: &[&str],
+        min_isa_children: usize,
+    ) -> Vec<AttractorHit> {
+        use std::collections::HashMap;
+
+        // concept → (score, source_words)
+        let mut attractor_map: HashMap<&str, (f64, Vec<String>)> = HashMap::new();
+
+        for &word in input_words {
+            if word.len() < 3 { continue; }
+
+            // Hop 1: direct IS_A parents
+            for parent in self.query_objects(word, RelationType::IsA) {
+                let n_children = self.query_subjects(parent, RelationType::IsA).len();
+                if n_children >= min_isa_children {
+                    let e = attractor_map.entry(parent).or_insert((0.0, Vec::new()));
+                    e.0 += 1.0;
+                    if !e.1.contains(&word.to_string()) { e.1.push(word.to_string()); }
+                }
+                // Hop 2: grandparent IS_A
+                for grandparent in self.query_objects(parent, RelationType::IsA) {
+                    let n_gc = self.query_subjects(grandparent, RelationType::IsA).len();
+                    if n_gc >= min_isa_children {
+                        let e = attractor_map.entry(grandparent).or_insert((0.0, Vec::new()));
+                        e.0 += 0.6;  // decay per hop
+                        if !e.1.contains(&word.to_string()) { e.1.push(word.to_string()); }
+                    }
+                }
+            }
+        }
+
+        let mut attractors: Vec<AttractorHit> = attractor_map
+            .into_iter()
+            .map(|(concept, (score, sources))| {
+                let causes = self.query_objects(concept, RelationType::Causes)
+                    .into_iter()
+                    .take(4)
+                    .map(|s| s.to_string())
+                    .collect();
+                AttractorHit {
+                    concept: concept.to_string(),
+                    activation_score: score,
+                    source_words: sources,
+                    causes,
+                }
+            })
+            .collect();
+
+        attractors.sort_by(|a, b| b.activation_score.partial_cmp(&a.activation_score)
+            .unwrap_or(std::cmp::Ordering::Equal));
+        attractors
+    }
+
     /// Nodi che hanno almeno `min_targets` archi uscenti di tipo `rel`.
     /// Utile per trovare cluster di similitudine: `nodes_with_min_outgoing(SimilarTo, 2)`.
     pub fn nodes_with_min_outgoing(&self, rel: RelationType, min_targets: usize) -> Vec<String> {
@@ -221,6 +467,7 @@ impl KnowledgeGraph {
                         object: t.object.clone(),
                         confidence: t.confidence,
                         source: t.source,
+                        via: t.via.clone(),
                     });
                 }
             }
@@ -244,6 +491,25 @@ impl Default for KnowledgeGraph {
 // ═══════════════════════════════════════════════════════════════════════════
 // KgSnapshot — persistenza
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AttractorHit — risultato di IS_A traversal upward
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Un nodo attrattore raggiunto dall'input via catena IS_A.
+/// Rappresenta la categoria pragmatica che l'entità ha riconosciuto.
+/// I `causes` dicono cosa FARE in risposta.
+#[derive(Debug, Clone)]
+pub struct AttractorHit {
+    /// Il concetto-categoria raggiunto (es. "saluto", "emozione", "domanda")
+    pub concept: String,
+    /// Score di attivazione: somma delle attivazioni delle parole sorgente
+    pub activation_score: f64,
+    /// Parole input che hanno raggiunto questo attrattore
+    pub source_words: Vec<String>,
+    /// CAUSES targets da questo attrattore — cosa l'entità dovrebbe fare
+    pub causes: Vec<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KgSnapshot {

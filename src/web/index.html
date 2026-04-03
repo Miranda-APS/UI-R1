@@ -9,10 +9,10 @@
   --bg:     #09091a;
   --bg2:    #10101f;
   --bg3:    #16162a;
-  --border: rgba(255,255,255,0.13);
+  --border: rgba(255,255,255,0.18);
   --t1:     #f0f0ff;
-  --t2:     #9090b8;
-  --t3:     #60607a;
+  --t2:     #b0b0d0;
+  --t3:     #8888a8;
   --blue:   #5aadff;
   --green:  #4affb0;
   --yellow: #ffd04a;
@@ -20,10 +20,45 @@
   --purple: #d060ff;
   --orange: #ff9a5a;
   --radius: 10px;
+  --card-bg: rgba(255,255,255,0.04);
+  --card-hover: rgba(255,255,255,0.05);
+  --bar-bg: rgba(255,255,255,0.08);
+  --input-bg: rgba(255,255,255,0.04);
+  --hdr-bg: rgba(10,10,22,0.98);
+  --overlay-bg: rgba(9,9,26,0.88);
+  --msg-user-bg: linear-gradient(135deg,rgba(90,173,255,0.20),rgba(90,173,255,0.10));
+  --msg-user-border: rgba(90,173,255,0.35);
+  --msg-entity-bg: rgba(255,255,255,0.07);
+  --msg-entity-border: rgba(255,255,255,0.16);
+}
+[data-theme="light"] {
+  --bg:     #f5f5fa;
+  --bg2:    #ebebf2;
+  --bg3:    #f0f0f6;
+  --border: rgba(0,0,0,0.15);
+  --t1:     #1a1a2e;
+  --t2:     #3a3a5a;
+  --t3:     #55557a;
+  --blue:   #2a7de0;
+  --green:  #1a9960;
+  --yellow: #c09000;
+  --red:    #d03050;
+  --purple: #8a3abf;
+  --orange: #c07030;
+  --card-bg: rgba(0,0,0,0.03);
+  --card-hover: rgba(0,0,0,0.05);
+  --bar-bg: rgba(0,0,0,0.08);
+  --input-bg: rgba(0,0,0,0.04);
+  --hdr-bg: rgba(240,240,245,0.98);
+  --overlay-bg: rgba(240,240,245,0.92);
+  --msg-user-bg: linear-gradient(135deg,rgba(42,125,224,0.12),rgba(42,125,224,0.06));
+  --msg-user-border: rgba(42,125,224,0.30);
+  --msg-entity-bg: rgba(0,0,0,0.04);
+  --msg-entity-border: rgba(0,0,0,0.12);
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{height:100%;overflow:hidden;}
-body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);color:var(--t1);font-size:13px;}
+body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);color:var(--t1);font-size:16px;}
 
 /* ── LAYOUT ── */
 .shell{display:flex;flex-direction:column;height:100vh;}
@@ -32,22 +67,23 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 .hdr{
   display:flex;align-items:center;justify-content:space-between;
   padding:0 18px;height:46px;flex-shrink:0;
-  background:rgba(10,10,22,0.98);border-bottom:1px solid var(--border);
+  background:var(--hdr-bg);border-bottom:1px solid var(--border);
 }
-.logo{font-size:14px;font-weight:700;letter-spacing:3px;
+.logo{font-size:17px;font-weight:700;letter-spacing:3px;
   background:linear-gradient(120deg,var(--blue),var(--purple));
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .hdr-stats{display:flex;gap:20px;align-items:center;}
 .hstat{display:flex;flex-direction:column;align-items:flex-end;gap:0px;}
-.hstat-lbl{font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;}
-.hstat-val{font-size:12px;color:var(--t1);}
+.hstat-lbl{font-size:13px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;}
+.hstat-val{font-size:14px;color:var(--t1);}
 .hstat-val.hi{color:var(--green);}
 .ws-dot{width:7px;height:7px;border-radius:50%;background:var(--t3);}
 .ws-dot.ok{background:var(--green);box-shadow:0 0 5px var(--green);}
 
 /* tabs */
-.tabs{display:flex;gap:1px;padding:7px 18px 0;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;}
-.tab{padding:7px 14px;border-radius:7px 7px 0 0;cursor:pointer;font-size:11px;letter-spacing:1px;
+.tabs{display:flex;gap:1px;padding:7px 18px 0;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{padding:8px 16px;border-radius:7px 7px 0 0;cursor:pointer;font-size:13px;letter-spacing:1px;
   color:var(--t2);border:1px solid transparent;border-bottom:none;background:none;transition:all 0.15s;white-space:nowrap;}
 .tab:hover{color:var(--t1);}
 .tab.active{color:var(--t1);background:var(--bg3);border-color:var(--border);position:relative;}
@@ -59,15 +95,15 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 .panel.active{display:flex;flex-direction:column;gap:10px;}
 
 /* card */
-.card{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
-.card-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--t2);margin-bottom:8px;}
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+.card-title{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--t2);margin-bottom:8px;}
 
 /* bar */
 .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
-.bar-lbl{width:80px;font-size:11px;color:var(--t1);flex-shrink:0;text-align:right;}
-.bar-track{flex:1;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;}
+.bar-lbl{width:80px;font-size:13px;color:var(--t1);flex-shrink:0;text-align:right;}
+.bar-track{flex:1;height:6px;background:var(--bar-bg);border-radius:3px;overflow:hidden;}
 .bar-fill{height:100%;border-radius:3px;transition:width 0.4s ease;}
-.bar-val{width:34px;font-size:10px;color:var(--t2);text-align:right;}
+.bar-val{width:34px;font-size:12px;color:var(--t2);text-align:right;}
 
 /* scrollbar */
 ::-webkit-scrollbar{width:3px;height:3px;}
@@ -77,12 +113,12 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 /* ── TAB 1 — MENTE ── */
 .status-bar{
   display:flex;align-items:center;gap:16px;padding:7px 14px;
-  background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;
+  background:var(--card-bg);border:1px solid var(--border);border-radius:8px;
   flex-shrink:0;flex-wrap:wrap;
 }
 .sbar-item{display:flex;align-items:center;gap:6px;}
-.sbar-lbl{font-size:9px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;}
-.sbar-val{font-size:12px;color:var(--t1);}
+.sbar-lbl{font-size:13px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;}
+.sbar-val{font-size:14px;color:var(--t1);}
 .sbar-sep{width:1px;height:18px;background:var(--border);}
 .dream-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 .dream-dot.Awake{background:var(--yellow);}
@@ -94,11 +130,11 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 
 /* vitals strip */
 .vitals-strip{display:flex;gap:8px;flex-shrink:0;}
-.vcard{flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border);
+.vcard{flex:1;background:var(--card-bg);border:1px solid var(--border);
   border-radius:8px;padding:8px 10px;}
-.vcard-lbl{font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:0.5px;}
-.vcard-val{font-size:16px;font-weight:700;margin-top:3px;}
-.vcard-bar{height:3px;border-radius:2px;margin-top:5px;background:rgba(255,255,255,0.07);}
+.vcard-lbl{font-size:13px;color:var(--t2);text-transform:uppercase;letter-spacing:0.5px;}
+.vcard-val{font-size:18px;font-weight:700;margin-top:3px;}
+.vcard-bar{height:3px;border-radius:2px;margin-top:5px;background:var(--bar-bg);}
 .vcard-bar-fill{height:100%;border-radius:2px;transition:width 0.4s;}
 
 /* chat */
@@ -107,25 +143,25 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
   flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
   padding:2px 0 4px;min-height:0;
 }
-.msg{max-width:82%;padding:10px 14px;border-radius:var(--radius);line-height:1.6;font-size:13px;}
+.msg{max-width:82%;padding:11px 15px;border-radius:var(--radius);line-height:1.6;font-size:15px;}
 .msg.user{
   align-self:flex-end;
-  background:linear-gradient(135deg,rgba(90,173,255,0.20),rgba(90,173,255,0.10));
-  border:1px solid rgba(90,173,255,0.35);color:#fff;
+  background:var(--msg-user-bg);
+  border:1px solid var(--msg-user-border);color:var(--t1);
 }
 .msg.entity{
   align-self:flex-start;
-  background:rgba(255,255,255,0.07);
-  border:1px solid rgba(255,255,255,0.16);color:var(--t1);
+  background:var(--msg-entity-bg);
+  border:1px solid var(--msg-entity-border);color:var(--t1);
 }
 .msg.system{
   align-self:center;background:rgba(255,255,255,0.02);
   border:1px solid rgba(255,255,255,0.07);border-radius:20px;
-  padding:4px 12px;color:var(--t3);font-size:11px;font-style:italic;
+  padding:4px 12px;color:var(--t3);font-size:13px;font-style:italic;
 }
 .msg .kws{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px;}
 .msg .kw{
-  padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;
+  padding:3px 9px;border-radius:10px;font-size:12px;font-weight:600;
   background:rgba(74,255,176,0.12);border:1px solid rgba(74,255,176,0.30);color:var(--green);
 }
 .chat-input-row{
@@ -134,82 +170,117 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
   flex-shrink:0;
 }
 .chat-input{
-  flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:7px;
-  padding:9px 12px;color:var(--t1);font-family:inherit;font-size:13px;outline:none;
+  flex:1;background:var(--input-bg);border:1px solid var(--border);border-radius:7px;
+  padding:10px 13px;color:var(--t1);font-family:inherit;font-size:15px;outline:none;
   transition:border-color 0.2s;
 }
 .chat-input:focus{border-color:rgba(90,173,255,0.40);}
-.btn{padding:9px 16px;border-radius:7px;border:none;cursor:pointer;
-  font-family:inherit;font-size:11px;letter-spacing:1px;transition:all 0.2s;}
+.btn{padding:10px 18px;border-radius:7px;border:none;cursor:pointer;
+  font-family:inherit;font-size:13px;letter-spacing:1px;transition:all 0.2s;}
 .btn-primary{background:linear-gradient(135deg,var(--blue),rgba(74,138,255,0.6));color:#fff;}
 .btn-primary:hover{opacity:0.85;}
-.btn-sm{padding:6px 11px;border-radius:6px;border:1px solid var(--border);
-  background:rgba(255,255,255,0.04);color:var(--t2);font-family:inherit;font-size:11px;cursor:pointer;}
+.btn-sm{padding:7px 12px;border-radius:6px;border:1px solid var(--border);
+  background:var(--input-bg);color:var(--t2);font-family:inherit;font-size:13px;cursor:pointer;}
 .btn-sm:hover{background:rgba(255,255,255,0.07);color:var(--t1);}
 
 /* ── TAB 2 — CAMPO ── */
 .word-list{display:flex;flex-direction:column;gap:4px;}
 .word-row{display:flex;align-items:center;gap:8px;padding:5px 7px;
   border-radius:5px;border-bottom:1px solid rgba(255,255,255,0.03);}
-.word-row:hover{background:rgba(255,255,255,0.05);}
-.word-name{width:100px;font-size:13px;color:var(--t1);flex-shrink:0;}
-.word-fractal{width:80px;font-size:10px;color:var(--t2);flex-shrink:0;}
-.word-bar-track{flex:1;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;}
+.word-row:hover{background:var(--card-hover);}
+.word-name{width:110px;font-size:14px;color:var(--t1);flex-shrink:0;}
+.word-fractal{width:90px;font-size:12px;color:var(--t2);flex-shrink:0;}
+.word-bar-track{flex:1;height:4px;background:var(--bar-bg);border-radius:2px;overflow:hidden;}
 .word-bar-fill{height:100%;border-radius:2px;transition:width 0.4s;}
-.word-act{width:40px;font-size:10px;color:var(--t2);text-align:right;}
+.word-act{width:44px;font-size:12px;color:var(--t2);text-align:right;}
 
 /* chips */
 .chips{display:flex;flex-wrap:wrap;gap:5px;}
-.chip{padding:4px 11px;border-radius:20px;font-size:11px;
-  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);color:var(--t1);}
+.chip{padding:5px 12px;border-radius:20px;font-size:13px;
+  background:var(--card-bg);border:1px solid var(--border);color:var(--t1);}
 
 /* ── TAB 3 — UNIVERSO ── */
 #panel-frattali{padding:0;overflow:hidden;}
 #universe-canvas{display:block;width:100%;height:100%;cursor:grab;}
 #universe-canvas.dragging{cursor:grabbing;}
 .u-overlay{
-  position:absolute;background:rgba(9,9,26,0.88);
-  border:1px solid rgba(255,255,255,0.13);border-radius:8px;
-  padding:10px 12px;backdrop-filter:blur(6px);pointer-events:none;
-  font-size:11px;
+  position:absolute;background:var(--overlay-bg);
+  border:1px solid var(--border);border-radius:8px;
+  padding:11px 13px;backdrop-filter:blur(6px);
+  font-size:13px;
 }
+/* Pannello dettaglio parola */
+#universe-info{
+  max-height:calc(100vh - 120px);overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.1) transparent;
+}
+.wd-section{
+  font-size:12px;color:var(--t3);letter-spacing:1.5px;text-transform:uppercase;
+  margin:6px 0 3px;padding-bottom:2px;border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.wd-rel{
+  display:flex;align-items:center;gap:5px;padding:3px 0;font-size:12px;
+  white-space:nowrap;overflow:hidden;
+}
+.wd-rel:hover .wd-actions{opacity:1;}
+.wd-actions{opacity:0;display:flex;gap:2px;margin-left:auto;transition:opacity 0.2s;}
+.wd-btn-del{background:none;border:none;color:#f85149;cursor:pointer;font-size:13px;padding:1px 4px;width:auto;}
+.wd-btn-del:hover{opacity:0.7;}
+.wd-conf-slider{width:40px;height:3px;accent-color:var(--blue);cursor:pointer;}
+.wd-radar-wrap{display:flex;gap:4px;justify-content:center;margin:6px 0;}
+.wd-legend-btn{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);
+  border-radius:4px;padding:4px 9px;color:var(--t2);font-size:13px;cursor:pointer;width:auto;margin-top:6px;}
+.wd-legend-btn:hover{color:var(--t1);border-color:var(--blue);}
+/* Modale legenda universo */
+#u-legenda{position:absolute;inset:0;background:rgba(9,9,26,0.95);z-index:50;
+  display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:30px 16px;}
+#u-legenda.aperto{display:flex;}
+.u-leg-box{background:rgba(20,20,45,0.95);border:1px solid rgba(255,255,255,0.15);
+  border-radius:12px;max-width:600px;width:100%;padding:24px;position:relative;font-size:13px;color:var(--t2);}
+.u-leg-box h3{font-size:15px;color:var(--blue);margin:14px 0 6px;}
+.u-leg-box table{width:100%;border-collapse:collapse;margin-bottom:10px;}
+.u-leg-box th{text-align:left;padding:4px 6px;color:var(--t3);font-size:13px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.08);}
+.u-leg-box td{padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;}
+.u-leg-close{position:absolute;top:12px;right:12px;background:none;border:none;color:var(--t3);
+  font-size:16px;cursor:pointer;width:auto;}
+.u-leg-formula{font-family:monospace;font-size:12px;color:var(--t1);background:rgba(255,255,255,0.05);padding:1px 5px;border-radius:3px;}
 
 .compound-item{display:flex;align-items:center;gap:8px;padding:7px 9px;
-  border-radius:7px;background:rgba(255,255,255,0.02);border:1px solid var(--border);margin-bottom:5px;}
+  border-radius:7px;background:var(--card-bg);border:1px solid var(--border);margin-bottom:5px;}
 .compound-name{
-  font-size:12px;font-weight:600;min-width:100px;
+  font-size:14px;font-weight:600;min-width:100px;
   background:linear-gradient(120deg,var(--purple),var(--blue));
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .compound-fractals{display:flex;gap:3px;flex:1;flex-wrap:wrap;}
 .compound-fractal-chip{
-  padding:2px 6px;border-radius:4px;font-size:10px;
+  padding:3px 7px;border-radius:4px;font-size:12px;
   background:rgba(196,74,255,0.09);border:1px solid rgba(196,74,255,0.18);color:var(--purple);}
-.compound-strength-bar{width:48px;height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;}
+.compound-strength-bar{width:48px;height:3px;background:var(--bar-bg);border-radius:2px;overflow:hidden;}
 .compound-strength-fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--blue));border-radius:2px;}
 
 /* locus info */
 .locus-trail{display:flex;gap:3px;flex-wrap:wrap;margin-top:5px;}
-.trail-chip{padding:1px 6px;border-radius:4px;font-size:10px;
+.trail-chip{padding:2px 7px;border-radius:4px;font-size:12px;
   background:rgba(255,255,255,0.03);color:var(--t2);border:1px solid rgba(255,255,255,0.07);}
 
 /* ── TAB 4 — VOLONTÀ ── */
 .intention-big{text-align:center;padding:18px;
-  border-radius:var(--radius);background:rgba(255,255,255,0.03);border:1px solid var(--border);}
+  border-radius:var(--radius);background:var(--card-bg);border:1px solid var(--border);}
 .intention-icon{font-size:36px;margin-bottom:6px;}
-.intention-name{font-size:22px;font-weight:700;letter-spacing:4px;text-transform:uppercase;
+.intention-name{font-size:26px;font-weight:700;letter-spacing:4px;text-transform:uppercase;
   background:linear-gradient(120deg,var(--blue),var(--green));
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.drive-track{height:7px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden;margin-top:8px;}
+.drive-track{height:7px;background:var(--bar-bg);border-radius:4px;overflow:hidden;margin-top:8px;}
 .drive-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--blue),var(--green));transition:width 0.5s ease;}
 .undercurrent-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
-.undercurrent-name{width:75px;font-size:11px;color:var(--t1);}
-.undercurrent-bar{flex:1;height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;}
+.undercurrent-name{width:85px;font-size:13px;color:var(--t1);}
+.undercurrent-bar{flex:1;height:3px;background:var(--bar-bg);border-radius:2px;overflow:hidden;}
 .undercurrent-fill{height:100%;border-radius:2px;background:var(--purple);transition:width 0.4s;}
-.undercurrent-val{width:32px;font-size:10px;color:var(--t2);text-align:right;}
+.undercurrent-val{width:36px;font-size:12px;color:var(--t2);text-align:right;}
 
 .will-history{display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto;}
-.will-history-item{display:flex;align-items:center;gap:7px;padding:4px 7px;border-radius:4px;font-size:11px;color:var(--t2);}
-.will-badge{padding:1px 5px;border-radius:4px;font-size:11px;font-weight:600;
+.will-history-item{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:4px;font-size:13px;color:var(--t2);}
+.will-badge{padding:2px 6px;border-radius:4px;font-size:13px;font-weight:600;
   background:rgba(90,173,255,0.14);color:var(--blue);}
 
 /* ── TAB 5 — SOGNO ── */
@@ -220,15 +291,15 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 .memory-layer.ltm{background:rgba(196,74,255,0.05);border:1px solid rgba(196,74,255,0.13);}
 .mem-icon{font-size:18px;}
 .mem-info{flex:1;}
-.mem-name{font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;}
+.mem-name{font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;}
 .mem-name.stm{color:var(--green);}
 .mem-name.mtm{color:var(--blue);}
 .mem-name.ltm{color:var(--purple);}
-.mem-desc{font-size:10px;color:var(--t2);margin-top:1px;}
-.mem-count{font-size:20px;font-weight:700;color:var(--t2);}
+.mem-desc{font-size:12px;color:var(--t2);margin-top:1px;}
+.mem-count{font-size:22px;font-weight:700;color:var(--t2);}
 
-.dc-phase{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 10px;
-  border-radius:5px;font-size:9px;letter-spacing:0.5px;text-transform:uppercase;
+.dc-phase{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 11px;
+  border-radius:5px;font-size:13px;letter-spacing:0.5px;text-transform:uppercase;
   color:var(--t2);transition:all 0.3s;min-width:62px;text-align:center;}
 .dc-phase.current{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.11);color:var(--t1);}
 .dc-arrow{color:var(--t3);font-size:14px;align-self:center;flex-shrink:0;}
@@ -236,7 +307,7 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 
 /* ── TAB 7 — FORMA ── */
 .forma-section-title{
-  font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+  font-size:13px;letter-spacing:1.5px;text-transform:uppercase;
   color:var(--t3);margin-bottom:10px;margin-top:4px;
 }
 .visuals-grid{
@@ -246,7 +317,7 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 }
 .visual-card{
   display:flex;flex-direction:column;align-items:center;
-  background:rgba(255,255,255,0.04);border:1px solid var(--border);
+  background:var(--card-bg);border:1px solid var(--border);
   border-radius:8px;padding:10px 6px 8px;cursor:default;
   transition:border-color 0.2s,box-shadow 0.2s;
 }
@@ -262,19 +333,19 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 }
 .visual-icon svg{width:52px;height:52px;}
 .visual-name{
-  margin-top:6px;font-size:8px;letter-spacing:1px;
+  margin-top:6px;font-size:12px;letter-spacing:1px;
   text-transform:uppercase;color:var(--t2);text-align:center;
 }
 .visual-act-bar{
   margin-top:5px;width:100%;height:2px;
-  background:rgba(255,255,255,0.07);border-radius:1px;overflow:hidden;
+  background:var(--bar-bg);border-radius:1px;overflow:hidden;
 }
 .visual-act-fill{height:100%;border-radius:1px;transition:width 0.5s ease;}
 
 .simplex-list{display:flex;flex-direction:column;gap:6px;}
 .simplex-row{
   display:flex;align-items:center;gap:10px;
-  background:rgba(255,255,255,0.03);border:1px solid var(--border);
+  background:var(--card-bg);border:1px solid var(--border);
   border-radius:7px;padding:8px 10px;
 }
 .simplex-icon{
@@ -285,18 +356,18 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 }
 .simplex-icon svg{width:38px;height:38px;}
 .simplex-info{flex:1;min-width:0;}
-.simplex-name{font-size:11px;font-weight:600;color:var(--t1);letter-spacing:0.5px;}
+.simplex-name{font-size:13px;font-weight:600;color:var(--t1);letter-spacing:0.5px;}
 .simplex-chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;}
 .simplex-chip{
-  font-size:9px;padding:1px 5px;border-radius:3px;
+  font-size:13px;padding:2px 6px;border-radius:3px;
   background:rgba(90,173,255,0.1);color:var(--blue);
   border:1px solid rgba(90,173,255,0.2);
 }
 .simplex-bars{display:flex;flex-direction:column;gap:3px;align-items:flex-end;min-width:50px;}
-.simplex-val{font-size:9px;color:var(--t3);text-align:right;}
+.simplex-val{font-size:13px;color:var(--t3);text-align:right;}
 
 /* misc */
-.loading{color:var(--t2);font-size:11px;font-style:italic;padding:8px 0;}
+.loading{color:var(--t2);font-size:13px;font-style:italic;padding:8px 0;}
 .row{display:flex;gap:10px;}
 .row>.card{flex:1;}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
@@ -312,8 +383,18 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 .PENSIERO  {color:#6eb0ff;}
 .CORPO     {color:#b0ff6e;}
 .default   {color:#7878a8;}
+
+/* theme toggle */
+.theme-toggle{font-size:18px;line-height:1;padding:4px 8px;cursor:pointer;}
+[data-theme="light"] .u-overlay{background:var(--overlay-bg);}
+[data-theme="light"] #u-legenda{background:rgba(240,240,245,0.95);}
+[data-theme="light"] .u-leg-box{background:rgba(230,230,240,0.98);border-color:rgba(0,0,0,0.12);}
+[data-theme="light"] .dc-phase.current{background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.10);}
+[data-theme="light"] .btn-primary{background:linear-gradient(135deg,var(--blue),rgba(42,100,200,0.7));color:#fff;}
+[data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);}
 </style>
-<!-- Three.js rimosso: sostituito con canvas 2D nativo -->
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 <div class="shell">
@@ -322,11 +403,12 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 <div class="hdr">
   <span class="logo">PROMETEO</span>
   <div class="hdr-stats">
-    <div class="hstat"><span class="hstat-lbl">parole</span><span class="hstat-val hi" id="h-vocab">—</span></div>
-    <div class="hstat"><span class="hstat-lbl">simplessi</span><span class="hstat-val" id="h-simplex">—</span></div>
-    <div class="hstat"><span class="hstat-lbl">perturbazioni</span><span class="hstat-val" id="h-perturb">—</span></div>
-    <div class="hstat"><span class="hstat-lbl">energia</span><span class="hstat-val" id="h-energy">—</span></div>
-    <div class="ws-dot" id="ws-dot"></div>
+    <div class="hstat" title="Numero di parole nel lessico di Prometeo"><span class="hstat-lbl">parole</span><span class="hstat-val hi" id="h-vocab">—</span></div>
+    <div class="hstat" title="Pattern semantici cristallizzati in memoria"><span class="hstat-lbl">simplessi</span><span class="hstat-val" id="h-simplex">—</span></div>
+    <div class="hstat" title="Numero di stimoli ricevuti dall'avvio"><span class="hstat-lbl">perturbazioni</span><span class="hstat-val" id="h-perturb">—</span></div>
+    <div class="hstat" title="Livello di attivazione del campo semantico corrente"><span class="hstat-lbl">energia</span><span class="hstat-val" id="h-energy">—</span></div>
+    <div class="ws-dot" id="ws-dot" title="Connessione live al campo — verde: attivo, rosso: disconnesso"></div>
+    <button class="btn-sm theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Cambia tema chiaro/scuro">&#9788;</button>
   </div>
 </div>
 
@@ -338,7 +420,9 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
   <button class="tab" onclick="showTab('volonta')">💫 VOLONTÀ</button>
   <button class="tab" onclick="showTab('sogno')">🌙 SOGNO</button>
   <button class="tab" onclick="showTab('pensieri')">🧭 NARRATIVA</button>
-  <button class="tab" onclick="showTab('forma')">◈ FORMA</button>
+  <button class="tab" onclick="showTab('identita')">🪪 IDENTITÀ</button>
+  <button class="tab" onclick="showTab('episodi')">📖 EPISODI</button>
+  <button class="tab" onclick="showTab('dialogo')">💬 DIALOGO</button>
 </div>
 
 <!-- ═══ PANELS ═══ -->
@@ -373,20 +457,20 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 
   <!-- status bar: fase + intenzione + locus -->
   <div class="status-bar">
-    <div class="sbar-item">
+    <div class="sbar-item" title="Ciclo del sogno: Vigile → Veglia Onirica → Sonno Profondo → REM">
       <div class="dream-dot WakefulDream" id="dream-dot"></div>
       <span class="sbar-lbl">FASE</span>
-      <span class="sbar-val" id="dream-phase-txt">WakefulDream</span>
+      <span class="sbar-val" id="dream-phase-txt">Veglia Onirica</span>
     </div>
     <div class="sbar-sep"></div>
-    <div class="sbar-item">
+    <div class="sbar-item" title="Cosa vuole fare Prometeo in questo momento — il numero è l'intensità del drive (0–1)">
       <span id="intention-icon" style="font-size:13px;">💭</span>
       <span class="sbar-lbl">INTENZIONE</span>
-      <span class="sbar-val" style="color:var(--blue);" id="intention-txt">Dream</span>
-      <span style="color:var(--t3);font-size:10px;margin-left:4px;" id="drive-txt">0.00</span>
+      <span class="sbar-val" style="color:var(--blue);" id="intention-txt">Sognare</span>
+      <span style="color:var(--t3);font-size:12px;margin-left:4px;" id="drive-txt">0.00</span>
     </div>
     <div class="sbar-sep"></div>
-    <div class="sbar-item">
+    <div class="sbar-item" title="Il frattale più attivo nel campo — la regione semantica che orienta il pensiero corrente">
       <span class="sbar-lbl">LOCUS</span>
       <span class="sbar-val" style="color:var(--purple);" id="locus-txt">—</span>
     </div>
@@ -415,18 +499,18 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
       <canvas id="energy-canvas" width="130" height="130"></canvas>
       <div style="display:flex;gap:20px;text-align:center;">
         <div>
-          <div style="font-size:10px;color:var(--t2);">VERTICI</div>
+          <div style="font-size:12px;color:var(--t2);" title="Parole nel campo topologico">PAROLE</div>
           <div style="font-size:18px;color:var(--blue);font-weight:700;" id="field-vertices">—</div>
         </div>
         <div>
-          <div style="font-size:10px;color:var(--t2);">ARCHI</div>
+          <div style="font-size:12px;color:var(--t2);" title="Connessioni semantiche tra parole">RELAZIONI</div>
           <div style="font-size:18px;color:var(--green);font-weight:700;" id="field-edges">—</div>
         </div>
       </div>
     </div>
     <!-- parole attive -->
     <div class="card" style="flex:1;overflow-y:auto;">
-      <div class="card-title">Parole Attive</div>
+      <div class="card-title" title="Le parole con attivazione più alta nel campo semantico corrente — riflettono il pensiero di Prometeo in questo momento">Parole Attive</div>
       <div class="word-list" id="word-list">
         <div class="loading">caricamento…</div>
       </div>
@@ -443,35 +527,70 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 
 <!-- ──────────── TAB 3 — UNIVERSO ──────────── -->
 <div class="panel" id="panel-frattali" style="position:relative;padding:0;overflow:hidden;">
-  <canvas id="universe-canvas"></canvas>
+  <div id="universe-3d" style="width:100%;height:100%;"></div>
 
   <!-- Parola selezionata (top-left) -->
   <div id="universe-info" class="u-overlay" style="top:10px;left:10px;min-width:155px;max-width:195px;pointer-events:none;">
-    <div style="font-size:10px;color:var(--t3);">clicca una parola</div>
+    <div style="font-size:12px;color:var(--t3);">clicca una parola</div>
   </div>
 
   <!-- Cerca (bottom-left) -->
   <div style="position:absolute;bottom:12px;left:12px;display:flex;gap:5px;pointer-events:all;">
     <input id="universe-search-input" placeholder="cerca parola…"
-      style="background:rgba(9,9,26,0.90);border:1px solid rgba(255,255,255,0.18);
+      style="background:var(--overlay-bg);border:1px solid var(--border);
              border-radius:6px;padding:5px 9px;color:var(--t1);font-family:inherit;
-             font-size:11px;width:148px;outline:none;"
+             font-size:13px;width:160px;outline:none;"
       onkeydown="if(event.key==='Enter') universeSearch()" />
     <button class="btn-sm" onclick="universeSearch()" style="padding:5px 9px;">↵</button>
   </div>
 
+  <!-- Legenda universo (modale) -->
+  <div id="u-legenda">
+    <div class="u-leg-box">
+      <button class="u-leg-close" onclick="document.getElementById('u-legenda').classList.remove('aperto')">✕</button>
+      <h3>Le 8 dimensioni della firma</h3>
+      <p style="font-size:12px;color:var(--t3);margin-bottom:8px;">Ogni parola ha una firma 8D derivata dai 64 frattali I Ching. La firma si raffina con l'uso e le relazioni nel Knowledge Graph.</p>
+      <table>
+        <tr><th>Dim</th><th>0.0</th><th>1.0</th><th>Cosa misura</th></tr>
+        <tr><td>Confine</td><td>Esterno</td><td>Interno/Io</td><td>Quanto è personale</td></tr>
+        <tr><td>Valenza</td><td>Repulsione</td><td>Attrazione</td><td>Carica emotiva</td></tr>
+        <tr><td>Intensità</td><td>Debole</td><td>Forte</td><td>Forza espressiva</td></tr>
+        <tr><td>Definizione</td><td>Vago</td><td>Netto</td><td>Chiarezza concettuale</td></tr>
+        <tr><td>Complessità</td><td>Semplice</td><td>Composto</td><td>Ricchezza strutturale</td></tr>
+        <tr><td>Permanenza</td><td>Transitorio</td><td>Stabile</td><td>Durata nel tempo</td></tr>
+        <tr><td>Agency</td><td>Paziente</td><td>Agente</td><td>Capacità di agire</td></tr>
+        <tr><td>Tempo</td><td>Passato</td><td>Futuro</td><td>Orientamento temporale</td></tr>
+      </table>
+      <h3>Octalysis — Il gioco della vita</h3>
+      <p style="font-size:12px;color:var(--t3);margin-bottom:8px;">La vita è un gioco serio. Ogni concetto, ogni frase, ogni emozione è mossa da drive fondamentali. L'Octalysis dà a Prometeo gli strumenti per comprendere cosa spinge un concetto — e cosa spinge chi lo usa.</p>
+      <table>
+        <tr><th>Drive</th><th>Formula</th><th>Comprende</th></tr>
+        <tr><td style="color:#e3b341;">Significato Epico</td><td><span class="u-leg-formula">√(Agency × Perm)</span></td><td>Scopo, missione, senso superiore</td></tr>
+        <tr><td style="color:#3fb950;">Realizzazione</td><td><span class="u-leg-formula">√(Intens × Defin)</span></td><td>Progresso, padronanza, risultato</td></tr>
+        <tr><td style="color:#f0883e;">Creatività</td><td><span class="u-leg-formula">√(Compl × Agency)</span></td><td>Libertà espressiva, feedback</td></tr>
+        <tr><td style="color:#58a6ff;">Possesso</td><td><span class="u-leg-formula">√(Confine × Perm)</span></td><td>Appartenenza, identità, proprietà</td></tr>
+        <tr><td style="color:#bc8cff;">Influenza Sociale</td><td><span class="u-leg-formula">√(Valenza × (1-Conf))</span></td><td>Connessione, riconoscimento</td></tr>
+        <tr><td style="color:#f85149;">Scarsità</td><td><span class="u-leg-formula">∛(Tempo × Int × (1-Perm))</span></td><td>Urgenza, rarità, desiderio</td></tr>
+        <tr><td style="color:#79c0ff;">Curiosità</td><td><span class="u-leg-formula">√(Compl × (1-Defin))</span></td><td>Mistero, scoperta, imprevedibilità</td></tr>
+        <tr><td style="color:#8b949e;">Evitamento Perdita</td><td><span class="u-leg-formula">√((1-Val) × (1-Perm))</span></td><td>Paura della perdita, attaccamento</td></tr>
+      </table>
+      <h3>Tipi di relazione</h3>
+      <div id="u-leg-rels"></div>
+    </div>
+  </div>
+
   <!-- Stats universo (top-right) -->
   <div id="universe-stats" class="u-overlay" style="top:10px;right:10px;text-align:right;">
-    <div style="font-size:9px;color:var(--t3);letter-spacing:1px;">UNIVERSO</div>
+    <div style="font-size:13px;color:var(--t3);letter-spacing:1px;">UNIVERSO</div>
     <div id="u-word-count" style="font-size:20px;font-weight:700;color:var(--blue);">—</div>
-    <div style="font-size:9px;color:var(--t2);">parole · 64 frattali</div>
-    <div style="margin-top:6px;font-size:9px;color:var(--t3);">Locus</div>
-    <div id="u-locus" style="font-size:11px;color:var(--purple);font-weight:600;">—</div>
+    <div style="font-size:13px;color:var(--t2);">parole · 64 frattali</div>
+    <div style="margin-top:6px;font-size:13px;color:var(--t3);">Locus</div>
+    <div id="u-locus" style="font-size:13px;color:var(--purple);font-weight:600;">—</div>
   </div>
 
   <!-- Hint (bottom-right) -->
-  <div style="position:absolute;bottom:12px;right:12px;font-size:9px;color:var(--t3);pointer-events:none;letter-spacing:1px;">
-    scroll: zoom · drag: naviga · click: seleziona
+  <div style="position:absolute;bottom:12px;right:12px;font-size:13px;color:var(--t3);pointer-events:none;letter-spacing:1px;">
+    orbita: ruota · scroll: zoom · cerca: campo in basso
   </div>
 </div>
 
@@ -479,16 +598,38 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 <div class="panel" id="panel-volonta">
   <div class="intention-big card" id="intention-card">
     <div class="intention-icon" id="intention-big-icon">💭</div>
-    <div class="intention-name" id="intention-big-name">DREAM</div>
+    <div class="intention-name" id="intention-big-name">SOGNARE</div>
     <div style="margin-top:10px;">
-      <div style="font-size:9px;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;">DRIVE</div>
+      <div style="font-size:13px;color:var(--t2);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;" title="Intensità della spinta volitiva verso questa intenzione (0–100%)">INTENSITÀ</div>
       <div class="drive-track"><div class="drive-fill" id="drive-fill" style="width:5%"></div></div>
       <div style="font-size:12px;color:var(--t1);margin-top:3px;font-weight:600;" id="drive-pct">5%</div>
     </div>
   </div>
+
+  <!-- Trigger Chain: PERCHÉ questa intenzione -->
+  <div class="card">
+    <div class="card-title">Perché questa intenzione</div>
+    <div id="trigger-chain" style="display:flex;flex-direction:column;gap:4px;"><div class="loading">in attesa…</div></div>
+  </div>
+
+  <!-- Forecast + Focus -->
+  <div style="display:flex;gap:8px;">
+    <div class="card" id="will-forecast-card" style="flex:1;display:none;">
+      <div class="card-title">Prossima intenzione probabile</div>
+      <div id="will-forecast" style="font-size:13px;color:var(--t2);">—</div>
+    </div>
+    <div class="card" style="flex:1;">
+      <div class="card-title">Focalizza su…</div>
+      <div style="display:flex;gap:6px;">
+        <input id="will-focus-input" placeholder="parola o concetto" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:13px;color:var(--t1);" onkeydown="if(event.key==='Enter')focusWill()">
+        <button class="btn-sm" onclick="focusWill()">→</button>
+      </div>
+    </div>
+  </div>
+
   <div class="grid2">
-    <div class="card">
-      <div class="card-title">Correnti Secondarie</div>
+    <div class="card" id="undercurrents-card" style="display:none;">
+      <div class="card-title" title="Intenzioni attive in sottofondo che coesistono con quella principale">Correnti Secondarie</div>
       <div id="undercurrents-list"><div class="loading">nessuna</div></div>
     </div>
     <div class="card">
@@ -504,22 +645,22 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
   <div class="card">
     <div class="card-title">Ciclo del Sogno</div>
     <div style="display:flex;align-items:center;justify-content:center;gap:0;padding:12px 0;">
-      <div class="dc-phase" id="dcp-wake"><div class="dc-icon">👁️</div><div>AWAKE</div></div>
+      <div class="dc-phase" id="dcp-wake"><div class="dc-icon">👁️</div><div>VEGLIA</div></div>
       <div class="dc-arrow">→</div>
       <div class="dc-phase" id="dcp-wdream"><div class="dc-icon">🌙</div><div>VEGLIA ONIRICA</div></div>
       <div class="dc-arrow">→</div>
-      <div class="dc-phase" id="dcp-deep"><div class="dc-icon">💤</div><div>DEEP SLEEP</div></div>
+      <div class="dc-phase" id="dcp-deep"><div class="dc-icon">💤</div><div>SONNO PROFONDO</div></div>
       <div class="dc-arrow">→</div>
       <div class="dc-phase" id="dcp-rem"><div class="dc-icon">✨</div><div>REM</div></div>
     </div>
     <div style="display:flex;gap:30px;justify-content:center;margin-top:4px;">
       <div style="text-align:center;">
         <div style="font-size:22px;font-weight:700;color:var(--purple);" id="dream-cycles-big">0</div>
-        <div style="font-size:9px;color:var(--t2);letter-spacing:1px;">CICLI</div>
+        <div style="font-size:13px;color:var(--t2);letter-spacing:1px;">CICLI</div>
       </div>
       <div style="text-align:center;">
         <div style="font-size:22px;font-weight:700;color:var(--blue);" id="perturb-big">0</div>
-        <div style="font-size:9px;color:var(--t2);letter-spacing:1px;">PERTURBAZIONI</div>
+        <div style="font-size:13px;color:var(--t2);letter-spacing:1px;">PERTURBAZIONI</div>
       </div>
     </div>
   </div>
@@ -530,33 +671,38 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
       <div class="memory-layer stm">
         <div class="mem-icon">⚡</div>
         <div class="mem-info">
-          <div class="mem-name stm">STM</div>
-          <div class="mem-desc">Simplessi illuminati nel campo</div>
+          <div class="mem-name stm" title="Short-Term Memory — memoria a breve termine">STM</div>
+          <div class="mem-desc">Pattern attivi nel campo corrente</div>
         </div>
         <div class="mem-count" id="mem-stm">0</div>
       </div>
       <div class="memory-layer mtm">
         <div class="mem-icon">🔵</div>
         <div class="mem-info">
-          <div class="mem-name mtm">MTM</div>
-          <div class="mem-desc">Pattern consolidati</div>
+          <div class="mem-name mtm" title="Medium-Term Memory — memoria a medio termine">MTM</div>
+          <div class="mem-desc">Pattern consolidati durante la veglia onirica</div>
         </div>
         <div class="mem-count" id="mem-mtm">0</div>
       </div>
       <div class="memory-layer ltm">
         <div class="mem-icon">💎</div>
         <div class="mem-info">
-          <div class="mem-name ltm">LTM</div>
-          <div class="mem-desc">Struttura cristallizzata</div>
+          <div class="mem-name ltm" title="Long-Term Memory — memoria a lungo termine, permanente">LTM</div>
+          <div class="mem-desc">Struttura permanente dell'identità</div>
         </div>
         <div class="mem-count" id="mem-ltm">0</div>
       </div>
     </div>
   </div>
+  <!-- report sogno -->
+  <div class="card">
+    <div class="card-title">Report Consolidamento</div>
+    <div id="dream-report" style="display:flex;flex-direction:column;gap:4px;"><div class="loading">in attesa del primo ciclo…</div></div>
+  </div>
   <!-- azioni -->
   <div style="display:flex;gap:8px;">
     <button class="btn btn-primary" onclick="triggerDream()" style="flex:1">💤 Forza Tick Onirico</button>
-    <button class="btn-sm" onclick="triggerGrow()" style="padding:9px 16px;">🌱 Crescita</button>
+    <button class="btn-sm" onclick="triggerGrow()" style="padding:9px 16px;" title="Consolida la memoria a lungo termine e rafforza i pattern appresi">🌱 Crescita</button>
     <button class="btn-sm" onclick="saveState()" style="padding:9px 16px;">💾 Salva</button>
   </div>
 </div>
@@ -564,31 +710,59 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 <!-- ──────────── TAB 6 — NARRATIVA ──────────── -->
 <div class="panel" id="panel-pensieri">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-    <span style="font-size:10px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;">NarrativeSelf — ciclo deliberativo</span>
+    <span style="font-size:12px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;" title="Il sé narrativo forma una posizione interna prima di rispondere — stance, intenzione e valori filtrano ogni espressione">Sé Narrativo — ciclo deliberativo</span>
     <button class="btn-sm" onclick="refreshNarrative()">↺ aggiorna</button>
   </div>
 
   <!-- Stato corrente -->
+  <!-- Phase 55: Valenza Octalysis — profilo continuo 8 drive -->
+  <div id="valence-panel" style="flex-shrink:0;margin-top:8px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <div style="font-size:13px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;" title="Profilo emotivo-motivazionale: 8 drive fondamentali che orientano ogni risposta">Valenza</div>
+      <div id="valence-label" style="font-size:14px;font-weight:700;color:var(--acc);">—</div>
+      <div id="valence-tone" style="font-size:12px;color:var(--t3);margin-left:auto;"></div>
+    </div>
+    <div id="valence-bars" style="display:grid;grid-template-columns:110px 1fr;gap:3px 8px;font-size:12px;"></div>
+    <div id="commitment-bar" style="display:none;margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;">Impegno</span>
+        <span id="commitment-intention" style="font-size:13px;font-weight:600;color:var(--acc);">—</span>
+        <div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;">
+          <div id="commitment-strength" style="height:100%;background:var(--acc);border-radius:3px;transition:width 0.3s;width:0%;"></div>
+        </div>
+        <span id="commitment-info" style="font-size:11px;color:var(--t3);">—</span>
+      </div>
+    </div>
+  </div>
+
   <div id="narrative-status" style="display:flex;gap:12px;flex-wrap:wrap;flex-shrink:0;margin-top:8px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);">
-    <div>
-      <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Stance</div>
+    <div title="Postura emotiva emergente dalla valenza del campo">
+      <div style="font-size:13px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Postura</div>
       <div id="narr-stance" style="font-size:14px;font-weight:600;color:var(--acc);">—</div>
     </div>
-    <div>
-      <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Intenzione</div>
+    <div title="Cosa intende fare Prometeo in risposta">
+      <div style="font-size:13px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Intenzione</div>
       <div id="narr-intention" style="font-size:14px;font-weight:600;color:var(--t2);">—</div>
     </div>
-    <div>
-      <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Continuità</div>
+    <div title="Quanto il tema corrente è connesso ai temi precedenti (100% = stesso tema)">
+      <div style="font-size:13px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Continuità</div>
       <div id="narr-continuity" style="font-size:14px;font-weight:600;color:var(--t2);">—</div>
     </div>
-    <div>
-      <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Turni</div>
+    <div title="Numero di scambi nella sessione corrente">
+      <div style="font-size:13px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Turni</div>
       <div id="narr-turns" style="font-size:14px;font-weight:600;color:var(--t2);">—</div>
     </div>
-    <div>
-      <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Nato</div>
+    <div title="L'identità narrativa è attiva e radicata">
+      <div style="font-size:13px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Identità</div>
       <div id="narr-born" style="font-size:14px;font-weight:600;">—</div>
+    </div>
+    <div title="Integrità interna — quanto i valori restano coerenti nel tempo (100% = nessuna contraddizione)">
+      <div style="font-size:13px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Coerenza</div>
+      <div id="narr-coherence" style="font-size:14px;font-weight:600;color:var(--t2);">—</div>
+    </div>
+    <div title="Intento attribuito all'interlocutore — come Prometeo interpreta chi gli parla">
+      <div style="font-size:13px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Interlocutore</div>
+      <div id="narr-attributed" style="font-size:14px;font-weight:600;color:var(--t2);">—</div>
     </div>
   </div>
 
@@ -596,7 +770,7 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 
     <!-- Posizioni formate -->
     <div>
-      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Posizioni deliberate</div>
+      <div style="font-size:12px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Posizioni deliberate</div>
       <div id="narr-positions" style="display:flex;flex-direction:column;gap:4px;">
         <div class="loading">—</div>
       </div>
@@ -604,7 +778,7 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 
     <!-- Turni cristallizzati -->
     <div>
-      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Cristallizzati</div>
+      <div style="font-size:12px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;" title="Momenti narrativi che hanno raggiunto la massima intensità e sono diventati parte dell'identità permanente">Cristallizzati</div>
       <div id="narr-crystallized" style="display:flex;flex-direction:column;gap:4px;">
         <div class="loading">—</div>
       </div>
@@ -612,7 +786,7 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 
     <!-- Turni recenti -->
     <div>
-      <div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Turni recenti</div>
+      <div style="font-size:12px;color:var(--t3);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Turni recenti</div>
       <div id="narr-recent" style="display:flex;flex-direction:column;gap:4px;">
         <div class="loading">—</div>
       </div>
@@ -621,10 +795,10 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
   </div>
 </div>
 
-<!-- ──────────── TAB 7 — FORMA ──────────── -->
-<div class="panel" id="panel-forma">
+<!-- ──────────── TAB 7 — FORMA (nascosta) ──────────── -->
+<div class="panel" id="panel-forma" style="display:none!important;">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-    <span style="font-size:10px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;">Grammatica visiva — 16 frattali primitivi · simplessi composti</span>
+    <span style="font-size:12px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;">Grammatica visiva — 16 frattali primitivi · simplessi composti</span>
     <button class="btn-sm" onclick="refreshVisuals()">↺ aggiorna</button>
   </div>
 
@@ -645,10 +819,124 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
   </div>
 </div>
 
+<!-- ══════════════════════ IDENTITÀ ══════════════════════ -->
+<div class="panel" id="panel-identita">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+    <span style="font-size:12px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;">Modello di sé — credenze, valori, incertezze</span>
+    <button class="btn-sm" onclick="refreshIdentita()">↺ aggiorna</button>
+  </div>
+
+  <!-- Credenze attive ora -->
+  <div class="card" style="flex-shrink:0;">
+    <div class="card-title">Credenze Attive Ora</div>
+    <div id="id-active-beliefs" style="display:flex;flex-direction:column;gap:4px;">
+      <div style="color:var(--t3);font-size:12px;">nessuna credenza attivata</div>
+    </div>
+    <div id="id-influence-trace" style="margin-top:6px;display:flex;flex-direction:column;gap:2px;"></div>
+  </div>
+
+  <!-- Valori -->
+  <div class="card" style="flex-shrink:0;">
+    <div class="card-title">Gerarchia Valoriale</div>
+    <div id="id-values" style="display:flex;flex-wrap:wrap;gap:8px;">
+      <div class="loading">caricamento…</div>
+    </div>
+  </div>
+
+  <!-- Credenze -->
+  <div class="card" style="flex:1;overflow-y:auto;min-height:0;">
+    <div class="card-title" title="Proposizioni che Prometeo ha formato sulla realtà — si consolidano con l'esperienza ripetuta">Sistema di Credenze</div>
+    <div id="id-beliefs" style="display:flex;flex-direction:column;gap:8px;">
+      <div class="loading">caricamento…</div>
+    </div>
+  </div>
+
+  <!-- Incertezze -->
+  <div class="card" style="flex-shrink:0;">
+    <div class="card-title">Incertezze Fondative</div>
+    <div id="id-uncertainties" style="display:flex;flex-wrap:wrap;gap:8px;">
+      <div class="loading">caricamento…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ EPISODI ══════════════════════ -->
+<div class="panel" id="panel-episodi">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+    <span style="font-size:12px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;">Memoria episodica semantica</span>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <input id="ep-search" placeholder="cerca concetto…" style="background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-size:13px;color:var(--t1);width:140px;" oninput="searchEpisodes(this.value)">
+      <button class="btn-sm" onclick="refreshEpisodi()">↺ aggiorna</button>
+    </div>
+  </div>
+
+  <!-- Temi ricorrenti -->
+  <div class="card" style="flex-shrink:0;">
+    <div class="card-title">Temi Ricorrenti</div>
+    <div id="ep-themes" style="display:flex;flex-wrap:wrap;gap:6px;">
+      <div class="loading">caricamento…</div>
+    </div>
+  </div>
+
+  <!-- Lista episodi -->
+  <div style="flex:1;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:8px;" id="ep-list">
+    <div class="loading">caricamento…</div>
+  </div>
+</div>
+
+<!-- ══════════════════════ DIALOGO INTERIORE ══════════════════════ -->
+<div class="panel" id="panel-dialogo">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+    <span style="font-size:12px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;">Dialogo Interiore</span>
+    <button class="btn-sm" onclick="refreshDialogo()">↺ aggiorna</button>
+  </div>
+
+  <!-- Proposizioni (verde) -->
+  <div class="card" style="flex-shrink:0;">
+    <div class="card-title" style="color:#4aff8c;">Proposizioni</div>
+    <div id="dlg-propositions" style="display:flex;flex-direction:column;gap:6px;">
+      <div class="loading">caricamento…</div>
+    </div>
+  </div>
+
+  <!-- Dubbi (arancione) -->
+  <div class="card" style="flex-shrink:0;">
+    <div class="card-title" style="color:#ffa54a;">Dubbi</div>
+    <div id="dlg-thoughts" style="display:flex;flex-direction:column;gap:6px;">
+      <div class="loading">caricamento…</div>
+    </div>
+  </div>
+
+  <!-- Domande (blu) -->
+  <div class="card">
+    <div class="card-title" style="color:#4a9eff;">Domande</div>
+    <div id="dlg-questions" style="display:flex;flex-direction:column;gap:6px;">
+      <div class="loading">caricamento…</div>
+    </div>
+  </div>
+</div>
+
 </div><!-- /panels -->
 </div><!-- /shell -->
 
 <script>
+// ═══ THEME ═══
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('prometeo-theme', next);
+  const btn = document.getElementById('theme-toggle');
+  btn.innerHTML = next === 'light' ? '&#9790;' : '&#9788;';
+}
+(function applyStoredTheme() {
+  const saved = localStorage.getItem('prometeo-theme');
+  if (saved === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+})();
+
 // ═══ STATE ═══
 let state = {};
 let willHistory = [];
@@ -667,10 +955,16 @@ const INTENTION_ICONS = {
   Express:'💬', Explore:'🔭', Question:'❓', Remember:'📖',
   Withdraw:'🤫', Reflect:'🪞', Dream:'💭',
 };
+const INTENTION_IT = {
+  Express:'Esprimere', Explore:'Esplorare', Question:'Domandare', Remember:'Ricordare',
+  Withdraw:'Ritirarsi', Reflect:'Riflettere', Dream:'Sognare',
+  Acknowledge:'Riconoscere', Resonate:'Risonare', Remain:'Restare',
+  Need:'Necessità', Irony:'Ironia', Desire:'Desiderio'
+};
 
 // ═══ TABS ═══
 function showTab(name) {
-  const names = ['mente','campo','frattali','volonta','sogno','pensieri','forma'];
+  const names = ['mente','campo','frattali','volonta','sogno','pensieri','identita','episodi','dialogo'];
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-'+name));
   if (name === 'campo')    refreshWordField();
@@ -678,6 +972,9 @@ function showTab(name) {
   if (name === 'volonta')  refreshWill();
   if (name === 'pensieri') refreshNarrative();
   if (name === 'forma')    refreshVisuals();
+  if (name === 'identita') refreshIdentita();
+  if (name === 'episodi')  refreshEpisodi();
+  if (name === 'dialogo')  refreshDialogo();
 }
 
 // ═══ WebSocket ═══
@@ -702,23 +999,27 @@ function updateFromSnapshot(s) {
   set('mem-stm', r.memory_stm);
   set('mem-mtm', r.memory_mtm);
   set('mem-ltm', r.memory_ltm);
+  // Aggiorna dream report se il tab sogno è visibile
+  if (document.getElementById('panel-sogno').classList.contains('active')) refreshDreamReport();
 
   const v = s.vital;
   setVital('act', v.activation, '#4affb0');
   setVital('cur', v.curiosity,  '#4a9eff');
   setVital('fat', v.fatigue,    '#ff9a5a');
+  const TENSION_IT = {Calm:'Calmo', Alert:'Attenzione', Tense:'Teso', Overloaded:'Sovraccarico'};
   const tensions = {Calm:'#4affb0', Alert:'#ffd04a', Tense:'#ff9a5a', Overloaded:'#ff4a6b'};
   const tcolor = tensions[v.tension] || '#9090b8';
   const tel = document.getElementById('v-tension');
-  if(tel){ tel.textContent = v.tension; tel.style.color = tcolor; }
+  if(tel){ tel.textContent = TENSION_IT[v.tension] || v.tension; tel.style.color = tcolor; }
   const tbar = document.getElementById('vb-sat');
   if(tbar){ const tpct = {Calm:10,Alert:40,Tense:70,Overloaded:100}[v.tension]||10; tbar.style.width=tpct+'%'; tbar.style.background=tcolor; }
 
   // dream phase
+  const PHASE_IT = {Awake:'Vigile', WakefulDream:'Veglia Onirica', LightSleep:'Sonno Leggero', DeepSleep:'Sonno Profondo', REM:'REM'};
   const phase = s.dream_phase;
   const dot = document.getElementById('dream-dot');
   dot.className = 'dream-dot ' + phase;
-  set('dream-phase-txt', phase);
+  set('dream-phase-txt', PHASE_IT[phase] || phase);
   const phaseMap = {Awake:'wake',WakefulDream:'wdream',LightSleep:'wdream',DeepSleep:'deep',REM:'rem'};
   ['wake','wdream','deep','rem'].forEach(p => document.getElementById('dcp-'+p).classList.remove('current'));
   document.getElementById('dcp-'+(phaseMap[phase]||'wdream')).classList.add('current');
@@ -737,7 +1038,7 @@ function updateFromSnapshot(s) {
     fc.innerHTML = af.length
       ? af.map(f => {
           const col = FRACTAL_COLORS[f.name] || '#7878a8';
-          return `<span class="chip" style="border-color:${col}33;color:${col};background:${col}14">${f.name} <span style="opacity:0.55">${Math.round(f.activation*100)}%</span></span>`;
+          return `<span class="chip" style="border-color:${col}33;color:${col};background:${col}14;cursor:pointer;" title="Esplora ${f.name} nel campo frattali" onclick="showTab('frattali');setTimeout(()=>{document.getElementById('universe-search-input').value='${f.name}';universeSearch();},200)">${f.name} <span style="opacity:0.55">${Math.round(f.activation*100)}%</span></span>`;
         }).join('')
       : '<div class="loading">nessun frattale attivo</div>';
   }
@@ -770,6 +1071,10 @@ async function sendInput() {
     set('h-energy', (data.state?.vital?.activation||0).toFixed(3));
     // aggiorna will se visibile
     if (document.getElementById('panel-volonta').classList.contains('active')) refreshWill();
+    // Aggiorna narrativa, identità, episodi dopo ogni input utente
+    refreshNarrative();
+    refreshIdentita();
+    refreshEpisodi();
   } catch(e) { console.error(e); }
 }
 
@@ -790,7 +1095,15 @@ function appendEntityMsg(text, kws) {
   if (kws.length) {
     const kd = document.createElement('div');
     kd.className = 'kws';
-    kws.forEach(k => { const s = document.createElement('span'); s.className='kw'; s.textContent=k; kd.appendChild(s); });
+    kws.forEach(k => {
+      const s = document.createElement('span');
+      s.className='kw';
+      s.textContent=k;
+      s.style.cursor='pointer';
+      s.title=`Esplora ${k} nel campo frattali`;
+      s.onclick=()=>{ showTab('frattali'); setTimeout(()=>{ document.getElementById('universe-search-input').value=k; universeSearch(); },200); };
+      kd.appendChild(s);
+    });
     div.appendChild(kd);
   }
   msgs.appendChild(div);
@@ -835,17 +1148,18 @@ function drawEnergyGauge(energy) {
   const e = isNaN(energy) ? 0 : energy;
   const pct = Math.min(e * 5, 1);
   ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,2*Math.PI);
-  ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=9; ctx.stroke();
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  ctx.strokeStyle=isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)'; ctx.lineWidth=9; ctx.stroke();
   if (pct > 0) {
     const g = ctx.createLinearGradient(cx-r,cy,cx+r,cy);
     g.addColorStop(0,'#4a9eff'); g.addColorStop(0.5,'#c44aff'); g.addColorStop(1,'#4affb0');
     ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,Math.PI+Math.PI*pct);
     ctx.strokeStyle=g; ctx.lineWidth=9; ctx.stroke();
   }
-  ctx.fillStyle='rgba(255,255,255,0.8)';
+  ctx.fillStyle=isLight ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.8)';
   ctx.font='bold 16px JetBrains Mono,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(e.toFixed(3),cx,cy-3);
-  ctx.font='8px JetBrains Mono,monospace'; ctx.fillStyle='rgba(255,255,255,0.3)';
+  ctx.font='10px JetBrains Mono,monospace'; ctx.fillStyle=isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)';
   ctx.fillText('ENERGIA',cx,cy+13);
 }
 
@@ -856,16 +1170,45 @@ async function refreshWill() {
     const d = await r.json();
     const icon = INTENTION_ICONS[d.intention] || '💭';
     set('intention-big-icon', icon);
-    set('intention-big-name', d.intention.toUpperCase());
+    set('intention-big-name', (INTENTION_IT[d.intention] || d.intention).toUpperCase());
     set('intention-icon', icon);
-    set('intention-txt', d.intention);
+    set('intention-txt', INTENTION_IT[d.intention] || d.intention);
     set('drive-txt', d.drive.toFixed(2));
     const pct = Math.min(Math.round(d.drive * 100), 100);
     set('drive-pct', pct+'%');
     const fill = document.getElementById('drive-fill');
     if (fill) fill.style.width = pct+'%';
+
+    // Trigger chain
+    const tcEl = document.getElementById('trigger-chain');
+    if (d.trigger_chain?.length) {
+      tcEl.innerHTML = d.trigger_chain.map(t => {
+        const barW = Math.min(Math.round(t.value * 100), 100);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:5px;border:1px solid var(--border);">
+          <span style="font-size:13px;color:var(--t1);flex:1;">${t.cause}</span>
+          <div style="width:60px;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;">
+            <div style="width:${barW}%;height:100%;background:var(--acc);border-radius:2px;"></div>
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      tcEl.innerHTML = '<div style="color:var(--t3);font-size:12px;">nessuna causa rilevata</div>';
+    }
+
+    // Forecast
+    const fcEl = document.getElementById('will-forecast');
+    const fcCard = document.getElementById('will-forecast-card');
+    if (d.forecast) {
+      const fIcon = INTENTION_ICONS[d.forecast] || '·';
+      fcEl.innerHTML = `<span style="font-size:16px;">${fIcon}</span> <span style="font-weight:600;">${d.forecast}</span>`;
+      if (fcCard) fcCard.style.display = 'block';
+    } else {
+      if (fcCard) fcCard.style.display = 'none';
+    }
+
     // undercurrents
     const ul = document.getElementById('undercurrents-list');
+    const ucCard = document.getElementById('undercurrents-card');
     if (d.undercurrents?.length) {
       ul.innerHTML = d.undercurrents.map(u => `
         <div class="undercurrent-row">
@@ -873,18 +1216,30 @@ async function refreshWill() {
           <div class="undercurrent-bar"><div class="undercurrent-fill" style="width:${Math.min(Math.round(u.pressure*100),100)}%"></div></div>
           <span class="undercurrent-val">${u.pressure.toFixed(2)}</span>
         </div>`).join('');
+      if (ucCard) ucCard.style.display = 'block';
     } else {
-      ul.innerHTML = '<div class="loading">nessuna corrente secondaria</div>';
+      if (ucCard) ucCard.style.display = 'none';
     }
     // history
     const last = willHistory[0];
     if (!last || last.name !== d.intention) {
-      willHistory.unshift({name:d.intention, icon, drive:d.drive});
+      willHistory.unshift({name:INTENTION_IT[d.intention]||d.intention, icon, drive:d.drive});
       if (willHistory.length > 14) willHistory.pop();
     } else { willHistory[0].drive = d.drive; }
     document.getElementById('will-history').innerHTML = willHistory.map(w =>
       `<div class="will-history-item"><span>${w.icon}</span><span class="will-badge">${w.name}</span><span style="margin-left:auto">${w.drive.toFixed(2)}</span></div>`
     ).join('');
+  } catch(e) {}
+}
+
+async function focusWill() {
+  const input = document.getElementById('will-focus-input');
+  const topic = input.value.trim();
+  if (!topic) return;
+  try {
+    await fetch('/api/will/focus', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({topic})});
+    input.value = '';
+    refreshWill();
   } catch(e) {}
 }
 
@@ -903,71 +1258,61 @@ const TRIG_COLORS = [
   '#ff6eb0', // 7 Lago   ☱ Valenza
 ];
 
-let uCanvas = null, uCtx = null;
-let uPan = { x: 0, y: 0 };
-let uScale = 0.90;
-let uDrag = null;
-let uFractals = [];
-let uWords = [];
-let uSel = null;
-let uNbrs = [];
-let uFrame = null;
+// ═══ 3D UNIVERSE ═══
+let uFractals = [], uWords = [], uSel = null, uNbrs = [];
 let uLoaded = false;
+let u3Scene, u3Camera, u3Renderer, u3Controls, u3Raycaster, u3Mouse;
+let u3FractalMeshes = [], u3WordCloud = null;
+let u3ConnectionLines = null, u3NbrMeshes = [];
+let u3Container = null, u3AnimId = null;
+let u3DragObj = null, u3DragPlane, u3DragOffset = null;
+let u3Springs = []; // { mesh, origPos: Vector3 }
+let u3LabelSprites = [];
+// 2D compat stubs
+let uCanvas = null, uCtx = null, uFrame = null;
 
-// Posizione frattale: layout "universo a 8 stelle"
-// — 8 esagrammi puri sull'anello esterno (raggio fisso R_PURE)
-// — esagrammi misti al punto geometrico intermedio tra i due trigrammi genitori
-// — i puri opposti (es. ☰/☷ Agency vs Permanenza) convergono verso il centro (Tao)
-// — i puri adiacenti restano vicini all'anello esterno
-const R_PURE  = 420;   // anello degli 8 puri
-const R_INNER = 55;    // minimo: coppie opposte (distanza angolare = π)
-const R_OUTER = 330;   // massimo: coppie adiacenti (distanza angolare = π/4)
+const R_PURE = 300, R_INNER = 40, R_OUTER = 240;
 
-function uFractalPos(id) {
-  const lower = (id / 8) | 0;
-  const upper = id & 7;
-  const angL = (lower / 8) * Math.PI * 2 - Math.PI / 2;
-  const angU = (upper / 8) * Math.PI * 2 - Math.PI / 2;
-
+function uFractalPos3D(id) {
+  const lower = (id / 8) | 0, upper = id & 7;
+  const phi1 = (lower / 8) * Math.PI * 2;
+  const phi2 = (upper / 8) * Math.PI * 2;
   if (lower === upper) {
-    // Puro: anello esterno fisso — tutti alla stessa distanza dal centro
-    return [Math.cos(angL) * R_PURE, Math.sin(angL) * R_PURE];
+    return new THREE.Vector3(Math.cos(phi1) * R_PURE, Math.sin(phi1 * 0.3) * R_PURE * 0.3, Math.sin(phi1) * R_PURE);
   }
-
-  // Angolo: midpoint tra i due trigrammi (con gestione del wrapping circolare)
-  let dAng = angU - angL;
-  if (dAng >  Math.PI) dAng -= 2 * Math.PI;
+  let dAng = phi2 - phi1;
+  if (dAng > Math.PI) dAng -= 2 * Math.PI;
   if (dAng < -Math.PI) dAng += 2 * Math.PI;
-  const midAng = angL + dAng * 0.5;
-
-  // Raggio: proporzionale alla "somiglianza" dei due trigrammi.
-  // |dAng|=0 → puro (R_PURE), |dAng|=π → opposti (R_INNER).
-  const t = Math.abs(dAng) / Math.PI;  // 0=stesso trigram, 1=opposti
+  const midAng = phi1 + dAng * 0.5;
+  const t = Math.abs(dAng) / Math.PI;
   const r = R_OUTER * (1 - t) + R_INNER * t;
-
-  // Piccolo offset radiale per separare (lower,upper) da (upper,lower) — stessa posizione altrimenti
-  const rFinal = dAng >= 0 ? r + 18 : r - 18;
-
-  return [Math.cos(midAng) * rFinal, Math.sin(midAng) * rFinal];
+  const rFinal = dAng >= 0 ? r + 12 : r - 12;
+  const y = Math.sin(midAng * 1.3) * r * 0.25 + Math.cos(phi1 * 2.1) * 30;
+  return new THREE.Vector3(Math.cos(midAng) * rFinal, y, Math.sin(midAng) * rFinal);
 }
+function uFractalPos(id) { const p = uFractalPos3D(id); return [p.x, p.z]; }
 
-// Hash FNV-1a deterministico per posizioni stabili
 function uHash(w) {
   let h = 2166136261;
   for (let i = 0; i < w.length; i++) h = (Math.imul(h ^ w.charCodeAt(i), 16777619)) >>> 0;
   return h;
 }
 
-// Posizione parola attorno al suo frattale dominante
-function uWordPos(w, fid) {
+function uWordPos3D(w, fid, a1) {
   const h = uHash(w);
-  const angle = (h & 0xFFFF) / 0x10000 * Math.PI * 2;
-  const r = 22 + ((h >>> 16) % 105);
-  const [fx, fy] = uFractalPos(fid);
-  return [fx + Math.cos(angle) * r, fy + Math.sin(angle) * r];
+  const theta = (h & 0xFFFF) / 0x10000 * Math.PI * 2;
+  const phi = ((h >> 16) & 0x7FFF) / 0x7FFF * Math.PI - Math.PI / 2;
+  const affinity = (a1 || 0) / 100;
+  const r = 12 + (80 - 12) * (1 - affinity);
+  const fPos = uFractalPos3D(fid);
+  return new THREE.Vector3(
+    fPos.x + Math.cos(theta) * Math.cos(phi) * r,
+    fPos.y + Math.sin(phi) * r,
+    fPos.z + Math.sin(theta) * Math.cos(phi) * r
+  );
 }
+function uWordPos(w, fid, a1) { const p = uWordPos3D(w, fid, a1); return [p.x, p.z]; }
 
-// hex + alpha → rgba
 function uRgba(hex, a) {
   const r = parseInt(hex.slice(1,3), 16);
   const g = parseInt(hex.slice(3,5), 16);
@@ -983,12 +1328,14 @@ async function loadUniverse() {
     const locusName = sd.locus ? sd.locus.fractal_name : '—';
 
     uFractals = (ud.fractals || []).map(f => {
-      const [px, py] = uFractalPos(f.id);
-      return Object.assign({}, f, { px, py });
+      const pos = uFractalPos3D(f.id);
+      const [px, py] = [pos.x, pos.z];
+      return Object.assign({}, f, { px, py, pos3d: pos });
     });
     uWords = (ud.words || []).map(wd => {
-      const [px, py] = uWordPos(wd.w, wd.f);
-      return Object.assign({}, wd, { px, py });
+      const pos = uWordPos3D(wd.w, wd.f, wd.a1);
+      const [px, py] = [pos.x, pos.z];
+      return Object.assign({}, wd, { px, py, pos3d: pos });
     });
 
     const wc = document.getElementById('u-word-count');
@@ -997,58 +1344,597 @@ async function loadUniverse() {
     if (ul) ul.textContent = locusName;
 
     uLoaded = true;
-    if (!uFrame) uAnimLoop();
+    build3DScene();
   } catch(e) { console.warn('universe load error', e); }
 }
 
+function makeTextSprite(text, color, size) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const fontSize = size || 48;
+  ctx.font = 'bold ' + fontSize + 'px monospace';
+  const w = ctx.measureText(text).width + 8;
+  canvas.width = w; canvas.height = fontSize * 1.3;
+  ctx.font = 'bold ' + fontSize + 'px monospace';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, w / 2, canvas.height / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(w / 8, canvas.height / 8, 1);
+  return sprite;
+}
+
+function build3DScene() {
+  if (!u3Scene) return;
+  // Clear previous
+  u3FractalMeshes.forEach(m => u3Scene.remove(m));
+  u3LabelSprites.forEach(s => u3Scene.remove(s));
+  if (u3WordCloud) u3Scene.remove(u3WordCloud);
+  if (u3ConnectionLines) { u3Scene.remove(u3ConnectionLines); u3ConnectionLines = null; }
+  u3NbrMeshes.forEach(m => u3Scene.remove(m));
+  u3FractalMeshes = []; u3LabelSprites = []; u3NbrMeshes = [];
+  u3Springs = [];
+
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+
+  // Fractal stars
+  for (const f of uFractals) {
+    const col = TRIG_COLORS[f.lower];
+    const isPure = f.lower === f.upper;
+    const r = isPure ? 8 + f.activation * 8 : 3 + f.activation * 3;
+    const threeCol = new THREE.Color(col);
+
+    // Core sphere
+    const geo = new THREE.SphereGeometry(r, isPure ? 24 : 12, isPure ? 24 : 12);
+    const mat = new THREE.MeshBasicMaterial({
+      color: threeCol, transparent: true, opacity: isPure ? 0.7 : 0.4
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(f.pos3d);
+    mesh.userData = { type: 'fractal', data: f };
+    u3Scene.add(mesh);
+    u3FractalMeshes.push(mesh);
+
+    // Glow sprite
+    if (isPure) {
+      const glowCanvas = document.createElement('canvas');
+      glowCanvas.width = 128; glowCanvas.height = 128;
+      const gCtx = glowCanvas.getContext('2d');
+      const grad = gCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grad.addColorStop(0, col + 'aa');
+      grad.addColorStop(0.3, col + '44');
+      grad.addColorStop(1, col + '00');
+      gCtx.fillStyle = grad;
+      gCtx.fillRect(0, 0, 128, 128);
+      const glowTex = new THREE.CanvasTexture(glowCanvas);
+      const glowMat = new THREE.SpriteMaterial({ map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+      const glow = new THREE.Sprite(glowMat);
+      glow.scale.set(r * 8, r * 8, 1);
+      glow.position.copy(f.pos3d);
+      u3Scene.add(glow);
+      u3LabelSprites.push(glow);
+    }
+
+    // Label
+    const label = makeTextSprite(f.name, isPure ? (isLight ? col : '#ffffff') : col, isPure ? 40 : 28);
+    label.position.copy(f.pos3d);
+    label.position.y -= r + 4;
+    u3Scene.add(label);
+    u3LabelSprites.push(label);
+  }
+
+  // Word cloud as Points (instanced — fast for 25K)
+  const positions = new Float32Array(uWords.length * 3);
+  const colors = new Float32Array(uWords.length * 3);
+  const sizes = new Float32Array(uWords.length);
+  for (let i = 0; i < uWords.length; i++) {
+    const wd = uWords[i];
+    positions[i * 3] = wd.pos3d.x;
+    positions[i * 3 + 1] = wd.pos3d.y;
+    positions[i * 3 + 2] = wd.pos3d.z;
+    const col = new THREE.Color(TRIG_COLORS[(wd.f / 8) | 0]);
+    colors[i * 3] = col.r;
+    colors[i * 3 + 1] = col.g;
+    colors[i * 3 + 2] = col.b;
+    const stab = wd.s / 100;
+    sizes[i] = 1.5 + stab * 2.5;
+  }
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  pGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+  const pMat = new THREE.PointsMaterial({
+    size: 2.5, vertexColors: true, transparent: true, opacity: 0.85,
+    sizeAttenuation: true, depthWrite: false
+  });
+  u3WordCloud = new THREE.Points(pGeo, pMat);
+  u3Scene.add(u3WordCloud);
+
+  // Update fog/bg for theme
+  const bgCol = isLight ? 0xf5f5fa : 0x09091a;
+  u3Scene.background = new THREE.Color(bgCol);
+  u3Scene.fog = new THREE.FogExp2(bgCol, isLight ? 0.0012 : 0.0015);
+}
+
+function u3ShowConnections() {
+  // Remove old
+  if (u3ConnectionLines) { u3Scene.remove(u3ConnectionLines); u3ConnectionLines = null; }
+  u3NbrMeshes.forEach(m => u3Scene.remove(m));
+  u3NbrMeshes = [];
+  if (!uSel || !uNbrs.length || !u3Scene) return;
+
+  const selPos = uSel.pos3d;
+  const linePositions = [];
+  const lineColors = [];
+  for (const nb of uNbrs) {
+    const nbPos = nb.pos3d || uWordPos3D(nb.w, nb.f, Math.round((nb.weight || 0.5) * 100));
+    linePositions.push(selPos.x, selPos.y, selPos.z, nbPos.x, nbPos.y, nbPos.z);
+    const col = new THREE.Color(TRIG_COLORS[(nb.f / 8) | 0]);
+    lineColors.push(col.r, col.g, col.b, col.r, col.g, col.b);
+    // Neighbor sphere
+    const sg = new THREE.SphereGeometry(2, 8, 8);
+    const sm = new THREE.MeshBasicMaterial({ color: col });
+    const mesh = new THREE.Mesh(sg, sm);
+    mesh.position.copy(nbPos);
+    u3Scene.add(mesh);
+    u3NbrMeshes.push(mesh);
+  }
+  const lGeo = new THREE.BufferGeometry();
+  lGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+  lGeo.setAttribute('color', new THREE.Float32BufferAttribute(lineColors, 3));
+  const lMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false });
+  u3ConnectionLines = new THREE.LineSegments(lGeo, lMat);
+  u3Scene.add(u3ConnectionLines);
+}
+
+// Colori e icone per tipi di relazione KG
+const REL_META = {
+  IS_A:        { color: '#70d060', icon: '▲', label: 'è un' },
+  HAS:         { color: '#5aadff', icon: '◆', label: 'ha' },
+  DOES:        { color: '#ffd04a', icon: '→', label: 'fa' },
+  PART_OF:     { color: '#a06eff', icon: '⊂', label: 'parte di' },
+  CAUSES:      { color: '#ff9a5a', icon: '⚡', label: 'causa' },
+  OPPOSITE_OF: { color: '#ff4a6b', icon: '⊘', label: 'opposto di' },
+  SIMILAR_TO:  { color: '#4affda', icon: '≈', label: 'simile a' },
+  USED_FOR:    { color: '#ff6eb0', icon: '⚙', label: 'usato per' },
+};
+
 async function fetchWordNeighbors(wordEntry) {
   try {
-    const r = await fetch('/api/word_neighbors?word=' + encodeURIComponent(wordEntry.w));
+    const enc = encodeURIComponent(wordEntry.w);
+    // Fetch word detail e concept in parallelo
+    const [r, rc] = await Promise.all([
+      fetch('/api/word_detail?word=' + enc),
+      fetch('/api/concept?word=' + enc),
+    ]);
     const d = await r.json();
-    uNbrs = (d.neighbors || []).map(nb => {
-      const [px, py] = uWordPos(nb.word, nb.fractal_id);
-      return { w: nb.word, f: nb.fractal_id, weight: nb.weight, px, py };
+    const concept = rc.ok ? await rc.json() : null;
+
+    // Vicini per il canvas: prendi KG out + KG in + statistici
+    const allNbrs = [
+      ...(d.kg_out || []).map(e => ({ w: e.target,   f: fractalIdOf(e.target),   weight: e.confidence, rel: e.relation })),
+      ...(d.kg_in  || []).map(e => ({ w: e.target,   f: fractalIdOf(e.target),   weight: e.confidence, rel: e.relation })),
+      ...(d.statistical || []).map(e => ({ w: e.word, f: e.fractal_id, weight: e.weight, rel: null })),
+    ];
+    uNbrs = allNbrs.map(nb => {
+      const a1proxy = Math.round((nb.weight || 0.5) * 100);
+      const [px, py] = uWordPos(nb.w, nb.f, a1proxy);
+      const pos3d = uWordPos3D(nb.w, nb.f, a1proxy);
+      return { ...nb, px, py, pos3d };
     });
-    updateUniverseInfo(wordEntry, d.neighbors || []);
+    u3ShowConnections();
+    renderWordDetail(d, concept);
+  } catch(e) { console.warn('word detail error', e); }
+}
+
+// Restituisce il fractal_id di una parola dall'array uWords (o 0 se non trovata)
+function fractalIdOf(word) {
+  const found = uWords.find(w => w.w === word);
+  return found ? found.f : 0;
+}
+
+// Renderizza il blocco "cosa sa il sistema di questo concetto"
+function renderConceptBlock(c) {
+  if (!c || (!c.type_chain.length && !c.instances.length && !c.has.length && !c.does.length &&
+             !c.causes.length && !c.similar.length && !c.opposites.length && !c.definition)) return '';
+
+  const tag = (words, color) => words.slice(0,8).map(w =>
+    `<span style="background:rgba(255,255,255,0.04);border:1px solid ${color}33;
+      border-radius:3px;padding:1px 5px;font-size:13px;color:${color};cursor:pointer;"
+      onclick="searchUWord('${w}')">${w}</span>`
+  ).join('');
+
+  const defHtml = c.definition ? `<div style="font-size:13px;color:var(--t2);margin-bottom:4px;font-style:italic;">"${c.definition}"</div>` : '';
+  const rows = [
+    c.type_chain.length  ? ['è un tipo di', '#70d060', c.type_chain] : null,
+    c.instances.length   ? ['comprende',    '#70d060', c.instances]  : null,
+    c.has.length         ? ['ha',           '#5aadff', c.has]        : null,
+    c.does.length        ? ['fa',           '#ffd04a', c.does]       : null,
+    c.causes.length      ? ['causa',        '#ff9a5a', c.causes]     : null,
+    c.similar.length     ? ['simile a',     '#4affda', c.similar]    : null,
+    c.opposites.length   ? ['opposto di',   '#ff4a6b', c.opposites]  : null,
+  ].filter(Boolean);
+
+  if (!rows.length && !defHtml) return '';
+
+  const rowsHtml = rows.map(([label, color, words]) =>
+    `<div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:3px;">
+      <span style="font-size:13px;color:var(--t3);min-width:52px;padding-top:2px;">${label}</span>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;">${tag(words, color)}</div>
+    </div>`
+  ).join('');
+
+  const density = c.ontology_density > 0
+    ? `<div style="font-size:13px;color:var(--t3);margin-top:4px;">${c.ontology_density} parole condividono questo ontotipo</div>` : '';
+
+  return `<div class="wd-section" style="margin-top:8px;">concetto</div>
+    ${defHtml}${rowsHtml}${density}`;
+}
+
+function renderWordDetail(d, concept) {
+  const el = document.getElementById('universe-info');
+  if (!el) return;
+  el.style.pointerEvents = 'all';
+  const col = TRIG_COLORS[(d.fractal_id / 8) | 0];
+  // Salvo la parola corrente per le azioni
+  el.dataset.word = d.word;
+
+  // ── Firma 8D + Octalysis: mini radar ──
+  const DIM_LABELS = ['Confine','Valenza','Intensità','Definiz.','Compless.','Permanen.','Agency','Tempo'];
+  const OCT_LABELS = ['Scopo','Progresso','Creatività','Possesso','Connessione','Urgenza','Mistero','Perdita'];
+  const OCT_COLORS = ['#e3b341','#3fb950','#f0883e','#58a6ff','#bc8cff','#f85149','#79c0ff','#8b949e'];
+  const firma = d.firma_8d || [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5];
+  const oct = d.octalysis || {};
+  const octVals = [oct.significato_epico||0, oct.realizzazione||0, oct.creativita||0,
+    oct.possesso||0, oct.influenza_sociale||0, oct.scarsita||0, oct.curiosita||0, oct.evitamento_perdita||0];
+
+  // Drive dominante
+  const driveNomi = ['Significato Epico','Realizzazione','Creatività','Possesso','Influenza Sociale','Scarsità','Curiosità','Evitamento Perdita'];
+  let maxDrive = 0; octVals.forEach((v,i) => { if (v > octVals[maxDrive]) maxDrive = i; });
+
+  // ── Archi KG con azioni ──
+  function edgeRow(e, dir) {
+    const c = e.colore || '#9090b8';
+    const nome = e.nome || e.relation;
+    const subj = dir === 'out' ? d.word : e.target;
+    const obj = dir === 'out' ? e.target : d.word;
+    return `<div class="wd-rel">
+      <span style="color:${c};font-size:13px;min-width:55px;">${nome}${dir==='in'?' ←':''}</span>
+      <span style="color:var(--t1);cursor:pointer;" onclick="searchUWord('${e.target}')">${e.target}</span>
+      <span class="wd-actions">
+        <input type="range" class="wd-conf-slider" min="0" max="100" value="${Math.round(e.confidence*100)}"
+          title="Confidence: ${(e.confidence*100).toFixed(0)}%"
+          onchange="uPatchConf('${subj}','${e.relation}','${obj}',this.value/100)">
+        <button class="wd-btn-del" title="Elimina"
+          onclick="uDelEdge('${subj}','${e.relation}','${obj}')">✕</button>
+      </span>
+    </div>`;
+  }
+
+  const kgOutHtml = (d.kg_out || []).map(e => edgeRow(e, 'out')).join('');
+  const kgInHtml = (d.kg_in || []).map(e => edgeRow(e, 'in')).join('');
+
+  // ── Co-occorrenze statistiche ──
+  const statHtml = (d.statistical || []).length ? `
+    <div class="wd-section">co-occ. statistiche</div>
+    ${(d.statistical).map(e => {
+      const nc = TRIG_COLORS[(e.fractal_id / 8) | 0];
+      return `<div class="wd-rel">
+        <span style="color:var(--t3);min-width:18px;text-align:center;">~</span>
+        <span style="color:${nc};cursor:pointer;" onclick="searchUWord('${e.word}')">${e.word}</span>
+        <span style="color:var(--t3);margin-left:auto;">${Math.round(e.weight*100)}%</span>
+      </div>`;
+    }).join('')}` : '';
+
+  // ── Affinità frattali ──
+  const affHtml = (d.top_affinities || []).slice(0,4).map(a => {
+    const ac = TRIG_COLORS[(a.fractal_id / 8) | 0];
+    const pct = Math.round(a.value * 100);
+    return `<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
+      <span style="font-size:13px;color:${ac};min-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.fractal_name}</span>
+      <div style="flex:1;height:2px;background:rgba(255,255,255,0.06);border-radius:1px;">
+        <div style="width:${pct}%;height:100%;background:${ac};border-radius:1px;"></div>
+      </div>
+      <span style="font-size:13px;color:var(--t3);">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  // ── Octalysis barre orizzontali ──
+  const octBars = octVals.map((v, i) => {
+    const pct = Math.round(v * 100);
+    return `<div style="display:flex;align-items:center;gap:4px;margin-bottom:1px;">
+      <span style="font-size:13px;color:${OCT_COLORS[i]};min-width:42px;">${OCT_LABELS[i]}</span>
+      <div style="flex:1;height:3px;background:rgba(255,255,255,0.06);border-radius:1px;">
+        <div style="width:${pct}%;height:100%;background:${OCT_COLORS[i]};border-radius:1px;"></div>
+      </div>
+      <span style="font-size:13px;color:var(--t3);min-width:20px;text-align:right;">${pct}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px;">
+      <span style="font-size:15px;font-weight:700;color:${col};">${d.word}</span>
+      <span style="font-size:13px;color:var(--t3);">stab. ${Math.round(d.stability*100)}%  ·  esp. ${d.exposure}</span>
+    </div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:4px;">frattale: <span style="color:${col}">${d.fractal_name || '?'}</span></div>
+
+    <div class="wd-section">firma 8D</div>
+    <div class="wd-radar-wrap">
+      <canvas id="wd-radar-8d" width="130" height="130"></canvas>
+    </div>
+
+    <div class="wd-section">drive dominante — <span style="color:${OCT_COLORS[maxDrive]}">${driveNomi[maxDrive]}</span></div>
+    ${octBars}
+
+    ${affHtml ? '<div class="wd-section" style="margin-top:4px;">affinità</div>' + affHtml : ''}
+    ${(kgOutHtml || kgInHtml) ? '<div class="wd-section" style="margin-top:4px;">semantica</div>' + kgOutHtml + kgInHtml : ''}
+    ${statHtml}
+    ${renderConceptBlock(concept)}
+    <div class="wd-section" style="margin-top:6px;">+ connessione</div>
+    <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+      <input id="wd-conn-to" placeholder="parola…" style="
+        background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);
+        border-radius:4px;padding:3px 7px;color:var(--t1);font-family:inherit;
+        font-size:12px;width:100%;outline:none;" />
+      <select id="wd-conn-rel" style="
+        background:rgba(9,9,26,0.95);border:1px solid rgba(255,255,255,0.15);
+        border-radius:4px;padding:3px 7px;color:var(--t1);font-family:inherit;
+        font-size:12px;width:100%;outline:none;"></select>
+      <button onclick="addWordConnection('${d.word}')" style="
+        background:rgba(90,173,255,0.12);border:1px solid rgba(90,173,255,0.3);
+        border-radius:4px;padding:4px;color:var(--blue);font-family:inherit;
+        font-size:12px;cursor:pointer;width:100%;">aggiungi</button>
+    </div>
+    <button class="wd-legend-btn" onclick="document.getElementById('u-legenda').classList.add('aperto')">? legenda dimensioni</button>
+  `;
+
+  // Popola select relazioni dinamicamente
+  uPopulateRelSelect();
+
+  // Disegna radar 8D nel mini-canvas
+  requestAnimationFrame(() => uDrawMiniRadar('wd-radar-8d', firma, DIM_LABELS, 'rgba(90,173,255,0.25)', 'rgba(90,173,255,0.8)'));
+}
+
+async function addWordConnection(fromWord) {
+  const to  = (document.getElementById('wd-conn-to')?.value || '').trim().toLowerCase();
+  const rel = document.getElementById('wd-conn-rel')?.value || 'SIMILAR_TO';
+  if (!to || !fromWord) return;
+  try {
+    const r = await fetch('/api/word_connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: fromWord, relation: rel, to }),
+    });
+    const ok = await r.json();
+    if (ok && uSel) fetchWordNeighbors(uSel);
   } catch(e) {}
 }
 
-function updateUniverseInfo(wordEntry, neighbors) {
-  const el = document.getElementById('universe-info');
-  if (!el) return;
-  const frac = uFractals.find(f => f.id === wordEntry.f);
-  const col = TRIG_COLORS[(wordEntry.f / 8) | 0];
-  const nbHtml = neighbors.slice(0, 10).map(nb => {
-    const nc = TRIG_COLORS[(nb.fractal_id / 8) | 0];
-    return '<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:1px;">' +
-      '<span style="color:' + nc + '">' + nb.word + '</span>' +
-      '<span style="color:var(--t3)">' + Math.round(nb.weight * 100) + '%</span></div>';
-  }).join('');
-  el.innerHTML =
-    '<div style="font-size:14px;font-weight:700;color:' + col + ';margin-bottom:4px;">' + wordEntry.w + '</div>' +
-    '<div style="font-size:9px;color:var(--t2);">frattale: ' + (frac ? frac.name : '?') + '</div>' +
-    '<div style="font-size:9px;color:var(--t2);">stabilità: ' + wordEntry.s + '%</div>' +
-    (nbHtml ? '<div style="margin-top:8px;font-size:9px;color:var(--t3);letter-spacing:1px;margin-bottom:3px;">CONNESSIONI</div>' + nbHtml : '');
+// ── Delete / Patch archi KG ──────────────────────────────────
+
+async function uDelEdge(subj, rel, obj) {
+  if (!confirm(`Eliminare: ${subj} ${rel} ${obj}?`)) return;
+  try {
+    await fetch('/api/edge', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({subject:subj, relation:rel, object:obj}),
+    });
+    if (uSel) fetchWordNeighbors(uSel);
+  } catch(e) { console.error(e); }
 }
 
-function uAnimLoop() {
-  uFrame = requestAnimationFrame(uAnimLoop);
-  if (!uCtx || !uLoaded) return;
+async function uPatchConf(subj, rel, obj, conf) {
+  try {
+    await fetch('/api/edge/confidence', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({subject:subj, relation:rel, object:obj, confidence:parseFloat(conf)}),
+    });
+  } catch(e) { console.error(e); }
+}
 
-  const W = uCanvas.width, H = uCanvas.height;
-  uCtx.fillStyle = '#09091a';
+// ── Select relazioni dinamico ────────────────────────────────
+
+let uRelCache = null;
+
+async function uLoadRelations() {
+  if (uRelCache) return uRelCache;
+  try {
+    const r = await fetch('/api/relations');
+    uRelCache = await r.json();
+    // Popola legenda relazioni
+    const legRels = document.getElementById('u-leg-rels');
+    if (legRels && uRelCache) {
+      const cats = {};
+      uRelCache.forEach(r => { (cats[r.categoria] = cats[r.categoria] || []).push(r); });
+      const catNomi = {strutturale:'Strutturali',causale:'Causali',semantica:'Semantiche',logica:'Logiche'};
+      legRels.innerHTML = Object.entries(cats).map(([cat, items]) =>
+        `<div style="margin-bottom:6px;"><span style="font-size:13px;color:var(--t3);text-transform:uppercase;">${catNomi[cat]||cat}</span>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;">${items.map(r =>
+          `<span style="font-size:13px;padding:2px 6px;border-radius:3px;border:1px solid ${r.colore}40;color:${r.colore};background:${r.colore}12;">${r.nome}</span>`
+        ).join('')}</div></div>`
+      ).join('');
+    }
+  } catch(e) { uRelCache = []; }
+  return uRelCache;
+}
+
+function uPopulateRelSelect() {
+  const sel = document.getElementById('wd-conn-rel');
+  if (!sel || !uRelCache) return;
+  sel.innerHTML = '';
+  const cats = {};
+  uRelCache.forEach(r => { (cats[r.categoria] = cats[r.categoria] || []).push(r); });
+  Object.entries(cats).forEach(([cat, items]) => {
+    const g = document.createElement('optgroup');
+    g.label = cat.charAt(0).toUpperCase() + cat.slice(1);
+    items.forEach(r => {
+      const o = document.createElement('option');
+      o.value = r.key;
+      o.textContent = r.nome;
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
+  });
+}
+
+// ── Mini radar 8D ────────────────────────────────────────────
+
+function uDrawMiniRadar(canvasId, values, labels, fillC, strokeC) {
+  const c = document.getElementById(canvasId);
+  if (!c) return;
+  const ctx2 = c.getContext('2d');
+  const w = c.width, h = c.height;
+  const cx = w/2, cy = h/2, R = Math.min(cx, cy) - 18;
+  const n = values.length;
+  ctx2.clearRect(0, 0, w, h);
+
+  // Griglia
+  [0.25, 0.5, 0.75, 1.0].forEach(lev => {
+    ctx2.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const a = (i%n)/n * Math.PI*2 - Math.PI/2;
+      const x = cx + Math.cos(a)*R*lev, y = cy + Math.sin(a)*R*lev;
+      i===0 ? ctx2.moveTo(x,y) : ctx2.lineTo(x,y);
+    }
+    ctx2.closePath();
+    ctx2.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx2.lineWidth = 0.5;
+    ctx2.stroke();
+  });
+
+  // Assi + label
+  ctx2.font = '7px monospace';
+  ctx2.textAlign = 'center';
+  ctx2.textBaseline = 'middle';
+  for (let i = 0; i < n; i++) {
+    const a = i/n * Math.PI*2 - Math.PI/2;
+    ctx2.beginPath();
+    ctx2.moveTo(cx, cy);
+    ctx2.lineTo(cx + Math.cos(a)*R, cy + Math.sin(a)*R);
+    ctx2.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx2.stroke();
+    const lx = cx + Math.cos(a)*(R+12), ly = cy + Math.sin(a)*(R+12);
+    ctx2.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx2.fillText(labels[i], lx, ly);
+  }
+
+  // Area
+  ctx2.beginPath();
+  for (let i = 0; i <= n; i++) {
+    const a = (i%n)/n * Math.PI*2 - Math.PI/2;
+    const v = Math.max(0, Math.min(1, values[i%n]));
+    const x = cx + Math.cos(a)*R*v, y = cy + Math.sin(a)*R*v;
+    i===0 ? ctx2.moveTo(x,y) : ctx2.lineTo(x,y);
+  }
+  ctx2.closePath();
+  ctx2.fillStyle = fillC;
+  ctx2.fill();
+  ctx2.strokeStyle = strokeC;
+  ctx2.lineWidth = 1.2;
+  ctx2.stroke();
+
+  // Punti
+  for (let i = 0; i < n; i++) {
+    const a = i/n * Math.PI*2 - Math.PI/2;
+    const v = Math.max(0, Math.min(1, values[i]));
+    ctx2.beginPath();
+    ctx2.arc(cx + Math.cos(a)*R*v, cy + Math.sin(a)*R*v, 2, 0, Math.PI*2);
+    ctx2.fillStyle = strokeC;
+    ctx2.fill();
+  }
+}
+
+// Carica relazioni all'init dell'universo
+uLoadRelations();
+
+function uAnimLoop_DEAD() {
+  // DEAD CODE — replaced by 3D animate()
+  return;
+  return;
+  const W = 0, H = 0;
+  const styles = getComputedStyle(document.documentElement);
+  const bgColor = styles.getPropertyValue('--bg').trim();
+  const t1Color = styles.getPropertyValue('--t1').trim();
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+
+  uCtx.fillStyle = bgColor;
   uCtx.fillRect(0, 0, W, H);
+
+  // Spring-back animation
+  for (let i = uSpringNodes.length - 1; i >= 0; i--) {
+    const sn = uSpringNodes[i];
+    const dx = sn.origPx - sn.node.px, dy = sn.origPy - sn.node.py;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.5) {
+      sn.node.px = sn.origPx; sn.node.py = sn.origPy;
+      uSpringNodes.splice(i, 1);
+    } else {
+      sn.node.px += dx * 0.06;
+      sn.node.py += dy * 0.06;
+    }
+  }
 
   uCtx.save();
   uCtx.translate(W / 2 + uPan.x, H / 2 + uPan.y);
   uCtx.scale(uScale, uScale);
 
-  // Linee connessione verso vicini
+  // LAYER 1: Fractal glow (sottile, sotto tutto)
+  for (const f of uFractals) {
+    const col = TRIG_COLORS[f.lower];
+    const isPure = f.lower === f.upper;
+    const r = isPure ? 14 + f.activation * 14 : 6 + f.activation * 6;
+    const glowR = r * 3;
+    const grd = uCtx.createRadialGradient(f.px, f.py, 0, f.px, f.py, glowR);
+    grd.addColorStop(0,    uRgba(col, isPure ? 0.25 : 0.10));
+    grd.addColorStop(0.5,  uRgba(col, isPure ? 0.05 : 0.02));
+    grd.addColorStop(1,    uRgba(col, 0));
+    uCtx.fillStyle = grd;
+    uCtx.beginPath();
+    uCtx.arc(f.px, f.py, glowR, 0, Math.PI * 2);
+    uCtx.fill();
+  }
+
+  // LAYER 2: Fractal nuclei (cerchi semitrasparenti, non opachi)
+  for (const f of uFractals) {
+    const col = TRIG_COLORS[f.lower];
+    const isPure = f.lower === f.upper;
+    const r = isPure ? 14 + f.activation * 14 : 6 + f.activation * 6;
+    uCtx.fillStyle = uRgba(col, isPure ? 0.35 : 0.20);
+    uCtx.beginPath();
+    uCtx.arc(f.px, f.py, r, 0, Math.PI * 2);
+    uCtx.fill();
+    // Bordo sottile
+    uCtx.strokeStyle = uRgba(col, isPure ? 0.6 : 0.35);
+    uCtx.lineWidth = isPure ? 1.5 : 0.8;
+    uCtx.stroke();
+  }
+
+  // LAYER 3: Fractal labels (sotto le parole)
+  for (const f of uFractals) {
+    const col = TRIG_COLORS[f.lower];
+    const isPure = f.lower === f.upper;
+    const r = isPure ? 14 + f.activation * 14 : 6 + f.activation * 6;
+    if (isPure || uScale > 0.75) {
+      const fs = Math.max(10, (isPure ? 13 : 9) / uScale);
+      uCtx.fillStyle = isPure ? (isLight ? uRgba(col, 0.85) : uRgba(col, 0.9)) : uRgba(col, 0.65);
+      uCtx.font = (isPure ? 'bold ' : '') + fs + 'px monospace';
+      uCtx.textAlign = 'center';
+      uCtx.fillText(f.name, f.px, f.py + r + fs * 1.1);
+    }
+  }
+
+  // LAYER 4: Connection lines (vicini selezionati)
   if (uSel && uNbrs.length) {
     for (const nb of uNbrs) {
       const nc = TRIG_COLORS[(nb.f / 8) | 0];
-      uCtx.strokeStyle = uRgba(nc, 0.25 + nb.weight * 0.55);
-      uCtx.lineWidth = 0.8;
+      uCtx.strokeStyle = uRgba(nc, 0.20 + nb.weight * 0.40);
+      uCtx.lineWidth = 0.8 + nb.weight * 1.2;
       uCtx.beginPath();
       uCtx.moveTo(uSel.px, uSel.py);
       uCtx.lineTo(nb.px, nb.py);
@@ -1056,84 +1942,81 @@ function uAnimLoop() {
     }
   }
 
-  // Puntini parole (rettangoli 1-2px per velocità)
+  // LAYER 5: Word nodes (cerchi, NON rettangoli — sopra i frattali)
+  const wordRadius = uScale > 2.5 ? 3.5 : uScale > 1.2 ? 2.8 : uScale > 0.6 ? 2.2 : 1.6;
   for (const wd of uWords) {
     const col = TRIG_COLORS[(wd.f / 8) | 0];
     const stab = wd.s / 100;
     const act  = wd.a / 100;
-    const alpha = Math.min(0.15 + stab * 0.55 + act * 0.30, 0.95);
-    const sz = uScale > 1.8 ? 1.4 : uScale > 0.9 ? 1.0 : 0.7;
+    const alpha = Math.min(0.50 + stab * 0.35 + act * 0.15, 1.0);
     uCtx.fillStyle = uRgba(col, alpha);
-    uCtx.fillRect(wd.px - sz, wd.py - sz, sz * 2, sz * 2);
+    uCtx.beginPath();
+    uCtx.arc(wd.px, wd.py, wordRadius, 0, Math.PI * 2);
+    uCtx.fill();
   }
 
-  // Vicini evidenziati + label
+  // LAYER 6: Word labels (se zoom sufficiente)
+  if (uScale > 1.8) {
+    const wfs = Math.max(8, 11 / uScale);
+    uCtx.font = wfs + 'px monospace';
+    uCtx.textAlign = 'center';
+    for (const wd of uWords) {
+      const col = TRIG_COLORS[(wd.f / 8) | 0];
+      const stab = wd.s / 100;
+      uCtx.fillStyle = uRgba(col, 0.6 + stab * 0.3);
+      uCtx.fillText(wd.w, wd.px, wd.py - wordRadius - 2);
+    }
+  }
+
+  // LAYER 7: Neighbor highlights + labels
   for (const nb of uNbrs) {
     const nc = TRIG_COLORS[(nb.f / 8) | 0];
     uCtx.fillStyle = nc;
     uCtx.beginPath();
-    uCtx.arc(nb.px, nb.py, 2.5, 0, Math.PI * 2);
+    uCtx.arc(nb.px, nb.py, 4, 0, Math.PI * 2);
     uCtx.fill();
-    if (uScale > 1.2) {
-      uCtx.fillStyle = uRgba(nc, 0.9);
-      uCtx.font = (9 / uScale) + 'px monospace';
+    if (uScale > 0.8) {
+      uCtx.fillStyle = isLight ? uRgba(nc, 0.95) : uRgba(nc, 0.9);
+      const nfs = Math.max(10, 12 / uScale);
+      uCtx.font = 'bold ' + nfs + 'px monospace';
       uCtx.textAlign = 'center';
-      uCtx.fillText(nb.w, nb.px, nb.py - 5 / uScale);
+      uCtx.fillText(nb.w, nb.px, nb.py - 7 / uScale);
     }
   }
 
-  // Soli frattali (sopra i puntini)
-  for (const f of uFractals) {
-    const col = TRIG_COLORS[f.lower];
-    const isPure = f.lower === f.upper;
-    const r = isPure ? 18 + f.activation * 20 : 8 + f.activation * 8;
-
-    // Alone luminosa
-    const grd = uCtx.createRadialGradient(f.px, f.py, 0, f.px, f.py, r * 4);
-    grd.addColorStop(0,    uRgba(col, isPure ? 0.55 : 0.18));
-    grd.addColorStop(0.45, uRgba(col, isPure ? 0.09 : 0.03));
-    grd.addColorStop(1,    uRgba(col, 0));
-    uCtx.fillStyle = grd;
-    uCtx.beginPath();
-    uCtx.arc(f.px, f.py, r * 4, 0, Math.PI * 2);
-    uCtx.fill();
-
-    // Nucleo
-    uCtx.fillStyle = isPure ? col : uRgba(col, 0.60);
-    uCtx.beginPath();
-    uCtx.arc(f.px, f.py, r, 0, Math.PI * 2);
-    uCtx.fill();
-
-    // Label
-    if (isPure || uScale > 0.75) {
-      const fs = Math.max(8, (isPure ? 12 : 8) / uScale);
-      uCtx.fillStyle = isPure ? '#ffffff' : uRgba(col, 0.80);
-      uCtx.font = (isPure ? 'bold ' : '') + fs + 'px monospace';
-      uCtx.textAlign = 'center';
-      uCtx.fillText(f.name, f.px, f.py + r + fs * 0.9);
-    }
-  }
-
-  // Cerchio pulsante parola selezionata
+  // LAYER 8: Selected word (pulsante, sopra tutto)
   if (uSel) {
     const col = TRIG_COLORS[(uSel.f / 8) | 0];
     const t = Date.now() * 0.003;
-    const pulse = 6.5 + Math.sin(t) * 2;
+    const pulse = 8 + Math.sin(t) * 2.5;
     uCtx.strokeStyle = uRgba(col, 0.70 + Math.sin(t) * 0.20);
-    uCtx.lineWidth = 1.2;
+    uCtx.lineWidth = 1.8;
     uCtx.beginPath();
     uCtx.arc(uSel.px, uSel.py, pulse, 0, Math.PI * 2);
     uCtx.stroke();
     uCtx.fillStyle = col;
     uCtx.beginPath();
-    uCtx.arc(uSel.px, uSel.py, 2.8, 0, Math.PI * 2);
+    uCtx.arc(uSel.px, uSel.py, 4, 0, Math.PI * 2);
     uCtx.fill();
-    // Label sempre visibile per la parola selezionata
-    const lfs = Math.max(9, 13 / uScale);
+    const lfs = Math.max(11, 15 / uScale);
     uCtx.fillStyle = col;
     uCtx.font = 'bold ' + lfs + 'px monospace';
     uCtx.textAlign = 'center';
-    uCtx.fillText(uSel.w, uSel.px, uSel.py - pulse - 3);
+    uCtx.fillText(uSel.w, uSel.px, uSel.py - pulse - 4);
+  }
+
+  // LAYER 9: Dragged node highlight
+  if (uDragNode) {
+    const dn = uDragNode;
+    const node = dn.type === 'fractal' ? uFractals[dn.idx] : uWords[dn.idx];
+    const col = dn.type === 'fractal' ? TRIG_COLORS[node.lower] : TRIG_COLORS[(node.f / 8) | 0];
+    uCtx.strokeStyle = uRgba(col, 0.9);
+    uCtx.lineWidth = 2;
+    uCtx.setLineDash([4, 3]);
+    uCtx.beginPath();
+    uCtx.arc(node.px, node.py, dn.type === 'fractal' ? 20 : 8, 0, Math.PI * 2);
+    uCtx.stroke();
+    uCtx.setLineDash([]);
   }
 
   uCtx.restore();
@@ -1177,8 +2060,30 @@ function uSelectAt(wx, wy) {
     uSel = null;
     uNbrs = [];
     const el = document.getElementById('universe-info');
-    if (el) el.innerHTML = '<div style="font-size:10px;color:var(--t3);">clicca una parola</div>';
+    if (el) el.innerHTML = '<div style="font-size:12px;color:var(--t3);">clicca una parola</div>';
   }
+}
+
+// Hit-test: find node at world coords
+function uHitTest(wx, wy) {
+  // Check words first (they're on top)
+  const wThr = Math.max(6, 10 / uScale);
+  let bestW = null, bestWD = wThr * wThr;
+  for (let i = 0; i < uWords.length; i++) {
+    const wd = uWords[i];
+    const d2 = (wd.px - wx) ** 2 + (wd.py - wy) ** 2;
+    if (d2 < bestWD) { bestWD = d2; bestW = i; }
+  }
+  if (bestW !== null) return { type: 'word', idx: bestW };
+  // Check fractals
+  for (let i = 0; i < uFractals.length; i++) {
+    const f = uFractals[i];
+    const isPure = f.lower === f.upper;
+    const r = (isPure ? 14 + f.activation * 14 : 6 + f.activation * 6) + 5;
+    const d2 = (f.px - wx) ** 2 + (f.py - wy) ** 2;
+    if (d2 < r * r) return { type: 'fractal', idx: i };
+  }
+  return null;
 }
 
 function initUniverse() {
@@ -1201,12 +2106,30 @@ function initUniverse() {
     uScale = Math.max(0.10, Math.min(12, uScale * (e.deltaY < 0 ? 1.13 : 0.885)));
   }, { passive: false });
 
+  // Mouse: drag nodes or pan
   uCanvas.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
-    uDrag = { sx: e.clientX, sy: e.clientY, px: uPan.x, py: uPan.y, moved: false };
-    uCanvas.classList.add('dragging');
+    const [wx, wy] = uCanvasToWorld(e.clientX, e.clientY);
+    const hit = uHitTest(wx, wy);
+    if (hit) {
+      const node = hit.type === 'fractal' ? uFractals[hit.idx] : uWords[hit.idx];
+      // Remove from spring list if returning
+      uSpringNodes = uSpringNodes.filter(s => s.node !== node);
+      uDragNode = { ...hit, ox: wx - node.px, oy: wy - node.py, origPx: node.px, origPy: node.py };
+      uCanvas.style.cursor = 'grabbing';
+    } else {
+      uDrag = { sx: e.clientX, sy: e.clientY, px: uPan.x, py: uPan.y, moved: false };
+      uCanvas.classList.add('dragging');
+    }
   });
   uCanvas.addEventListener('mousemove', e => {
+    if (uDragNode) {
+      const [wx, wy] = uCanvasToWorld(e.clientX, e.clientY);
+      const node = uDragNode.type === 'fractal' ? uFractals[uDragNode.idx] : uWords[uDragNode.idx];
+      node.px = wx - uDragNode.ox;
+      node.py = wy - uDragNode.oy;
+      return;
+    }
     if (!uDrag) return;
     const dx = e.clientX - uDrag.sx, dy = e.clientY - uDrag.sy;
     if (Math.abs(dx) + Math.abs(dy) > 4) uDrag.moved = true;
@@ -1214,6 +2137,13 @@ function initUniverse() {
     uPan.y = uDrag.py + dy;
   });
   uCanvas.addEventListener('mouseup', e => {
+    if (uDragNode) {
+      const node = uDragNode.type === 'fractal' ? uFractals[uDragNode.idx] : uWords[uDragNode.idx];
+      uSpringNodes.push({ node, origPx: uDragNode.origPx, origPy: uDragNode.origPy });
+      uDragNode = null;
+      uCanvas.style.cursor = 'grab';
+      return;
+    }
     if (!uDrag) return;
     if (!uDrag.moved) {
       const [wx, wy] = uCanvasToWorld(e.clientX, e.clientY);
@@ -1223,18 +2153,43 @@ function initUniverse() {
     uCanvas.classList.remove('dragging');
   });
   uCanvas.addEventListener('mouseleave', () => {
+    if (uDragNode) {
+      const node = uDragNode.type === 'fractal' ? uFractals[uDragNode.idx] : uWords[uDragNode.idx];
+      uSpringNodes.push({ node, origPx: uDragNode.origPx, origPy: uDragNode.origPy });
+      uDragNode = null;
+    }
     uDrag = null;
     uCanvas.classList.remove('dragging');
+    uCanvas.style.cursor = 'grab';
   });
 
-  // Touch support
+  // Touch support: drag nodes or pan
   let lastTouches = null;
+  let touchDragNode = null;
   uCanvas.addEventListener('touchstart', e => {
-    e.preventDefault(); lastTouches = e.touches;
+    e.preventDefault();
+    lastTouches = e.touches;
+    if (e.touches.length === 1) {
+      const [wx, wy] = uCanvasToWorld(e.touches[0].clientX, e.touches[0].clientY);
+      const hit = uHitTest(wx, wy);
+      if (hit) {
+        const node = hit.type === 'fractal' ? uFractals[hit.idx] : uWords[hit.idx];
+        uSpringNodes = uSpringNodes.filter(s => s.node !== node);
+        touchDragNode = { ...hit, ox: wx - node.px, oy: wy - node.py, origPx: node.px, origPy: node.py };
+        uDragNode = touchDragNode;
+      } else {
+        touchDragNode = null;
+      }
+    }
   }, { passive: false });
   uCanvas.addEventListener('touchmove', e => {
     e.preventDefault();
-    if (e.touches.length === 1 && lastTouches && lastTouches.length === 1) {
+    if (e.touches.length === 1 && touchDragNode) {
+      const [wx, wy] = uCanvasToWorld(e.touches[0].clientX, e.touches[0].clientY);
+      const node = touchDragNode.type === 'fractal' ? uFractals[touchDragNode.idx] : uWords[touchDragNode.idx];
+      node.px = wx - touchDragNode.ox;
+      node.py = wy - touchDragNode.oy;
+    } else if (e.touches.length === 1 && !touchDragNode && lastTouches && lastTouches.length === 1) {
       uPan.x += e.touches[0].clientX - lastTouches[0].clientX;
       uPan.y += e.touches[0].clientY - lastTouches[0].clientY;
     } else if (e.touches.length === 2 && lastTouches && lastTouches.length === 2) {
@@ -1244,26 +2199,194 @@ function initUniverse() {
     }
     lastTouches = e.touches;
   }, { passive: false });
-  uCanvas.addEventListener('touchend', e => { lastTouches = e.touches; }, { passive: false });
+  uCanvas.addEventListener('touchend', e => {
+    if (touchDragNode) {
+      const node = touchDragNode.type === 'fractal' ? uFractals[touchDragNode.idx] : uWords[touchDragNode.idx];
+      uSpringNodes.push({ node, origPx: touchDragNode.origPx, origPy: touchDragNode.origPy });
+      touchDragNode = null;
+      uDragNode = null;
+    } else if (e.changedTouches.length === 1 && lastTouches && lastTouches.length === 1) {
+      // Tap = select
+      const [wx, wy] = uCanvasToWorld(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+      uSelectAt(wx, wy);
+    }
+    lastTouches = e.touches;
+  }, { passive: false });
 }
 
+function searchUWord(word) {
+  document.getElementById('universe-search-input').value = word;
+  universeSearch();
+}
 function universeSearch() {
   const q = ((document.getElementById('universe-search-input') || {}).value || '').trim().toLowerCase();
-  if (!q) return;
+  if (!q || !u3Camera || !u3Controls) return;
   const found = uWords.find(w => w.w === q) || uWords.find(w => w.w.startsWith(q));
   if (found) {
     uSel = found;
     uNbrs = [];
-    uScale = 2.8;
-    uPan.x = -found.px * uScale;
-    uPan.y = -found.py * uScale;
+    // Fly camera toward the word
+    const target = found.pos3d.clone();
+    u3Controls.target.copy(target);
+    u3Camera.position.copy(target).add(new THREE.Vector3(30, 20, 30));
+    u3Controls.update();
     fetchWordNeighbors(found);
   }
 }
 
+function init3DUniverse() {
+  u3Container = document.getElementById('universe-3d');
+  if (!u3Container) return;
+  if (!u3DragOffset) u3DragOffset = new THREE.Vector3();
+  const W = u3Container.clientWidth || 800;
+  const H = u3Container.clientHeight || 600;
+
+  // Scene
+  u3Scene = new THREE.Scene();
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const bgCol = isLight ? 0xf5f5fa : 0x06060f;
+  u3Scene.background = new THREE.Color(bgCol);
+  u3Scene.fog = new THREE.FogExp2(bgCol, isLight ? 0.0012 : 0.0015);
+
+  // Camera
+  u3Camera = new THREE.PerspectiveCamera(60, W / H, 1, 3000);
+  u3Camera.position.set(0, 200, 500);
+
+  // Renderer
+  u3Renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  u3Renderer.setSize(W, H);
+  u3Renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  u3Container.appendChild(u3Renderer.domElement);
+
+  // Controls
+  u3Controls = new THREE.OrbitControls(u3Camera, u3Renderer.domElement);
+  u3Controls.enableDamping = true;
+  u3Controls.dampingFactor = 0.08;
+  u3Controls.minDistance = 20;
+  u3Controls.maxDistance = 1200;
+  u3Controls.target.set(0, 0, 0);
+
+  // Ambient light (for MeshBasicMaterial it's not needed, but good for future)
+  u3Scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+  // Raycaster for click
+  u3Raycaster = new THREE.Raycaster();
+  u3Raycaster.params.Points.threshold = 4;
+  u3Mouse = new THREE.Vector2();
+
+  // Click handler
+  u3Renderer.domElement.addEventListener('click', function(e) {
+    const rect = u3Renderer.domElement.getBoundingClientRect();
+    u3Mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    u3Mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    u3Raycaster.setFromCamera(u3Mouse, u3Camera);
+
+    // Check fractal meshes first
+    const fHits = u3Raycaster.intersectObjects(u3FractalMeshes);
+    if (fHits.length > 0) {
+      const f = fHits[0].object.userData.data;
+      u3Controls.target.copy(fHits[0].object.position);
+      u3Controls.update();
+      return;
+    }
+    // Check word cloud
+    if (u3WordCloud) {
+      const pHits = u3Raycaster.intersectObject(u3WordCloud);
+      if (pHits.length > 0) {
+        const idx = pHits[0].index;
+        if (idx !== undefined && idx < uWords.length) {
+          uSel = uWords[idx];
+          uNbrs = [];
+          fetchWordNeighbors(uSel);
+          return;
+        }
+      }
+    }
+    // Click on empty: deselect
+    uSel = null; uNbrs = [];
+    u3ShowConnections();
+    const el = document.getElementById('universe-info');
+    if (el) el.innerHTML = '<div style="font-size:12px;color:var(--t3);">clicca una parola</div>';
+  });
+
+  // Drag support for fractal meshes
+  let dragActive = false, dragMesh = null, dragOrigPos = new THREE.Vector3();
+  const dragPlane = new THREE.Plane();
+  const dragIntersect = new THREE.Vector3();
+  const dragOff = new THREE.Vector3();
+
+  u3Renderer.domElement.addEventListener('pointerdown', function(e) {
+    const rect = u3Renderer.domElement.getBoundingClientRect();
+    u3Mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    u3Mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    u3Raycaster.setFromCamera(u3Mouse, u3Camera);
+    const hits = u3Raycaster.intersectObjects(u3FractalMeshes);
+    if (hits.length > 0) {
+      dragActive = true;
+      dragMesh = hits[0].object;
+      dragOrigPos.copy(dragMesh.position);
+      u3Controls.enabled = false;
+      dragPlane.setFromNormalAndCoplanarPoint(u3Camera.getWorldDirection(new THREE.Vector3()).negate(), dragMesh.position);
+      u3Raycaster.ray.intersectPlane(dragPlane, dragIntersect);
+      dragOff.subVectors(dragMesh.position, dragIntersect);
+      // Remove from springs
+      u3Springs = u3Springs.filter(s => s.mesh !== dragMesh);
+    }
+  });
+  u3Renderer.domElement.addEventListener('pointermove', function(e) {
+    if (!dragActive || !dragMesh) return;
+    const rect = u3Renderer.domElement.getBoundingClientRect();
+    u3Mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    u3Mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    u3Raycaster.setFromCamera(u3Mouse, u3Camera);
+    if (u3Raycaster.ray.intersectPlane(dragPlane, dragIntersect)) {
+      dragMesh.position.copy(dragIntersect.add(dragOff));
+    }
+  });
+  const endDrag = function() {
+    if (dragActive && dragMesh) {
+      u3Springs.push({ mesh: dragMesh, origPos: dragOrigPos.clone() });
+      dragActive = false; dragMesh = null;
+    }
+    u3Controls.enabled = true;
+  };
+  u3Renderer.domElement.addEventListener('pointerup', endDrag);
+  u3Renderer.domElement.addEventListener('pointerleave', endDrag);
+
+  // Resize
+  const ro = new ResizeObserver(() => {
+    const w = u3Container.clientWidth, h = u3Container.clientHeight;
+    if (w < 10 || h < 10) return;
+    u3Camera.aspect = w / h;
+    u3Camera.updateProjectionMatrix();
+    u3Renderer.setSize(w, h);
+  });
+  ro.observe(u3Container);
+
+  // Animation loop
+  function animate() {
+    u3AnimId = requestAnimationFrame(animate);
+    // Spring-back
+    for (let i = u3Springs.length - 1; i >= 0; i--) {
+      const s = u3Springs[i];
+      s.mesh.position.lerp(s.origPos, 0.04);
+      if (s.mesh.position.distanceTo(s.origPos) < 0.3) {
+        s.mesh.position.copy(s.origPos);
+        u3Springs.splice(i, 1);
+      }
+    }
+    u3Controls.update();
+    u3Renderer.render(u3Scene, u3Camera);
+  }
+  animate();
+}
+
 async function refreshTopology() {
-  if (!uCanvas) initUniverse();
-  await loadUniverse();
+  if (!u3Scene) {
+    init3DUniverse();
+    await loadUniverse();
+  }
+  // Don't reload every tick — only on first open or explicit refresh
 }
 
 // ═══ ACTIONS ═══
@@ -1303,6 +2426,40 @@ const KIND_LABELS = {
   hypothesis:    { icon: '◈',  label: 'IPOTESI',       color: 'var(--blue)' },
 };
 
+async function refreshDreamReport() {
+  try {
+    const r = await fetch('/api/dream/report');
+    const d = await r.json();
+    const el = document.getElementById('dream-report');
+    if (!el) return;
+    let html = '';
+    // Fase corrente
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:5px;border:1px solid var(--border);">
+      <span style="font-size:13px;color:var(--purple);font-weight:600;">Fase: ${d.phase}</span>
+      <span style="font-size:12px;color:var(--t3);">Profondità: ${(d.depth * 100).toFixed(0)}%</span>
+    </div>`;
+    // Consolidamenti
+    if (d.consolidations?.length) {
+      d.consolidations.forEach(c => {
+        const LAYER_COLORS = {STM:'#ffd04a', MTM:'#4a9eff', LTM:'#c44aff', attivo:'#4affb0'};
+        const fromC = LAYER_COLORS[c.from_layer] || 'var(--t3)';
+        const toC = LAYER_COLORS[c.to_layer] || 'var(--t3)';
+        html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(255,255,255,0.02);border-radius:5px;border:1px solid var(--border);">
+          <span style="font-size:12px;color:${fromC};font-weight:600;">${c.from_layer}</span>
+          <span style="color:var(--t3);">→</span>
+          <span style="font-size:12px;color:${toC};font-weight:600;">${c.to_layer}</span>
+          <span style="font-size:12px;color:var(--t2);flex:1;">${c.description}</span>
+        </div>`;
+      });
+    }
+    // Sommario post-sogno
+    if (d.post_dream_summary) {
+      html += `<div style="padding:6px 8px;background:rgba(196,74,255,0.08);border:1px solid rgba(196,74,255,0.2);border-radius:5px;font-size:13px;color:var(--purple);margin-top:4px;">${d.post_dream_summary}</div>`;
+    }
+    el.innerHTML = html || '<div style="color:var(--t3);font-size:12px;">nessun consolidamento registrato</div>';
+  } catch(e) {}
+}
+
 async function refreshNarrative() {
   try {
     const r = await fetch('/api/narrative');
@@ -1310,21 +2467,82 @@ async function refreshNarrative() {
 
     const STANCE_COLORS = {
       aperto:'#22c55e', curioso:'#ffd04a', riflessivo:'#4a9eff',
-      risonante:'#c44aff', ritratto:'#64748b'
+      risonante:'#c44aff', ritratto:'#64748b',
+      // Phase 55: etichette emergenti dalla valenza
+      ispirato:'#f59e0b', determinato:'#22c55e', creativo:'#a78bfa',
+      radicato:'#6366f1', cercante:'#f97316', attento:'#14b8a6',
+      inquieto:'#ef4444', sicuro:'#22c55e', vulnerabile:'#ef4444',
+      'in tensione':'#ef4444', 'in cerca di senso':'#ffd04a',
+      insoddisfatto:'#f97316', bloccato:'#64748b', impaziente:'#f97316',
+      spaesato:'#a78bfa'
     };
+
+    // Phase 55: Render valenza Octalysis
+    function renderValence(valence) {
+      const labelEl = document.getElementById('valence-label');
+      const toneEl = document.getElementById('valence-tone');
+      const barsEl = document.getElementById('valence-bars');
+      if (!valence) {
+        labelEl.textContent = '—';
+        toneEl.textContent = '';
+        barsEl.innerHTML = '';
+        return;
+      }
+      const lc = STANCE_COLORS[valence.label] || 'var(--acc)';
+      labelEl.textContent = valence.label;
+      labelEl.style.color = lc;
+      const toneSign = valence.hedonic_tone >= 0 ? '+' : '';
+      const toneColor = valence.hedonic_tone > 0.1 ? '#22c55e' : valence.hedonic_tone < -0.1 ? '#ef4444' : 'var(--t3)';
+      toneEl.innerHTML = `tono: <span style="color:${toneColor}">${toneSign}${valence.hedonic_tone.toFixed(2)}</span> &nbsp; intensità: ${valence.intensity.toFixed(2)}`;
+      barsEl.innerHTML = valence.drives.map(d => {
+        const pct = Math.abs(d.value) * 100;
+        const isPos = d.value >= 0;
+        const barColor = isPos ? '#22c55e' : '#ef4444';
+        const nameColor = Math.abs(d.value) > 0.2 ? barColor : 'var(--t3)';
+        return `<div style="color:${nameColor};text-align:right;white-space:nowrap;">${d.name}</div>` +
+          `<div style="position:relative;height:16px;background:var(--bg2);border-radius:3px;overflow:hidden;">` +
+          `<div style="position:absolute;${isPos?'left':'right'}:50%;width:${pct/2}%;height:100%;background:${barColor};opacity:0.7;border-radius:3px;"></div>` +
+          `<div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:var(--border);"></div>` +
+          `<div style="position:absolute;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--t2);">${d.value>=0?'+':''}${d.value.toFixed(2)}</div>` +
+          `</div>`;
+      }).join('');
+    }
     const INTENT_COLORS = {
       Acknowledge:'#22c55e', Reflect:'#4a9eff', Resonate:'#c44aff',
       Explore:'#ffd04a', Express:'#ff8c4a', Remain:'#64748b'
     };
+    const INTENT_IT = {
+      Acknowledge:'Riconoscere', Reflect:'Riflettere', Resonate:'Risonare',
+      Explore:'Esplorare', Express:'Esprimere', Remain:'Restare',
+      Question:'Domandare', Withdraw:'Ritirarsi', Dream:'Sognare',
+      Remember:'Ricordare', Need:'Necessità', Irony:'Ironia', Desire:'Desiderio'
+    };
 
-    const sc = STANCE_COLORS[n.stance] || 'var(--t2)';
+    // Phase 55: render valenza Octalysis
+    renderValence(n.valence);
+
+    // Phase 55: render impegno volitivo
+    const commitEl = document.getElementById('commitment-bar');
+    if (n.commitment) {
+      commitEl.style.display = 'block';
+      document.getElementById('commitment-intention').textContent = n.commitment.intention;
+      document.getElementById('commitment-strength').style.width = (n.commitment.strength * 100) + '%';
+      document.getElementById('commitment-info').textContent =
+        `${n.commitment.turns_held} turni | inerzia ${n.commitment.inertia.toFixed(2)}`;
+    } else {
+      commitEl.style.display = 'none';
+    }
+
+    // Usa valence_label se disponibile, altrimenti stance
+    const stanceLabel = n.valence_label || n.stance;
+    const sc = STANCE_COLORS[stanceLabel] || STANCE_COLORS[n.stance] || 'var(--t2)';
     const ic = INTENT_COLORS[n.pending_intention] || 'var(--t2)';
     const cont = Math.round(n.topic_continuity * 100);
     const contColor = cont > 65 ? '#22c55e' : cont > 35 ? '#ffd04a' : '#ef4444';
 
-    document.getElementById('narr-stance').textContent = n.stance;
+    document.getElementById('narr-stance').textContent = stanceLabel;
     document.getElementById('narr-stance').style.color = sc;
-    document.getElementById('narr-intention').textContent = n.pending_intention || '—';
+    document.getElementById('narr-intention').textContent = INTENT_IT[n.pending_intention] || n.pending_intention || '—';
     document.getElementById('narr-intention').style.color = ic;
     document.getElementById('narr-continuity').innerHTML =
       `<span style="color:${contColor}">${cont}%</span>`;
@@ -1333,36 +2551,57 @@ async function refreshNarrative() {
     bornEl.textContent = n.is_born ? '✓' : '✗';
     bornEl.style.color = n.is_born ? '#22c55e' : '#ef4444';
 
+    // Coherence integrity
+    const cohPct = Math.round((n.coherence_integrity ?? 1.0) * 100);
+    const cohColor = cohPct >= 80 ? '#22c55e' : cohPct >= 50 ? '#eab308' : '#ef4444';
+    document.getElementById('narr-coherence').innerHTML =
+      `<span style="color:${cohColor}">${cohPct}%</span>`;
+
+    // Attributed intent
+    const INTENT_LABELS = {
+      Unknown: 'Ignoto', Seeking: 'Cerca', Teaching: 'Insegna',
+      Challenging: 'Sfida', Connecting: 'Connette', Withdrawing: 'Si ritira'
+    };
+    const attrIntent = n.attributed_intent || 'Unknown';
+    document.getElementById('narr-attributed').textContent =
+      INTENT_LABELS[attrIntent] || attrIntent;
+
     function renderTurnRow(t) {
       const sc2 = STANCE_COLORS[t.stance] || 'var(--t2)';
       const ic2 = INTENT_COLORS[t.intention] || 'var(--t2)';
       const pct = Math.round(t.intensity * 100);
-      const aw = t.awareness ? `<span style="color:#e2e8f0;font-size:9px;margin-left:6px;">— ${t.awareness}</span>` : '';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:rgba(255,255,255,0.03);border-radius:6px;border:1px solid var(--border);">
-        <span style="font-size:9px;color:var(--t3);min-width:20px;">#${t.turn_id}</span>
-        <span style="font-size:10px;color:var(--t3);">${t.act.replace('Declaration','Dichiar.').replace('Question','Domanda').replace('Greeting','Saluto').replace('EmotionalExpr','Emozione').replace('SelfQuery','AutoQuery')}</span>
-        <span style="font-size:10px;font-weight:600;color:${sc2};">${t.stance}</span>
-        <span style="font-size:10px;color:${ic2};">→ ${t.intention}</span>
-        <div style="flex:1;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
-          <div style="width:${pct}%;height:100%;background:${ic2};opacity:0.6;border-radius:2px;"></div>
+      const aw = t.awareness ? `<span style="color:#e2e8f0;font-size:13px;margin-left:6px;">— ${t.awareness}</span>` : '';
+      // Intent riconosciuto e posizione formata (nuovi campi)
+      const intent = t.recognized_intent ? `<div style="font-size:13px;color:var(--blue);margin-top:3px;">🎯 ${t.recognized_intent}</div>` : '';
+      const pos = t.formed_position ? `<div style="font-size:13px;color:var(--purple);margin-top:2px;">🧭 ${t.formed_position}</div>` : '';
+      return `<div style="padding:5px 8px;background:rgba(255,255,255,0.03);border-radius:6px;border:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;color:var(--t3);min-width:20px;">#${t.turn_id}</span>
+          <span style="font-size:12px;color:var(--t3);">${t.act}</span>
+          <span style="font-size:12px;font-weight:600;color:${sc2};">${t.stance}</span>
+          <span style="font-size:12px;color:${ic2};">→ ${INTENT_IT[t.intention]||t.intention}</span>
+          <div style="flex:1;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:${ic2};opacity:0.6;border-radius:2px;"></div>
+          </div>
+          <span style="font-size:13px;color:var(--t3);">${pct}%</span>
+          ${aw}
         </div>
-        <span style="font-size:9px;color:var(--t3);">${pct}%</span>
-        ${aw}
+        ${intent}${pos}
       </div>`;
     }
 
     // Posizioni
     const posEl = document.getElementById('narr-positions');
     if (!n.positions.length) {
-      posEl.innerHTML = '<div style="color:var(--t3);font-size:10px;">nessuna posizione formata</div>';
+      posEl.innerHTML = '<div style="color:var(--t3);font-size:12px;">nessuna posizione formata</div>';
     } else {
       posEl.innerHTML = n.positions.map(p => {
         const sc3 = STANCE_COLORS[p.stance] || 'var(--t2)';
         const ic3 = INTENT_COLORS[p.intention] || 'var(--t2)';
         return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;background:rgba(255,215,0,0.06);border-radius:6px;border:1px solid rgba(255,215,0,0.2);">
-          <span style="font-size:10px;color:#ffd04a;font-weight:700;">${p.act_key}</span>
-          <span style="font-size:10px;color:${sc3};">${p.stance}</span>
-          <span style="font-size:10px;color:${ic3};">→ ${p.intention}</span>
+          <span style="font-size:12px;color:#ffd04a;font-weight:700;">${p.act_key}</span>
+          <span style="font-size:12px;color:${sc3};">${p.stance}</span>
+          <span style="font-size:12px;color:${ic3};">→ ${INTENT_IT[p.intention]||p.intention}</span>
         </div>`;
       }).join('');
     }
@@ -1371,13 +2610,13 @@ async function refreshNarrative() {
     const crysEl = document.getElementById('narr-crystallized');
     crysEl.innerHTML = n.crystallized.length
       ? n.crystallized.map(renderTurnRow).join('')
-      : '<div style="color:var(--t3);font-size:10px;">nessun turno cristallizzato</div>';
+      : '<div style="color:var(--t3);font-size:12px;">nessun turno cristallizzato</div>';
 
     // Recenti
     const recEl = document.getElementById('narr-recent');
     recEl.innerHTML = n.recent_turns.length
       ? n.recent_turns.map(renderTurnRow).join('')
-      : '<div style="color:var(--t3);font-size:10px;">nessun turno ancora</div>';
+      : '<div style="color:var(--t3);font-size:12px;">nessun turno ancora</div>';
 
   } catch(e) { console.error('narrative error', e); }
 }
@@ -1466,6 +2705,9 @@ function renderSimplices(simplices) {
 
 // ═══ INIT ═══
 async function init() {
+  // theme icon on load
+  const themeBtn = document.getElementById('theme-toggle');
+  if (document.documentElement.getAttribute('data-theme') === 'light') themeBtn.innerHTML = '&#9790;';
   connectWS();
   try {
     const r = await fetch('/api/state');
@@ -1495,11 +2737,261 @@ async function init() {
       refreshWordField();
     if (document.getElementById('panel-frattali').classList.contains('active'))
       refreshTopology();
-    if (document.getElementById('panel-pensieri').classList.contains('active'))
-      refreshNarrative();
+    // Narrativa: non auto-refresh — cambia solo su input utente
+    // refreshNarrative() chiamato solo da sendInput() e dal bottone manuale
     if (document.getElementById('panel-forma').classList.contains('active'))
       refreshVisuals();
+    if (document.getElementById('panel-identita').classList.contains('active'))
+      refreshIdentita();
+    if (document.getElementById('panel-episodi').classList.contains('active'))
+      refreshEpisodi();
+    if (document.getElementById('panel-dialogo').classList.contains('active'))
+      refreshDialogo();
   }, 4000);
+}
+
+// ═══ IDENTITÀ ═══
+
+const VALUE_COLORS = ['#4affb0','#4a9eff','#ffd04a','#ff8c4a','#c44aff','#ff4a6b','#6eb0ff','#b0ff6e'];
+
+async function refreshIdentita() {
+  const r = await fetch('/api/self').catch(() => null);
+  if (!r || !r.ok) return;
+  const d = await r.json();
+  renderIdValues(d.values || []);
+  renderIdBeliefs(d.beliefs || []);
+  renderIdUncertainties(d.uncertainties || []);
+
+  // Credenze attive ora
+  const abEl = document.getElementById('id-active-beliefs');
+  if (d.active_beliefs?.length) {
+    abEl.innerHTML = d.active_beliefs.map(ab => {
+      const pct = Math.round(ab.confidence * 100);
+      return `<div style="padding:5px 8px;background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);border-radius:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:13px;color:var(--yellow);">"${ab.claim.substring(0,60)}"</span>
+          <span style="font-size:12px;color:var(--green);">${pct}%</span>
+        </div>
+        <div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">
+          ${ab.activated_words.map(w => `<span style="font-size:13px;background:rgba(255,215,0,0.1);color:var(--yellow);border-radius:3px;padding:1px 5px;">${w}</span>`).join('')}
+          <span style="font-size:13px;color:var(--t3);margin-left:auto;">boost ${ab.influence_strength.toFixed(3)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    abEl.innerHTML = '<div style="color:var(--t3);font-size:12px;">nessuna credenza attivata dall\'ultimo input</div>';
+  }
+
+  // Traccia influenza — mostrata solo se ci sono credenze attive
+  const trEl = document.getElementById('id-influence-trace');
+  if (d.active_beliefs?.length && d.belief_influence_trace?.length) {
+    trEl.innerHTML = d.belief_influence_trace.map(t =>
+      `<div style="font-size:13px;color:var(--t3);padding:2px 0;">→ ${t}</div>`
+    ).join('');
+  } else {
+    trEl.innerHTML = '';
+  }
+}
+
+function renderIdValues(values) {
+  const el = document.getElementById('id-values');
+  if (!values.length) { el.innerHTML = '<span class="loading">nessun valore</span>'; return; }
+  const max = values[0].weight;
+  el.innerHTML = values.map((v, i) => {
+    const pct = max > 0 ? Math.round((v.weight / max) * 100) : 0;
+    const col = VALUE_COLORS[i % VALUE_COLORS.length];
+    const innate = v.innate ? '★' : '';
+    return `<div style="display:flex;flex-direction:column;gap:3px;min-width:100px;flex:1;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:12px;color:${col};font-weight:600;">${innate}${v.name}</span>
+        <span style="font-size:12px;color:var(--t3);">${v.weight.toFixed(2)}</span>
+      </div>
+      <div style="height:3px;background:rgba(255,255,255,0.07);border-radius:2px;">
+        <div style="width:${pct}%;height:100%;background:${col};border-radius:2px;transition:width 0.4s;"></div>
+      </div>
+      <span style="font-size:13px;color:var(--t3);" title="Quante volte questo valore ha influenzato una risposta">att. ${v.activation_count} volt${v.activation_count===1?'a':'e'}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderIdBeliefs(beliefs) {
+  const el = document.getElementById('id-beliefs');
+  if (!beliefs.length) { el.innerHTML = '<span class="loading">nessuna credenza</span>'; return; }
+  el.innerHTML = beliefs.map(b => {
+    const confPct = Math.round(b.confidence * 100);
+    const innate = b.innate ? '<span style="font-size:13px;color:var(--yellow);margin-left:4px;">★ innata</span>' : '';
+    const anchors = b.anchor_concepts.map(c =>
+      `<span style="font-size:13px;background:rgba(100,174,255,0.12);color:var(--blue);border:1px solid rgba(100,174,255,0.2);border-radius:3px;padding:1px 5px;">${c}</span>`
+    ).join('');
+    return `<div style="padding:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <span style="font-size:12px;color:var(--t1);flex:1;">"${b.claim}"${innate}</span>
+        <span style="font-size:13px;color:var(--green);font-weight:700;white-space:nowrap;">${confPct}%</span>
+      </div>
+      <div style="margin-top:4px;height:2px;background:rgba(255,255,255,0.06);border-radius:1px;">
+        <div style="width:${confPct}%;height:100%;background:var(--green);border-radius:1px;transition:width 0.4s;"></div>
+      </div>
+      ${anchors ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">${anchors}</div>` : ''}
+      <div style="margin-top:4px;font-size:13px;color:var(--t3);" title="Quante volte questa credenza è stata confermata dall'esperienza">rinforzata ${b.reinforcement_count} volt${b.reinforcement_count===1?'a':'e'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderIdUncertainties(uncertainties) {
+  const el = document.getElementById('id-uncertainties');
+  if (!uncertainties.length) { el.innerHTML = '<span style="font-size:13px;color:var(--t3);">nessuna incertezza rilevata</span>'; return; }
+  el.innerHTML = uncertainties.map(u => {
+    const pct = Math.round(u.tension * 100);
+    return `<div style="display:flex;flex-direction:column;gap:3px;min-width:90px;">
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:13px;color:var(--orange);">?${u.topic}</span>
+        <span style="font-size:12px;color:var(--t3);">${pct}%</span>
+      </div>
+      <div style="height:2px;background:rgba(255,255,255,0.07);border-radius:1px;">
+        <div style="width:${pct}%;height:100%;background:var(--orange);border-radius:1px;"></div>
+      </div>
+      <span style="font-size:13px;color:var(--t3);" title="Quante volte questa domanda è emersa nel campo">emersa ${u.emergence_count} volt${u.emergence_count===1?'a':'e'}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══ EPISODI ═══
+
+let allEpisodes = [];
+
+async function refreshEpisodi() {
+  const r = await fetch('/api/episodes?n=50').catch(() => null);
+  if (!r || !r.ok) return;
+  allEpisodes = await r.json();
+  renderEpisodeThemes(allEpisodes);
+  renderEpisodeList(allEpisodes);
+}
+
+function renderEpisodeThemes(episodes) {
+  const el = document.getElementById('ep-themes');
+  const counts = {};
+  episodes.forEach(ep => ep.key_concepts.forEach(c => { counts[c] = (counts[c] || 0) + 1; }));
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  if (!sorted.length) { el.innerHTML = '<span class="loading">nessun tema</span>'; return; }
+  const max = sorted[0][1];
+  el.innerHTML = sorted.map(([c, n]) => {
+    const alpha = 0.3 + 0.7 * (n / max);
+    return `<span onclick="searchEpisodes('${c}')" style="cursor:pointer;font-size:13px;background:rgba(100,174,255,${alpha * 0.2});color:rgba(100,174,255,${alpha});border:1px solid rgba(100,174,255,${alpha * 0.3});border-radius:12px;padding:2px 8px;">${c} <span style="font-size:13px;">${n}</span></span>`;
+  }).join('');
+}
+
+function renderEpisodeList(episodes) {
+  const el = document.getElementById('ep-list');
+  if (!episodes.length) { el.innerHTML = '<div class="loading">nessun episodio registrato</div>'; return; }
+  const STANCE_COL = { Curious:'#4a9eff', Reflective:'#c44aff', Resonant:'#4affb0', Open:'#ffd04a', Withdrawn:'#7878a8',
+    curioso:'#4a9eff', riflessivo:'#c44aff', risonante:'#4affb0', aperto:'#ffd04a', ritratto:'#7878a8' };
+  const STANCE_IT = { Curious:'Curioso', Reflective:'Riflessivo', Resonant:'Risonante', Open:'Aperto', Withdrawn:'Ritratto' };
+  const INT_ICONS = { Express:'💬', Explore:'🔭', Question:'❓', Remember:'📖', Withdraw:'🤫', Reflect:'🪞', Dream:'💭' };
+  const INT_IT = { Express:'Esprimere', Explore:'Esplorare', Question:'Domandare', Remember:'Ricordare',
+    Withdraw:'Ritirarsi', Reflect:'Riflettere', Dream:'Sognare', Acknowledge:'Riconoscere' };
+  const reversed = [...episodes].reverse();
+  el.innerHTML = reversed.map(ep => {
+    const col = STANCE_COL[ep.stance] || '#7878a8';
+    const icon = INT_ICONS[ep.intention] || '·';
+    const energy = Math.round(ep.field_energy * 100);
+    const date = new Date(ep.timestamp * 1000).toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
+    const concepts = ep.key_concepts.slice(0,5).map(c =>
+      `<span style="font-size:13px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:3px;padding:1px 4px;color:var(--t2);">${c}</span>`
+    ).join('');
+    const values = ep.active_values.slice(0,3).map(v =>
+      `<span style="font-size:13px;color:var(--green);opacity:0.7;">${v}</span>`
+    ).join(' · ');
+    return `<div style="padding:8px 10px;background:rgba(255,255,255,0.025);border:1px solid var(--border);border-left:2px solid ${col};border-radius:0 6px 6px 0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="font-size:13px;color:${col};font-weight:600;">${STANCE_IT[ep.stance]||ep.stance}</span>
+        <span style="font-size:12px;color:var(--t3);">${icon} ${INT_IT[ep.intention]||ep.intention}</span>
+        <span style="font-size:12px;color:var(--t3);margin-left:auto;">${date} · energia ${energy}%</span>
+      </div>
+      <div style="margin-top:4px;font-size:12px;color:var(--t1);">${ep.summary}</div>
+      ${concepts ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px;">${concepts}</div>` : ''}
+      ${values ? `<div style="margin-top:4px;font-size:13px;color:var(--t3);">valori: ${values}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function searchEpisodes(query) {
+  document.getElementById('ep-search').value = query;
+  if (!query.trim()) { renderEpisodeList(allEpisodes); return; }
+  const r = await fetch(`/api/episodes/recall?concepts=${encodeURIComponent(query)}&n=30`).catch(()=>null);
+  if (!r || !r.ok) {
+    const q = query.toLowerCase();
+    renderEpisodeList(allEpisodes.filter(ep =>
+      ep.key_concepts.some(c => c.toLowerCase().includes(q)) || ep.summary.toLowerCase().includes(q)
+    ));
+    return;
+  }
+  const results = await r.json();
+  renderEpisodeList(results);
+}
+
+// ═══ DIALOGO INTERIORE (Phase 52) ═══
+async function refreshDialogo() {
+  try {
+    const r = await fetch('/api/inner-dialogue');
+    const d = await r.json();
+    renderDialogueSection('dlg-propositions', d.propositions, '#4aff8c');
+    renderDialogueSection('dlg-thoughts', d.thoughts, '#ffa54a');
+    renderDialogueSection('dlg-questions', d.questions, '#4a9eff');
+  } catch(e) { console.error('refreshDialogo:', e); }
+}
+
+function renderDialogueSection(containerId, items, color) {
+  const el = document.getElementById(containerId);
+  if (!items || items.length === 0) {
+    el.innerHTML = '<div style="color:var(--t3);font-size:13px;font-style:italic;">nessuno</div>';
+    return;
+  }
+  el.innerHTML = items.map(item => {
+    const pct = Math.round(item.strength * 100);
+    const barW = Math.max(8, pct);
+    return `<div style="background:rgba(255,255,255,0.04);border-radius:6px;padding:8px 10px;border-left:3px solid ${color};">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-size:12px;color:var(--t1);">${escHtml(item.text)}</span>
+        <span style="font-size:13px;color:${color};min-width:36px;text-align:right;">${pct}%</span>
+      </div>
+      <div style="height:3px;background:rgba(255,255,255,0.08);border-radius:2px;margin-bottom:6px;">
+        <div style="height:100%;width:${barW}%;background:${color};border-radius:2px;"></div>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;">
+        <input id="dlg-resp-${item.category}-${item.id}" placeholder="rispondi…"
+          style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;color:var(--t1);"
+          onkeydown="if(event.key==='Enter')respondItem('${item.category}',${item.id},'elaborate')">
+        <button class="btn-sm" style="font-size:13px;background:rgba(74,255,140,0.15);color:#4aff8c;"
+          onclick="respondItem('${item.category}',${item.id},'confirm')">conferma</button>
+        <button class="btn-sm" style="font-size:13px;background:rgba(255,74,107,0.15);color:#ff4a6b;"
+          onclick="respondItem('${item.category}',${item.id},'deny')">nega</button>
+        <button class="btn-sm" style="font-size:13px;"
+          onclick="respondItem('${item.category}',${item.id},'elaborate')">elabora</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function respondItem(category, id, action) {
+  const input = document.getElementById(`dlg-resp-${category}-${id}`);
+  const response = input ? input.value.trim() : '';
+  if (!response && action === 'elaborate') return;
+  try {
+    const r = await fetch('/api/respond', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ item_type: category, item_id: id, response: response || action, action })
+    });
+    const result = await r.json();
+    if (result.success) {
+      if (input) { input.value = ''; input.style.borderColor = '#4aff8c'; setTimeout(() => input.style.borderColor = '', 1000); }
+      setTimeout(refreshDialogo, 500);
+    }
+  } catch(e) { console.error('respondItem:', e); }
 }
 
 window.addEventListener('load', init);

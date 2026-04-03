@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Prometeo — Universo</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #000;
+  color: #ccc;
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+  width: 100vw; height: 100vh;
+  touch-action: none;
+}
+#universe { width:100%; height:100%; position:absolute; top:0; left:0; }
+
+#hud {
+  position: fixed; top: 12px; left: 12px;
+  z-index: 10; pointer-events: none;
+}
+#hud h1 { font-size: 15px; color: #fff; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 4px; }
+#hud .sub { font-size: 12px; color: #999; }
+#hud .level { font-size: 11px; color: #7af; margin-top: 4px; }
+#hud a { color: #7af; text-decoration: none; pointer-events: auto; font-size: 12px; }
+#hud a:hover { text-decoration: underline; }
+
+#info-panel {
+  position: fixed; bottom: 20px; left: 50%;
+  transform: translateX(-50%); z-index: 10;
+  background: rgba(8,8,25,0.9);
+  border: 1px solid rgba(100,140,255,0.3);
+  border-radius: 12px; padding: 16px 28px;
+  font-size: 15px; color: #dde;
+  backdrop-filter: blur(10px);
+  display: none; max-width: 92vw; text-align: center;
+  pointer-events: auto;
+}
+#info-panel .title { font-size: 20px; font-weight: bold; color: #fff; }
+#info-panel .meta { font-size: 13px; color: #99a; margin-top: 6px; line-height: 1.6; }
+#info-panel .close {
+  position: absolute; top: 6px; right: 12px;
+  cursor: pointer; color: #667; font-size: 18px;
+}
+#info-panel .close:hover { color: #fff; }
+
+#search-box { position: fixed; top: 12px; right: 12px; z-index: 10; }
+#search-box input {
+  background: rgba(10,10,30,0.7);
+  border: 1px solid rgba(100,140,255,0.3);
+  border-radius: 8px; padding: 10px 16px;
+  color: #fff; font-family: inherit; font-size: 14px;
+  width: 220px; backdrop-filter: blur(4px); outline: none;
+}
+#search-box input::placeholder { color: #556; }
+#search-box input:focus { border-color: rgba(100,180,255,0.6); }
+
+#nav-buttons {
+  position: fixed; bottom: 16px; left: 12px; z-index: 10;
+  display: flex; gap: 8px;
+}
+#nav-buttons button {
+  background: rgba(10,10,30,0.7); border: 1px solid rgba(100,140,255,0.3);
+  border-radius: 8px; padding: 8px 14px; color: #aac; font-family: inherit;
+  font-size: 12px; cursor: pointer; backdrop-filter: blur(4px);
+}
+#nav-buttons button:hover { background: rgba(40,40,80,0.8); color: #fff; }
+
+#legend {
+  position: fixed; bottom: 16px; right: 12px;
+  z-index: 10; font-size: 12px; color: #556;
+  pointer-events: none; text-align: right;
+}
+
+#loading {
+  position: fixed; top:0; left:0; width:100%; height:100%;
+  display: flex; align-items: center; justify-content: center;
+  background: #000; z-index: 100; flex-direction: column;
+  transition: opacity 0.6s;
+}
+#loading h2 { color: #fff; font-size: 16px; letter-spacing: 6px; text-transform: uppercase; }
+#loading .bar { width: 200px; height: 2px; background: #222; margin-top: 16px; border-radius: 2px; overflow:hidden; }
+#loading .bar .fill { width: 0%; height: 100%; background: linear-gradient(90deg, #4af, #a4f); transition: width 0.3s; }
+#loading .err { color: #f66; font-size: 12px; margin-top: 12px; display:none; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="loading">
+  <h2>Prometeo</h2>
+  <div class="bar"><div class="fill" id="load-fill"></div></div>
+  <div class="err" id="load-err"></div>
+</div>
+
+<div id="hud">
+  <h1>Prometeo</h1>
+  <div class="sub" id="hud-stats">caricamento...</div>
+  <div class="level" id="hud-level">vista cosmica</div>
+  <a href="/">torna alla dashboard</a>
+</div>
+
+<div id="search-box">
+  <input type="text" id="search" placeholder="cerca..." autocomplete="off">
+</div>
+
+<div id="info-panel">
+  <span class="close" id="info-close">&times;</span>
+  <div class="title" id="info-title"></div>
+  <div class="meta" id="info-meta"></div>
+</div>
+
+<div id="nav-buttons">
+  <button id="btn-back">indietro</button>
+  <button id="btn-home">vista cosmica</button>
+</div>
+
+<div id="legend">
+  trascina: orbita &middot; scroll: zoom &middot; click: info &middot; doppio-click: entra
+</div>
+
+<div id="universe"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+const fill = document.getElementById('load-fill');
+const loadErr = document.getElementById('load-err');
+
+try {
+
+// ════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ════════════════════════════════════════════════════════════════
+
+const TRIGRAM_NAMES = ['Cielo','Terra','Fuoco','Acqua','Tuono','Vento','Monte','Lago'];
+const TRIGRAM_HUES = [210, 30, 340, 120, 50, 270, 170, 15];
+const SYSTEM_RADIUS = 500;   // distance between solar systems
+const PLANET_ORBIT = 40;     // planet orbit radius around star
+const PLANET_SIZE = 4;       // base planet sphere radius
+
+// Strati del pianeta: da nucleo a satellite
+const LAYERS = [
+  { name: 'nucleo',     color: [1.0, 0.95, 0.8], minR: 0.0, maxR: 0.2, minAff: 80, minStab: 70 },
+  { name: 'mantello',   color: [0.9, 0.6, 0.3],  minR: 0.2, maxR: 0.45, minAff: 60, minStab: 50 },
+  { name: 'crosta',     color: [0.5, 0.7, 0.4],  minR: 0.45, maxR: 0.7, minAff: 40, minStab: 0 },
+  { name: 'oceani',     color: [0.3, 0.5, 0.9],  minR: 0.7, maxR: 0.85, minAff: 0, minStab: -1 }, // stab < 30
+  { name: 'atmosfera',  color: [0.7, 0.85, 1.0], minR: 0.85, maxR: 1.05, minAff: 0, minStab: -2 }, // active
+  { name: 'satellite',  color: [0.5, 0.5, 0.6],  minR: 1.2, maxR: 1.8, minAff: 0, minStab: -3 }, // aff < 20
+];
+
+function classifyWord(w) {
+  if (w.a1 >= 80 && w.s >= 70) return 0; // nucleo
+  if (w.a1 >= 60 && w.s >= 50) return 1; // mantello
+  if (w.a1 >= 40)              return 2; // crosta
+  if (w.s < 30)                return 3; // oceani
+  if (w.a > 0)                 return 4; // atmosfera
+  if (w.a1 < 20)               return 5; // satellite
+  return 2; // default: crosta
+}
+
+function trigramHue(tri) { return TRIGRAM_HUES[tri]; }
+function fractalHue(id) { return (TRIGRAM_HUES[Math.floor(id/8)] + TRIGRAM_HUES[id%8]) / 2; }
+
+// ════════════════════════════════════════════════════════════════
+// LOAD DATA
+// ════════════════════════════════════════════════════════════════
+
+fill.style.width = '15%';
+const resp = await fetch('/api/universe');
+if (!resp.ok) throw new Error('API non disponibile');
+const data = await resp.json();
+fill.style.width = '40%';
+
+const fractals = data.fractals || [];
+const words = data.words || [];
+
+// Build trigram -> fractals mapping
+const trigramSystems = Array.from({length: 8}, () => []);
+fractals.forEach(fr => {
+  const lower = Math.floor(fr.id / 8);
+  trigramSystems[lower].push(fr);
+});
+
+// ════════════════════════════════════════════════════════════════
+// LAYOUT: 8 solar systems on a large sphere
+// ════════════════════════════════════════════════════════════════
+
+// Solar system positions (8 points, well spread — cube vertices)
+const systemPositions = [
+  new THREE.Vector3( 1, 1, 1),  // Cielo
+  new THREE.Vector3(-1,-1,-1),  // Terra
+  new THREE.Vector3( 1,-1,-1),  // Fuoco
+  new THREE.Vector3(-1, 1, 1),  // Acqua
+  new THREE.Vector3(-1,-1, 1),  // Tuono
+  new THREE.Vector3( 1, 1,-1),  // Vento
+  new THREE.Vector3(-1, 1,-1),  // Monte
+  new THREE.Vector3( 1,-1, 1),  // Lago
+].map(v => v.normalize().multiplyScalar(SYSTEM_RADIUS));
+
+// Planet positions within each system
+const planetPositions = {}; // fractalId -> Vector3
+const starPositions = {};   // trigram -> Vector3 (star = pure hexagram)
+
+fractals.forEach(fr => {
+  const lower = Math.floor(fr.id / 8);
+  const upper = fr.id % 8;
+  const sysPos = systemPositions[lower];
+
+  if (lower === upper) {
+    // Pure hexagram = central star
+    planetPositions[fr.id] = sysPos.clone();
+    starPositions[lower] = sysPos.clone();
+  } else {
+    // Mixed hexagram = planet orbiting
+    const angle = (upper / 8) * Math.PI * 2;
+    // Slight inclination per system for 3D feel
+    const incl = (lower * 0.3);
+    const ox = PLANET_ORBIT * Math.cos(angle);
+    const oy = PLANET_ORBIT * Math.sin(angle) * Math.cos(incl);
+    const oz = PLANET_ORBIT * Math.sin(angle) * Math.sin(incl);
+    planetPositions[fr.id] = new THREE.Vector3(
+      sysPos.x + ox, sysPos.y + oy, sysPos.z + oz
+    );
+  }
+});
+
+fill.style.width = '55%';
+
+// ════════════════════════════════════════════════════════════════
+// SCENE
+// ════════════════════════════════════════════════════════════════
+
+const container = document.getElementById('universe');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000005);
+scene.fog = new THREE.FogExp2(0x000005, 0.00025);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 5000);
+camera.position.set(0, 300, 1100);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+container.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 2;
+controls.maxDistance = 2500;
+controls.rotateSpeed = 0.5;
+controls.zoomSpeed = 0.8;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.12;
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.8, 0.4, 0.3
+);
+composer.addPass(bloom);
+
+// ════════════════════════════════════════════════════════════════
+// BACKGROUND STARFIELD
+// ════════════════════════════════════════════════════════════════
+
+const BG = 8000;
+const bgGeo = new THREE.BufferGeometry();
+const bgP = new Float32Array(BG*3), bgC = new Float32Array(BG*3);
+for (let i = 0; i < BG; i++) {
+  const r = 1500 + Math.random()*1500;
+  const t = Math.random()*Math.PI*2, p = Math.acos(2*Math.random()-1);
+  bgP[i*3]=r*Math.sin(p)*Math.cos(t); bgP[i*3+1]=r*Math.sin(p)*Math.sin(t); bgP[i*3+2]=r*Math.cos(p);
+  const b = 0.12+Math.random()*0.2;
+  bgC[i*3]=b*0.7; bgC[i*3+1]=b*0.8; bgC[i*3+2]=b;
+}
+bgGeo.setAttribute('position', new THREE.BufferAttribute(bgP, 3));
+bgGeo.setAttribute('color', new THREE.BufferAttribute(bgC, 3));
+scene.add(new THREE.Points(bgGeo, new THREE.PointsMaterial({
+  size: 0.5, sizeAttenuation: true, vertexColors: true, transparent: true, opacity: 0.7
+})));
+
+// ════════════════════════════════════════════════════════════════
+// SOLAR SYSTEMS: Stars + Orbit rings + Planets
+// ════════════════════════════════════════════════════════════════
+
+const clickableMeshes = []; // for raycasting
+
+// 8 Stars (pure hexagrams = central suns)
+for (let tri = 0; tri < 8; tri++) {
+  const pos = systemPositions[tri];
+  const hue = trigramHue(tri);
+  const col = new THREE.Color().setHSL(hue/360, 0.9, 0.75);
+  const colDim = new THREE.Color().setHSL(hue/360, 0.6, 0.4);
+
+  // Star core
+  const starSize = 8;
+  const star = new THREE.Mesh(
+    new THREE.SphereGeometry(starSize, 24, 24),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.95 })
+  );
+  star.position.copy(pos);
+  const pureFr = fractals.find(f => f.id === tri * 8 + tri);
+  star.userData = { type: 'star', trigram: tri, name: TRIGRAM_NAMES[tri], fractal: pureFr };
+  scene.add(star);
+  clickableMeshes.push(star);
+
+  // Star glow
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(starSize*3, 16, 16),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.06 })
+  );
+  glow.position.copy(pos);
+  scene.add(glow);
+
+  // Star outer halo
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(starSize*6, 8, 8),
+    new THREE.MeshBasicMaterial({ color: colDim, transparent: true, opacity: 0.02 })
+  );
+  halo.position.copy(pos);
+  scene.add(halo);
+
+  // Star label
+  const lbl = makeLabel(TRIGRAM_NAMES[tri], 48, '#ffffff');
+  lbl.position.copy(pos).add(new THREE.Vector3(0, starSize + 12, 0));
+  lbl.scale.set(50, 10, 1);
+  scene.add(lbl);
+
+  // Orbit ring
+  const ringGeo = new THREE.RingGeometry(PLANET_ORBIT - 0.3, PLANET_ORBIT + 0.3, 64);
+  const ringMat = new THREE.MeshBasicMaterial({ color: colDim, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.position.copy(pos);
+  ring.lookAt(pos.clone().add(new THREE.Vector3(0,1,0))); // face up-ish
+  scene.add(ring);
+}
+
+// Planets (mixed hexagrams)
+const planetMeshes = []; // for animation
+
+fractals.forEach(fr => {
+  const lower = Math.floor(fr.id / 8);
+  const upper = fr.id % 8;
+  if (lower === upper) return; // star, already drawn
+
+  const pos = planetPositions[fr.id];
+  const hue = fractalHue(fr.id);
+  const col = new THREE.Color().setHSL(hue/360, 0.7, 0.55);
+  const sz = PLANET_SIZE + Math.min(fr.word_count / 300, 4);
+
+  const planet = new THREE.Mesh(
+    new THREE.SphereGeometry(sz, 20, 20),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9 })
+  );
+  planet.position.copy(pos);
+  planet.userData = { type: 'planet', fractal: fr, baseSize: sz, lower, upper, orbitAngle: (upper/8)*Math.PI*2 };
+  scene.add(planet);
+  clickableMeshes.push(planet);
+  planetMeshes.push(planet);
+
+  // Planet atmosphere glow
+  const atm = new THREE.Mesh(
+    new THREE.SphereGeometry(sz*1.5, 12, 12),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.06 })
+  );
+  atm.position.copy(pos);
+  scene.add(atm);
+
+  // Planet label (smaller, visible when closer)
+  const lbl = makeLabel(fr.name, 32, '#dddddd');
+  lbl.position.copy(pos).add(new THREE.Vector3(0, sz + 4, 0));
+  lbl.scale.set(24, 5, 1);
+  lbl.userData = { isLabel: true };
+  scene.add(lbl);
+});
+
+fill.style.width = '70%';
+
+// ════════════════════════════════════════════════════════════════
+// WORDS as particles — stratified on planets
+// ════════════════════════════════════════════════════════════════
+
+const N = words.length;
+const wPos = new Float32Array(N*3);
+const wCol = new Float32Array(N*3);
+const wSize = new Float32Array(N);
+const wordData = []; // for raycasting + search
+
+words.forEach((w, i) => {
+  const pp = planetPositions[w.f];
+  if (!pp) { wordData[i] = null; return; }
+
+  const fr = fractals.find(f => f.id === w.f);
+  const planetSz = fr ? PLANET_SIZE + Math.min(fr.word_count / 300, 4) : PLANET_SIZE;
+
+  // Classify into planetary layer
+  const layer = classifyWord(w);
+  const L = LAYERS[layer];
+
+  // Position: spherical shell around planet center
+  const rMin = planetSz * (1 + L.minR * 2);
+  const rMax = planetSz * (1 + L.maxR * 2);
+  const r = rMin + Math.random() * (rMax - rMin);
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2*Math.random() - 1);
+  const x = pp.x + r * Math.sin(phi) * Math.cos(theta);
+  const y = pp.y + r * Math.sin(phi) * Math.sin(theta);
+  const z = pp.z + r * Math.cos(phi);
+
+  wPos[i*3] = x; wPos[i*3+1] = y; wPos[i*3+2] = z;
+
+  // Color from layer, tinted by planet hue
+  const hue = fractalHue(w.f);
+  const lc = L.color;
+  const base = new THREE.Color().setHSL(hue/360, 0.4, 0.5);
+  const layerCol = new THREE.Color(lc[0], lc[1], lc[2]);
+  base.lerp(layerCol, 0.6);
+  // Dim by stability
+  const bright = 0.4 + (w.s/100) * 0.6;
+  wCol[i*3] = base.r*bright; wCol[i*3+1] = base.g*bright; wCol[i*3+2] = base.b*bright;
+
+  wSize[i] = 0.2 + (w.s/100)*0.6 + (w.a/100)*1.5;
+
+  wordData[i] = {
+    word: w.w, fractal: w.f, stability: w.s, activation: w.a, affinity: w.a1,
+    layer: L.name, pos: new THREE.Vector3(x, y, z)
+  };
+});
+
+const wGeo = new THREE.BufferGeometry();
+wGeo.setAttribute('position', new THREE.BufferAttribute(wPos, 3));
+wGeo.setAttribute('aColor', new THREE.BufferAttribute(wCol, 3));
+wGeo.setAttribute('aSize', new THREE.BufferAttribute(wSize, 1));
+
+const wMat = new THREE.ShaderMaterial({
+  uniforms: { uPR: { value: renderer.getPixelRatio() } },
+  vertexShader: `
+    attribute float aSize;
+    attribute vec3 aColor;
+    varying vec3 vCol;
+    uniform float uPR;
+    void main() {
+      vCol = aColor;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = clamp(aSize * uPR * (120.0 / -mv.z), 0.5, 36.0);
+      gl_Position = projectionMatrix * mv;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vCol;
+    void main() {
+      float d = length(gl_PointCoord - vec2(0.5));
+      if (d > 0.5) discard;
+      float glow = smoothstep(0.5, 0.0, d);
+      float core = smoothstep(0.12, 0.0, d);
+      vec3 c = mix(vCol * 0.4, vCol * 2.2, core);
+      gl_FragColor = vec4(c, glow * 0.8);
+    }
+  `,
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+});
+
+const wordPoints = new THREE.Points(wGeo, wMat);
+scene.add(wordPoints);
+
+fill.style.width = '100%';
+setTimeout(() => {
+  const ld = document.getElementById('loading');
+  ld.style.opacity = '0';
+  setTimeout(() => ld.style.display = 'none', 600);
+}, 300);
+
+// ════════════════════════════════════════════════════════════════
+// HUD
+// ════════════════════════════════════════════════════════════════
+
+const activeN = words.filter(w => w.a > 0).length;
+document.getElementById('hud-stats').textContent =
+  `${words.length.toLocaleString()} parole · 8 sistemi · ${fractals.length} pianeti · ${activeN} attive`;
+
+// ════════════════════════════════════════════════════════════════
+// NAVIGATION STATE
+// ════════════════════════════════════════════════════════════════
+
+let viewLevel = 'cosmic'; // cosmic | system | planet
+let viewTarget = null;    // trigram index or fractal id
+
+function updateLevelHud() {
+  const el = document.getElementById('hud-level');
+  if (viewLevel === 'cosmic') el.textContent = 'vista cosmica';
+  else if (viewLevel === 'system') el.textContent = `sistema ${TRIGRAM_NAMES[viewTarget]}`;
+  else el.textContent = `pianeta ${fractals.find(f=>f.id===viewTarget)?.name || viewTarget}`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// FLY-TO
+// ════════════════════════════════════════════════════════════════
+
+let flyTgt = null, flySrc = null, flyT = 0, flyTargetLook = null;
+function flyTo(position, dist, lookAt) {
+  flySrc = camera.position.clone();
+  const dir = position.clone().sub(camera.position).normalize();
+  flyTgt = position.clone().sub(dir.multiplyScalar(dist));
+  flyTargetLook = lookAt || position;
+  flyT = 0;
+  controls.autoRotate = false;
+}
+
+function goHome() {
+  viewLevel = 'cosmic'; viewTarget = null;
+  flyTo(new THREE.Vector3(0, 300, 1100), 0, new THREE.Vector3(0,0,0));
+  controls.target.set(0,0,0);
+  updateLevelHud();
+}
+
+function goToSystem(tri) {
+  viewLevel = 'system'; viewTarget = tri;
+  const pos = systemPositions[tri];
+  flyTo(pos, 120, pos);
+  controls.target.copy(pos);
+  updateLevelHud();
+}
+
+function goToPlanet(fractalId) {
+  viewLevel = 'planet'; viewTarget = fractalId;
+  const pos = planetPositions[fractalId];
+  if (!pos) return;
+  const fr = fractals.find(f => f.id === fractalId);
+  const sz = fr ? PLANET_SIZE + Math.min(fr.word_count/300, 4) : PLANET_SIZE;
+  flyTo(pos, sz * 5, pos);
+  controls.target.copy(pos);
+  updateLevelHud();
+}
+
+document.getElementById('btn-home').addEventListener('click', goHome);
+document.getElementById('btn-back').addEventListener('click', () => {
+  if (viewLevel === 'planet') {
+    const lower = Math.floor(viewTarget / 8);
+    goToSystem(lower);
+  } else goHome();
+});
+
+// ════════════════════════════════════════════════════════════════
+// RAYCASTER
+// ════════════════════════════════════════════════════════════════
+
+const ray = new THREE.Raycaster();
+ray.params.Points.threshold = 1.5;
+const mouse = new THREE.Vector2();
+let pDown = {x:0, y:0};
+
+renderer.domElement.addEventListener('pointerdown', e => { pDown = {x:e.clientX, y:e.clientY}; });
+
+renderer.domElement.addEventListener('pointerup', e => {
+  if (Math.abs(e.clientX-pDown.x) > 6 || Math.abs(e.clientY-pDown.y) > 6) return;
+  mouse.x = (e.clientX/window.innerWidth)*2-1;
+  mouse.y = -(e.clientY/window.innerHeight)*2+1;
+  ray.setFromCamera(mouse, camera);
+
+  const hits = ray.intersectObjects(clickableMeshes);
+  if (hits.length) {
+    const obj = hits[0].object;
+    if (obj.userData.type === 'star') {
+      const tri = obj.userData.trigram;
+      const nm = obj.userData.name;
+      const frCount = trigramSystems[tri].length;
+      const wCount = trigramSystems[tri].reduce((s,f) => s + f.word_count, 0);
+      showInfo(`${nm}`, `Stella centrale · sistema ${nm} · ${frCount} pianeti · ${wCount} parole`);
+    } else if (obj.userData.type === 'planet') {
+      const fr = obj.userData.fractal;
+      showInfo(fr.name, `Pianeta #${fr.id} · ${fr.word_count} parole · attivazione ${(fr.activation*100).toFixed(0)}%`);
+    }
+    return;
+  }
+
+  const wh = ray.intersectObject(wordPoints);
+  if (wh.length) {
+    const w = wordData[wh[0].index];
+    if (w) {
+      const fn = fractals.find(f=>f.id===w.fractal)?.name || '?';
+      showInfo(w.word, `pianeta ${fn} · strato: ${w.layer} · stabilita ${w.stability}% · attivazione ${w.activation}% · affinita ${w.affinity}%`);
+    }
+  } else hideInfo();
+});
+
+// Double-click: navigate deeper
+renderer.domElement.addEventListener('dblclick', e => {
+  mouse.x = (e.clientX/window.innerWidth)*2-1;
+  mouse.y = -(e.clientY/window.innerHeight)*2+1;
+  ray.setFromCamera(mouse, camera);
+
+  const hits = ray.intersectObjects(clickableMeshes);
+  if (hits.length) {
+    const obj = hits[0].object;
+    if (obj.userData.type === 'star') goToSystem(obj.userData.trigram);
+    else if (obj.userData.type === 'planet') goToPlanet(obj.userData.fractal.id);
+    return;
+  }
+  const wh = ray.intersectObject(wordPoints);
+  if (wh.length) {
+    const w = wordData[wh[0].index];
+    if (w) { goToPlanet(w.fractal); }
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+// SEARCH
+// ════════════════════════════════════════════════════════════════
+
+const searchIn = document.getElementById('search');
+searchIn.addEventListener('input', () => {
+  const q = searchIn.value.toLowerCase().trim();
+  if (q.length < 2) return;
+
+  // Word match
+  const wi = wordData.findIndex(w => w && w.word === q);
+  if (wi >= 0) { const w = wordData[wi]; showWordInfo(w); goToPlanet(w.fractal); return; }
+  const pi = wordData.findIndex(w => w && w.word.startsWith(q));
+  if (pi >= 0) { const w = wordData[pi]; showWordInfo(w); goToPlanet(w.fractal); return; }
+
+  // System
+  const si = TRIGRAM_NAMES.findIndex(n => n.toLowerCase().startsWith(q));
+  if (si >= 0) { showInfo(TRIGRAM_NAMES[si], `Sistema solare`); goToSystem(si); return; }
+
+  // Planet
+  const fr = fractals.find(f => f.name.toLowerCase().includes(q));
+  if (fr) { showInfo(fr.name, `Pianeta · ${fr.word_count} parole`); goToPlanet(fr.id); }
+});
+searchIn.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { searchIn.value = ''; searchIn.blur(); hideInfo(); }
+});
+
+function showWordInfo(w) {
+  const fn = fractals.find(f=>f.id===w.fractal)?.name || '?';
+  showInfo(w.word, `pianeta ${fn} · strato: ${w.layer} · stabilita ${w.stability}%`);
+}
+
+// ════════════════════════════════════════════════════════════════
+// INFO PANEL
+// ════════════════════════════════════════════════════════════════
+
+function showInfo(title, meta) {
+  document.getElementById('info-title').textContent = title;
+  document.getElementById('info-meta').textContent = meta;
+  document.getElementById('info-panel').style.display = 'block';
+}
+function hideInfo() { document.getElementById('info-panel').style.display = 'none'; }
+document.getElementById('info-close').addEventListener('click', hideInfo);
+
+// ════════════════════════════════════════════════════════════════
+// WEBSOCKET LIVE
+// ════════════════════════════════════════════════════════════════
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onmessage = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'state_update' && msg.data?.active_words) {
+        const aSet = new Set(msg.data.active_words.map(a => a[0]));
+        let aN = 0;
+        const sizes = wGeo.attributes.aSize.array;
+        const colors = wGeo.attributes.aColor.array;
+        for (let i = 0; i < wordData.length; i++) {
+          const w = wordData[i];
+          if (!w) continue;
+          if (aSet.has(w.word)) {
+            aN++;
+            sizes[i] = 1.5 + (w.stability/100)*1.5;
+            const c = new THREE.Color().setHSL(fractalHue(w.fractal)/360, 0.5, 0.85);
+            colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
+          } else {
+            const layer = classifyWord({a1:w.affinity, s:w.stability, a:0});
+            const L = LAYERS[layer];
+            const hue = fractalHue(w.fractal);
+            const base = new THREE.Color().setHSL(hue/360, 0.4, 0.5);
+            const lc = new THREE.Color(L.color[0], L.color[1], L.color[2]);
+            base.lerp(lc, 0.6);
+            const br = 0.4 + (w.stability/100)*0.6;
+            sizes[i] = 0.2 + (w.stability/100)*0.6;
+            colors[i*3]=base.r*br; colors[i*3+1]=base.g*br; colors[i*3+2]=base.b*br;
+          }
+        }
+        wGeo.attributes.aSize.needsUpdate = true;
+        wGeo.attributes.aColor.needsUpdate = true;
+        document.getElementById('hud-stats').textContent =
+          `${words.length.toLocaleString()} parole · 8 sistemi · ${fractals.length} pianeti · ${aN} attive`;
+      }
+    } catch(_) {}
+  };
+  ws.onclose = () => setTimeout(connectWS, 3000);
+}
+connectWS();
+
+// ════════════════════════════════════════════════════════════════
+// ANIMATE
+// ════════════════════════════════════════════════════════════════
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Fly-to
+  if (flyTgt) {
+    flyT += 0.02;
+    if (flyT >= 1) {
+      camera.position.copy(flyTgt);
+      if (flyTargetLook) controls.target.copy(flyTargetLook);
+      flyTgt = null;
+    } else {
+      const ease = 1 - Math.pow(1-flyT, 3);
+      camera.position.lerpVectors(flySrc, flyTgt, ease);
+    }
+  }
+
+  // Slow planet orbit animation
+  for (const pm of planetMeshes) {
+    const d = pm.userData;
+    const sysPos = systemPositions[d.lower];
+    const angle = d.orbitAngle + t * 0.03; // very slow orbit
+    const incl = d.lower * 0.3;
+    const ox = PLANET_ORBIT * Math.cos(angle);
+    const oy = PLANET_ORBIT * Math.sin(angle) * Math.cos(incl);
+    const oz = PLANET_ORBIT * Math.sin(angle) * Math.sin(incl);
+    pm.position.set(sysPos.x + ox, sysPos.y + oy, sysPos.z + oz);
+    // Update stored position for raycasting
+    planetPositions[d.fractal.id] = pm.position.clone();
+  }
+
+  controls.update();
+  composer.render();
+}
+animate();
+
+// ════════════════════════════════════════════════════════════════
+// RESIZE
+// ════════════════════════════════════════════════════════════════
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  wMat.uniforms.uPR.value = renderer.getPixelRatio();
+});
+
+// ════════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════════
+
+function makeLabel(text, fontSize, color) {
+  const cvs = document.createElement('canvas');
+  const ctx = cvs.getContext('2d');
+  cvs.width = 512; cvs.height = 128;
+  ctx.clearRect(0, 0, 512, 128);
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = color;
+  ctx.font = `bold ${fontSize}px Courier New`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 256, 64);
+  const tex = new THREE.CanvasTexture(cvs);
+  return new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.9, depthWrite: false })
+  );
+}
+
+} catch(err) {
+  console.error('Universo init error:', err);
+  fill.style.width = '100%';
+  fill.style.background = '#f44';
+  loadErr.textContent = err.message;
+  loadErr.style.display = 'block';
+}
+</script>
+</body>
+</html>

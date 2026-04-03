@@ -1,0 +1,59 @@
+{
+  "name": "analyze_and_repair",
+  "description": "Task completo: analizza il campo, identifica problemi, propone e applica correzioni",
+  "max_iterations": 50,
+  "token_budget_per_turn": 2048,
+  "strategy": {
+    "type": "sequential",
+    "phases": [
+      {
+        "name": "explore",
+        "tool": "analyze_field",
+        "focus": "isolated_nodes",
+        "depth": 3,
+        "max_calls": 5
+      },
+      {
+        "name": "explore_clusters",
+        "tool": "analyze_field", 
+        "focus": "semantic_gaps",
+        "depth": 2,
+        "max_calls": 3
+      },
+      {
+        "name": "deep_dive",
+        "tool": "query_concept",
+        "sample_from": "isolated_found_in_explore",
+        "relation_type": "Any",
+        "max_calls": 10
+      },
+      {
+        "name": "propose",
+        "tool": "propose_connection",
+        "min_proposals": 3,
+        "max_proposals": 15,
+        "confidence_threshold": 0.6
+      },
+      {
+        "name": "validate",
+        "tool": "check_fractal_consistency",
+        "sample_size": 5
+      },
+      {
+        "name": "commit",
+        "tool": "commit_changes",
+        "dry_run_first": true
+      }
+    ]
+  },
+  "circuit_breaker": {
+    "max_errors": 3,
+    "max_no_improvement": 5,
+    "pause_on_rate_limit": 30
+  },
+  "logging": {
+    "log_all_opinions": true,
+    "log_proposals_rejected": true,
+    "summary_every": 10
+  }
+}

@@ -46,6 +46,10 @@ pub struct TeachResult {
     pub new_count: usize,
     /// Frattali coinvolti dal contesto
     pub fractal_affinities: Vec<(crate::topology::fractal::FractalId, f64)>,
+    /// Parole che erano nuove per il lessico
+    pub words_new: Vec<String>,
+    /// Parole che erano già note
+    pub words_known: Vec<String>,
 }
 
 /// Report sullo stato del sistema.
@@ -256,6 +260,22 @@ const TRIPLE_TABLE: [(&str, FractalId, FractalId, FractalId); 4] = [
 
 /// Soglia per composti ternari.
 const TRIPLE_THRESHOLD: f64 = 0.20;
+
+/// Distanza coseno tra due profili frattali [f32; 64].
+fn cosine_distance_64(a: &[f32; 64], b: &[f32; 64]) -> f64 {
+    let mut dot = 0.0f64;
+    let mut norm_a = 0.0f64;
+    let mut norm_b = 0.0f64;
+    for i in 0..64 {
+        let va = a[i] as f64;
+        let vb = b[i] as f64;
+        dot += va * vb;
+        norm_a += va * va;
+        norm_b += vb * vb;
+    }
+    let denom = (norm_a.sqrt() * norm_b.sqrt()).max(1e-10);
+    1.0 - (dot / denom)
+}
 
 /// Rileva quali composti frattali sono attivi dalla co-attivazione corrente.
 /// Prende i frattali attivi con le loro attivazioni e restituisce gli stati composti.
@@ -553,6 +573,71 @@ pub struct PrometeoTopologyEngine {
     /// invece di co-occorrenze statistiche.
     /// Caricato da prometeo_kg.json all'avvio.
     pub kg: KnowledgeGraph,
+
+    // ── SelfModel — Identità esplicita ────────────────────────────────────────
+    /// Credenze dichiarative, gerarchia di valori, incertezze riconosciute.
+    /// Layer esplicito complementare all'IdentityCore (implicito/olografico).
+    /// Bootstrappato con credenze e valori fondativi; evolve attraverso l'esperienza.
+    pub self_model: crate::topology::self_model::SelfModel,
+
+    // ── SemanticEpisodeLog — Memoria episodica semantica ──────────────────────
+    /// Episodi con sintesi testuale, concetti chiave, firma frattale.
+    /// Complementare all'EpisodeStore (vettori di attivazione): questo layer
+    /// memorizza COSA è successo in linguaggio comprensibile.
+    pub semantic_episodes: crate::topology::semantic_episode::SemanticEpisodeLog,
+
+    /// Pre-indice: frattale_id → top parole per affinità (per apply_fractal_resonance).
+    /// Calcolato in rebuild_pf_field(), usato in apply_fractal_resonance().
+    /// Elimina la scansione O(25K) del lessico ad ogni receive().
+    fractal_resonance_index: Vec<Vec<(String, f32)>>,  // indexed by fractal_id
+
+    // ── ThoughtChain — ragionamento autonomo finalizzato ────────────────────
+    /// Ultima catena di pensiero completata (per la UI e l'ispezione).
+    /// None all'avvio, poi aggiornata ogni volta che l'entità ragiona.
+    pub last_thought_chain: Option<crate::topology::thought_chain::ThoughtChain>,
+
+    // ── Phase 52 — Cristalli di comprensione ─────────────────────────────────
+    /// Ultime proposizioni estratte (per inner dialogue API e ispezione).
+    /// Aggiornate ad ogni generate_willed_inner().
+    pub last_propositions: Vec<crate::topology::proposition::Proposition>,
+
+    // ── Phase 53 — Bisogni, desideri, interlocutore, umorismo ──────────────
+
+    /// Gerarchia dei bisogni (Maslow reinterpretato per Prometeo).
+    pub needs: crate::topology::needs::NeedsHierarchy,
+    /// Ultimo stato dei bisogni calcolato.
+    pub last_needs_state: Option<crate::topology::needs::NeedsState>,
+
+    /// Sistema dei desideri — motivazioni persistenti sopra le intenzioni.
+    pub desire: crate::topology::desire::DesireCore,
+
+    /// Modello dell'interlocutore — l'eco dell'Altro nel campo.
+    pub interlocutor: crate::topology::interlocutor::InterlocutorModel,
+
+    /// Stato umoristico corrente (rilevato in receive).
+    pub last_humor_state: crate::topology::humor::HumorState,
+
+    /// Scoperte da self-listening pendenti (svuotate dopo ogni lettura).
+    pub pending_self_discoveries: Vec<crate::topology::thought::Thought>,
+
+    /// Cache KG-derivata per interocezione: parole associate a fatica.
+    intero_fatigue_cache: Vec<(String, f32)>,
+    /// Cache KG-derivata per interocezione: parole associate a curiosità.
+    intero_curiosity_cache: Vec<(String, f32)>,
+    /// Tick dell'ultimo ricalcolo cache interocezione.
+    intero_cache_tick: u32,
+
+    // ── Prefrontale topologico ─────────────────────────────────────────────
+    /// Ultimi attrattori IS_A raggiunti dall'input (categoria pragmatica riconosciuta).
+    /// Vuoto = l'entità non ha capito l'input.
+    pub last_comprehension: Vec<crate::topology::knowledge_graph::AttractorHit>,
+
+    /// True se l'ultimo input era una domanda (contiene '?').
+    pub last_input_is_question: bool,
+
+    /// True se il prossimo input deve essere insegnato automaticamente.
+    /// Viene impostato quando l'entità non capisce l'input corrente.
+    pub learning_mode_pending: bool,
 }
 
 impl PrometeoTopologyEngine {
@@ -620,6 +705,23 @@ impl PrometeoTopologyEngine {
             last_input_reading: None,
             narrative_self: crate::topology::narrative::NarrativeSelf::new(),
             kg: KnowledgeGraph::new(),
+            self_model: crate::topology::self_model::SelfModel::bootstrap(),
+            semantic_episodes: crate::topology::semantic_episode::SemanticEpisodeLog::new(),
+            fractal_resonance_index: Vec::new(),
+            last_thought_chain: None,
+            last_propositions: Vec::new(),
+            needs: crate::topology::needs::NeedsHierarchy::new(),
+            last_needs_state: None,
+            desire: crate::topology::desire::DesireCore::new(),
+            interlocutor: crate::topology::interlocutor::InterlocutorModel::new(),
+            last_humor_state: crate::topology::humor::HumorState::empty(),
+            pending_self_discoveries: Vec::new(),
+            intero_fatigue_cache: Vec::new(),
+            intero_curiosity_cache: Vec::new(),
+            intero_cache_tick: 0,
+            last_comprehension: Vec::new(),
+            last_input_is_question: false,
+            learning_mode_pending: false,
             instance_born: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -640,6 +742,93 @@ impl PrometeoTopologyEngine {
         // Qualsiasi parola che attiva gli stessi frattali sarà riconosciuta dallo stesso concetto.
         engine.seed_conceptual_anchors();
         engine
+    }
+
+    /// Crea un engine vuoto: solo 64 frattali (immutabili) + strutture minime.
+    /// Usato dal server quando lo stato viene caricato da disco:
+    /// `new_empty()` + `restore_lexicon()` evita il doppio bootstrap.
+    pub fn new_empty() -> Self {
+        let registry = bootstrap_fractals();
+        let mut ids = registry.all_ids();
+        ids.sort();
+        let complex = SimplicialComplex::new();
+        let memory = TopologicalMemory::new();
+        let dream = DreamEngine::new();
+        let lexicon = Lexicon::new();
+        let vital = VitalCore::new();
+        let curiosity = CuriosityEngine::new();
+        let dimensional = CovariationTracker::new();
+        let conversation = ConversationContext::new();
+        let growth = GrowthTracker::new();
+        let locus = Locus::new();
+        let word_topology = WordTopology::new();
+
+        Self {
+            registry,
+            complex,
+            memory,
+            dream,
+            lexicon,
+            vital,
+            curiosity,
+            dimensional,
+            conversation,
+            growth,
+            locus,
+            last_movement: None,
+            total_perturbations: 0,
+            will: WillCore::new(),
+            last_will: None,
+            last_unknown_words: Vec::new(),
+            curriculum: CurriculumProgress::new(),
+            semantic_axes: Vec::new(),
+            last_compound_states: Vec::new(),
+            tick_counter: 0,
+            word_topology,
+            conversation_turn_count: 0,
+            knowledge_base: KnowledgeBase::new(),
+            last_input_words: Vec::new(),
+            last_generated_words: Vec::new(),
+            pf_field: PrometeoField::empty(),
+            pf_activation: ActivationState::new(0),
+            episode_store: EpisodeStore::new(200),
+            identity: IdentityCore::new(),
+            cached_curiosity_gaps: Vec::new(),
+            homology_refresh_counter: 0,
+            provenance: ProvenanceMap::new(),
+            last_dogfeed_words: Vec::new(),
+            curiosity_satiety: 0.0,
+            last_archetype_used: String::new(),
+            conversation_window: std::collections::VecDeque::new(),
+            last_input_reading: None,
+            narrative_self: crate::topology::narrative::NarrativeSelf::new(),
+            kg: KnowledgeGraph::new(),
+            self_model: crate::topology::self_model::SelfModel::bootstrap(),
+            semantic_episodes: crate::topology::semantic_episode::SemanticEpisodeLog::new(),
+            fractal_resonance_index: Vec::new(),
+            last_thought_chain: None,
+            last_propositions: Vec::new(),
+            needs: crate::topology::needs::NeedsHierarchy::new(),
+            last_needs_state: None,
+            desire: crate::topology::desire::DesireCore::new(),
+            interlocutor: crate::topology::interlocutor::InterlocutorModel::new(),
+            last_humor_state: crate::topology::humor::HumorState::empty(),
+            pending_self_discoveries: Vec::new(),
+            intero_fatigue_cache: Vec::new(),
+            intero_curiosity_cache: Vec::new(),
+            intero_cache_tick: 0,
+            last_comprehension: Vec::new(),
+            last_input_is_question: false,
+            learning_mode_pending: false,
+            instance_born: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            last_interaction_ts: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        }
     }
 
     /// Alias per compatibilita: identico a `new()`.
@@ -814,7 +1003,7 @@ impl PrometeoTopologyEngine {
     /// rientra nel concetto, anche se non è nella lista.
     ///
     /// Idempotente: non ri-semina se le ancore sono già presenti (resistente ai restart).
-    fn seed_conceptual_anchors(&mut self) {
+    pub fn seed_conceptual_anchors(&mut self) {
         use crate::topology::knowledge::KnowledgeDomain;
         if self.knowledge_base.has_conceptual_anchors() { return; }
 
@@ -903,6 +1092,10 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             awareness: Some("Sono nato. La mia narrativa comincia qui.".to_string()),
             fractal_snapshot: vec![],
             intensity: 1.0, // massima salienza — è l'origine
+            input_words: vec![],
+            salient_word: None,
+            inner_state_summary: Some("Nascita — il campo si apre per la prima volta.".to_string()),
+            valence: None, // Phase 55: nessuna valenza al turno 0 (pre-campo)
         };
         self.narrative_self.crystallized.insert(0, founding_turn);
 
@@ -911,8 +1104,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
 
         // 5. Reset campo: il teach() satura activation + curiosity — Prometeo non deve
         //    nascere già "Overloaded". Il campo torna a riposo prima della prima interazione.
-        //    decay_all(0.99) → rimane 1% dell'energia. rest() × 6 ≈ EMA × 0.5^6 ≈ 1.5%.
-        self.word_topology.decay_all(0.99);
+        //    decay(0.01) → rimane 1% dell'energia. rest() × 6 ≈ EMA × 0.5^6 ≈ 1.5%.
+        self.pf_activation.decay(0.01);
         for _ in 0..6 { self.vital.rest(); }
     }
 
@@ -954,8 +1147,17 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // Osserva pattern per crescita futura (senza attivare il campo)
         self.growth.observe(&phrase.composite_signature, input, &self.registry);
 
-        let new_count = new_before.iter().filter(|&&b| b).count();
-        let known_count = words.len() - new_count;
+        let mut words_new = Vec::new();
+        let mut words_known = Vec::new();
+        for (i, w) in words.iter().enumerate() {
+            if new_before.get(i).copied().unwrap_or(false) {
+                words_new.push(w.clone());
+            } else {
+                words_known.push(w.clone());
+            }
+        }
+        let new_count = words_new.len();
+        let known_count = words_known.len();
 
         let affinities: Vec<(crate::topology::fractal::FractalId, f64)> =
             phrase.fractal_involvement.iter().map(|(&k, &v)| (k, v)).collect();
@@ -965,6 +1167,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             known_count,
             new_count,
             fractal_affinities: affinities,
+            words_new,
+            words_known,
         }
     }
 
@@ -990,6 +1194,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             known_count: 0,
             new_count: 0,
             fractal_affinities: Vec::new(),
+            words_new: Vec::new(),
+            words_known: Vec::new(),
         };
 
         // Formato .lesson: "parola: contesto_positivo / contesto_negativo"
@@ -1055,6 +1261,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             known_count: 0,
             new_count: 0,
             fractal_affinities: Vec::new(),
+            words_new: Vec::new(),
+            words_known: Vec::new(),
         };
 
         // Teach positivo: "parola contesto_positivo"
@@ -1106,6 +1314,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             known_count: 0,
             new_count: 0,
             fractal_affinities: Vec::new(),
+            words_new: Vec::new(),
+            words_known: Vec::new(),
         };
 
         let is_lesson_format = path.extension()
@@ -1157,7 +1367,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         self.word_topology.enrich_with_emergent_distances(&self.lexicon, &self.registry);
 
         total_result.fractal_affinities = {
-            let fa = self.word_topology.emerge_fractal_activations(&self.lexicon);
+            let fa = self.pf_emerge_fractals();
             fa.into_iter().collect()
         };
 
@@ -1189,6 +1399,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             known_count: 0,
             new_count: 0,
             fractal_affinities: Vec::new(),
+            words_new: Vec::new(),
+            words_known: Vec::new(),
         };
 
         // Raccoglie le frasi generate per debug/visualizzazione
@@ -1336,6 +1548,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             known_count: 0,
             new_count: 0,
             fractal_affinities: Vec::new(),
+            words_new: Vec::new(),
+            words_known: Vec::new(),
         };
 
         for line in content.lines() {
@@ -1515,14 +1729,35 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
     /// Ricevi un input testuale: perturba il campo, cattura in memoria,
     /// restituisci la risposta emergente.
     pub fn receive(&mut self, input: &str) -> EmergentResponse {
+        let _t0 = std::time::Instant::now();
+        macro_rules! tick {
+            ($label:expr) => {
+                eprintln!("[PERF] {:>35} — {:>6}ms", $label, _t0.elapsed().as_millis());
+            };
+        }
         // Aggiorna il timestamp di interazione — misura il silenzio trascorso
         self.last_interaction_ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
 
+        // Prefrontale — learning mode: se il turno precedente non era capito,
+        // il nuovo input viene insegnato automaticamente prima di essere elaborato.
+        // L'entità impara ciò che le viene spiegato subito dopo aver detto "non capisco".
+        if self.learning_mode_pending {
+            self.learning_mode_pending = false;
+            let _ = self.teach(input);
+        }
+
+        // Rileva domanda: '?' è un segnale pragmatico che dice "mi stai chiedendo qualcosa".
+        // Non serve capire le parole — il punto interrogativo cambia il tipo di risposta.
+        self.last_input_is_question = input.contains('?');
+
         // 1. Sveglia il sistema (se dormiva)
         self.dream.signal_activity();
+
+        // Phase 53: cattura firma 8D pre-input per InterlocutorModel
+        let pre_input_sig = self.env_biased_field_sig();
 
         // Phase 44: il dogfeed è rimosso dal path dialogico.
         // Re-iniettare le parole dell'output precedente crea eco (ciao → ricompare al turno 4).
@@ -1536,6 +1771,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
 
         // 2. Composizione frasale tramite lessico apprendibile
         let phrase = compose_phrase(&mut self.lexicon, input, &self.registry);
+        tick!("compose_phrase");
 
         // 2b. Risoluzione anaforica: se l'input risuona con un turno precedente,
         //     i frattali di quel turno vengono pre-attivati (eco conversazionale).
@@ -1559,20 +1795,34 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // 4b. Attiva il campo topologico delle parole.
         //     Le parole dell'input vengono attivate nella word_topology,
         //     poi la propagazione illumina il vicinato semantico.
-        self.word_topology.decay_all(0.50); // decay inter-turno: dimezza l'attivazione a ogni turno
+        self.pf_activation.decay(0.50); // decay inter-turno: dimezza l'attivazione a ogni turno
         // 0.50: dopo 3 turni una parola è al 12.5% → non contamina più il campo
 
         // Phase 41 — Baseline frattale PRE-input.
         // Catturata DOPO il decay (residuo del turno precedente) ma PRIMA dell'attivazione
         // delle parole input. Il delta = post_propagazione - baseline = segnale dell'input.
-        let frattale_baseline: Vec<(u32, f64)> =
-            self.word_topology.emerge_fractal_activations(&self.lexicon);
+        let frattale_baseline = self.pf_emerge_fractals();
 
-        let input_words_for_provenance: Vec<String> = phrase.word_activations.iter()
+        let mut input_words_for_provenance: Vec<String> = phrase.word_activations.iter()
             .map(|a| a.word.clone())
             .collect();
         for act in &phrase.word_activations {
-            self.word_topology.activate_word(&act.word, act.strength);
+            self.pf_activation.activate_by_name(&self.pf_field, &act.word, act.strength as f32);
+        }
+        // Phase 60: lemmatizzazione morfologica sull'input.
+        // "stai" → "stare", "mangio" → "mangiare" — se il lessico conosce l'infinito,
+        // lo attiva con la stessa forza della forma coniugata.
+        // Permette al KG di ragionare su "stare" anche quando l'input contiene "stai".
+        for act in &phrase.word_activations {
+            if let Some(lemma) = crate::topology::grammar::lemmatize(&act.word) {
+                if lemma.infinitive != act.word
+                    && self.pf_field.word_id(&lemma.infinitive).is_some()
+                    && !input_words_for_provenance.contains(&lemma.infinitive)
+                {
+                    self.pf_activation.activate_by_name(&self.pf_field, &lemma.infinitive, act.strength as f32);
+                    input_words_for_provenance.push(lemma.infinitive.clone());
+                }
+            }
         }
         // Phase 38: marca le parole input come External
         self.provenance.mark_many(&input_words_for_provenance, ActivationSource::External);
@@ -1585,25 +1835,125 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // Solo parole già nel lessico ricevono il boost (no parole sconosciute).
         if self.kg.edge_count > 0 {
             let inference = InferenceEngine::new(&self.kg);
-            let input_words_snap: Vec<String> = input_words_for_provenance.clone();
-            for word in &input_words_snap {
+            for word in &input_words_for_provenance {
                 for (related_word, strength) in inference.field_boosts(word) {
-                    // Boost solo se la parola è nel lessico (evita inquinare con concetti ignoti)
-                    if self.lexicon.get(&related_word).is_some() {
-                        self.word_topology.activate_word(&related_word, strength as f64);
-                    }
+                    self.pf_activation.activate_by_name(&self.pf_field, &related_word, strength);
                 }
             }
         }
-        // ─────────────────────────────────────────────────────────────────────
+        tick!("kg_boost");
 
-        self.propagate_field_words(); // PF1: O(attive × 8) invece di O(archi_totali)
+        if self.kg.edge_count > 0 {
+            let schema_boosts = self.detect_schema_activation(&input_words_for_provenance);
+            for (concept, strength) in schema_boosts {
+                self.pf_activation.activate_by_name(&self.pf_field, &concept, strength as f32);
+            }
+        }
+        tick!("schema_activation");
+
+        // ── Prefrontale topologico ────────────────────────────────────────────────
+        // IS_A upward = riconosce la categoria pragmatica ("ciao" → "saluto").
+        // CAUSES forward = semina l'intento nel campo ("saluto" CAUSES "benvenuto").
+        // I semi CAUSES diventano parte del campo prima della propagazione:
+        // la risposta emerge naturalmente da un campo già orientato verso l'azione giusta.
+        if self.kg.edge_count > 0 {
+            let iw_refs: Vec<&str> = input_words_for_provenance.iter().map(|s| s.as_str()).collect();
+            let attractors = self.kg.find_activated_attractors(&iw_refs, 3);
+
+            // Semina i CAUSES come intent seeds nel campo (prima della propagazione).
+            for attr in attractors.iter().take(2) {
+                for cause_target in attr.causes.iter().take(3) {
+                    self.pf_activation.activate_by_name(&self.pf_field, cause_target, 0.20f32);
+                }
+            }
+            self.last_comprehension = attractors;
+
+            // ── Phase 60: 2° hop deliberativo — dal COSA al COME ────────────────
+            // I CAUSES targets (0.20) dicono all'entità COSA deve accadere.
+            // Questo hop aggiunge il COME: cosa richiedono, fanno, contengono
+            // quegli obiettivi.
+            //
+            // Es:  saluto → CAUSES → conversazione (0.20, già seminato)
+            //      conversazione → HAS      → risposta    (0.12)
+            //      conversazione → DOES     → connettere  (0.12)
+            //      conversazione → REQUIRES → ascolto     (0.12)
+            //
+            // A forza minore (0.12): sono orientamenti, non segnali primari.
+            // Hub words esclusi (degree < 200): il campo resta preciso.
+            //
+            // Cristallizzazione automatica: ogni percorso
+            // [obiettivo → azione] navigato coerentemente inscrive simplessi
+            // che al turno successivo risuonano direttamente, senza ricalcolare.
+            // È così che Prometeo impara a fare cose attraverso le relazioni.
+            {
+                // Step 1: raccogli cause_targets (borrow su last_comprehension)
+                let cause_targets: Vec<String> = self.last_comprehension.iter()
+                    .take(2)
+                    .flat_map(|attr| attr.causes.iter().take(3).cloned())
+                    .collect();
+
+                // Step 2: interroga il KG per ogni target (borrow su kg)
+                let how_rels = [
+                    crate::topology::relation::RelationType::Has,
+                    crate::topology::relation::RelationType::Does,
+                    crate::topology::relation::RelationType::Requires,
+                ];
+                let mut how_words: Vec<String> = Vec::new();
+                for cause_target in &cause_targets {
+                    for &rel in &how_rels {
+                        let words: Vec<String> = self.kg
+                            .query_objects_weighted(cause_target, rel)
+                            .into_iter()
+                            .take(2)
+                            .filter(|(w, _)| self.kg.total_degree(w) < 200)
+                            .map(|(w, _)| w.to_string())
+                            .collect();
+                        how_words.extend(words);
+                    }
+                }
+
+                // Step 3: attiva nel campo (borrow su pf_activation)
+                for word in &how_words {
+                    self.pf_activation.activate_by_name(&self.pf_field, word, 0.12f32);
+                }
+            }
+
+        } else {
+            self.last_comprehension = Vec::new();
+        }
+        tick!("prefrontal_attractors");
+
+        {
+            let self_boosts = self.self_model.field_boosts(&input_words_for_provenance);
+            for (word, strength) in self_boosts {
+                self.pf_activation.activate_by_name(&self.pf_field, &word, strength as f32);
+            }
+        }
+        tick!("selfmodel_boost");
+
+        // Phase 55: cap pre-propagazione per parole non-input.
+        // Le sorgenti (KG boost, episode recall, risonanza, frattale) si sommano:
+        // senza cap, hub words raggiungono 0.4+ prima della propagazione.
+        // L'input (0.3-0.6) deve restare il segnale dominante.
+        {
+            const MAX_NON_INPUT: f32 = 0.25;
+            let hot = self.pf_activation.hot_words(&self.pf_field, 500);
+            for (word, act) in &hot {
+                if *act > MAX_NON_INPUT && !input_words_for_provenance.contains(&word.to_string()) {
+                    self.pf_activation.set_by_name(&self.pf_field, &word, MAX_NON_INPUT);
+                }
+            }
+        }
+
+        self.propagate_field_words();
+        tick!("propagate_pf1");
 
         // Phase 41 — Delta frattale: segnale SPECIFICO dell'input.
         // post - baseline = ciò che queste parole hanno cambiato nel campo.
         // Usato da read_input() per riconoscere l'atto comunicativo senza liste hardcoded.
-        let frattale_post_input: Vec<(u32, f64)> =
-            self.word_topology.emerge_fractal_activations(&self.lexicon);
+        // Una sola chiamata PF1 — O(attive × 64), riusata per tutti i downstream consumers
+        let frattale_post_input = self.pf_emerge_fractals();
+        tick!("emerge_post");
         let frattale_delta: Vec<(u32, f64)> = frattale_post_input.iter()
             .map(|(fid, post_act)| {
                 let pre = frattale_baseline.iter()
@@ -1616,31 +1966,22 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             .collect();
 
         // 4c. Risonanza frattale — Phase 43A.
-        //     I frattali attivati dall'input amplificano il campo: "cassa armonica".
-        //     Le parole affini ai frattali salienti si attivano a bassa intensità,
-        //     arricchendo il contesto senza soffocare il segnale originale.
         self.apply_fractal_resonance(&frattale_delta);
+        tick!("fractal_resonance");
 
         // 4d. Pattern completion episodica — Phase 28.
-        //     Il campo presente risuona con episodi passati simili (cosine > 0.45).
-        //     Il passato "completa" il presente: recall_into() blende φ-pesato nel campo.
         self.episode_store.recall_into(&mut self.pf_activation.activations,
                                        crate::topology::episodic::RECALL_THRESHOLD);
+        tick!("episode_recall");
 
-        // 5. Crea perturbazione dall'input (usa il lessico come fonte unica)
+        // 5. Perturbazione input → complesso simpliciale
         let perturbation = create_perturbation(input, &self.lexicon);
         apply_perturbation(&mut self.complex, &perturbation);
+        tick!("perturbation");
 
-        // 6. Attivazione frattale: gia gestita dalla perturbazione (step 5).
-        //    Aggiungere qui sarebbe doppia attivazione → saturazione.
-        //    La perturbazione usa le stesse affinita lessicali della frase.
-
-        // 6b. Calcola destinazione dall'input e muovi il locus.
-        // Fallback: se fractal_involvement e vuoto (parola ignota o instabile),
-        // usa il frattale piu attivo nel complesso — l'entita reagisce comunque.
+        // 6b. Calcola destinazione e muovi il locus.
         let destination = Locus::compute_destination(&phrase, &self.registry)
             .or_else(|| {
-                // Frattale piu attivo nel complesso simpliciale
                 let mut best: Option<(FractalId, f64)> = None;
                 for (&id, _) in self.registry.iter() {
                     let act: f64 = self.complex.simplices_of(id).iter()
@@ -1653,23 +1994,21 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 }
                 best.map(|(id, _)| id)
             });
+        tick!("destination");
         if let Some(dest) = destination {
             let movement = self.locus.move_to(dest, &self.complex, &self.registry);
-            // I frattali lungo il cammino ricevono attivazione residua
             for &waypoint in &movement.path {
                 self.complex.activate_region(waypoint, 0.1);
             }
             self.last_movement = Some(movement);
         }
+        tick!("locus_move");
 
-        // 6b2. Aggiorna il sub-locus: l'input sposta la posizione
-        //      nelle dimensioni libere del frattale corrente.
         self.locus.update_sub_position(&phrase.composite_signature, 0.3);
 
-        // 6c. Sensi computazionali: il sistema sente la propria elaborazione
+        // 6c. Sensi computazionali
         let n_active = phrase.fractal_involvement.len();
         if n_active >= 4 {
-            // Molti frattali attivati → Complessità percepita cresce
             let complexity_boost = (n_active as f64 - 3.0) * 0.05;
             let mut sig = phrase.composite_signature;
             let current = sig.get(crate::topology::primitive::Dim::Complessita);
@@ -1677,16 +2016,17 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     (current + complexity_boost).min(1.0));
         }
         if n_active <= 1 {
-            // Pochi frattali → Definizione bassa (sfumato)
             let mut sig = phrase.composite_signature;
             sig.set(crate::topology::primitive::Dim::Definizione, 0.3);
         }
 
         // 7. Cattura stato in memoria (topologica)
         self.memory.capture(&self.complex, input);
+        tick!("memory_capture");
 
         // 8. Lascia risuonare col passato
         let resonances = self.memory.resonate(&self.complex);
+        tick!("memory_resonate");
         for res in &resonances {
             for &(sid, act) in &res.imprint.active_simplices {
                 if let Some(simplex) = self.complex.get_mut(sid) {
@@ -1695,8 +2035,32 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             }
         }
 
-        // 9. Propaga attivazione (1 step: la diffusione resta locale)
-        self.complex.propagate_activation(1);
+        // Phase 52→55: risonanza → attivazione parole sorgente in PF1.
+        // Il passato compreso riaffiora come attivazione lessicale nella generazione.
+        // Phase 55: cap per-word per evitare che hub words in molti simplessi saturino.
+        {
+            let mut word_boosts: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
+            for res in &resonances {
+                for &(sid, act) in &res.imprint.active_simplices {
+                    if let Some(simplex) = self.complex.get(sid) {
+                        if let Some(words) = &simplex.source_words {
+                            let boost = (act * res.strength * 0.15) as f32;
+                            if boost > 0.005 {
+                                for word in words {
+                                    let entry = word_boosts.entry(word.clone()).or_insert(0.0);
+                                    *entry += boost;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            const MAX_RESONANCE_BOOST: f32 = 0.10;
+            for (word, boost) in &word_boosts {
+                let capped = boost.min(MAX_RESONANCE_BOOST);
+                self.pf_activation.activate_by_name(&self.pf_field, word, capped);
+            }
+        }
 
         // 10. Osserva co-variazioni dimensionali per i frattali coinvolti
         for &fid in phrase.fractal_involvement.keys() {
@@ -1714,7 +2078,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // 13. Traccia parole sconosciute: parole nell'input che il lessico non conosceva
         //     prima di process_input (che le crea come instabili)
         self.last_unknown_words = input.split_whitespace()
-            .map(|w| w.to_lowercase())
+            .filter_map(|w| crate::topology::lexicon::clean_token(w))
             .filter(|w| !self.lexicon.is_function_word(w) && w.chars().any(|c| c.is_alphabetic()))
             .filter(|w| {
                 self.lexicon.get(w)
@@ -1726,11 +2090,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         //      Include TUTTE le parole (anche function words come "ciao", "come")
         //      perché i trigger del knowledge base includono parole di apertura sociale.
         self.last_input_words = input.split_whitespace()
-            .map(|w| {
-                w.to_lowercase()
-                    .trim_matches(|c: char| !c.is_alphabetic())
-                    .to_string()
-            })
+            .filter_map(|w| crate::topology::lexicon::clean_token(w))
             .filter(|w| w.len() > 1)
             .collect();
 
@@ -1758,26 +2118,31 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             &frattale_delta,
             &self.knowledge_base,
             &self.lexicon,
+            Some(&self.kg),
         ));
 
         // 15. Senti la volonta: cosa vuole fare il sistema?
         let vital = self.vital.sense(&self.complex);
         let emotional_tone = vital.activation; // Salvo per memoria episodica
 
-        // 15b. Ciclo deliberativo — NarrativeSelf.
-        //      Il soggetto che comprende e decide PRIMA di generare.
-        //      Usa InputReading (atto grezzo) + KG (semantica IS_A) + KB (consapevolezze)
-        //      + VitalState (stato corrente) per formare l'intenzione di risposta.
+        tick!("read_input");
+
+        // 15b. Ciclo deliberativo — SPOSTATO dopo calcolo bisogni/interlocutore (riga ~2171b).
+        // La deliberazione ha bisogno dello stato motivazionale completo.
+        tick!("deliberate_placeholder");
+
+        // Credenze SelfModel → boost nel campo.
+        // Le credenze rilevanti all'input corrente attivano le loro parole ancora
+        // nel PF1, così influenzano la generazione (non solo la stance).
         {
-            let active_frac = self.word_topology.emerge_fractal_activations(&self.lexicon);
-            if let Some(reading) = &self.last_input_reading.clone() {
-                self.narrative_self.deliberate(
-                    reading,
-                    &vital,
-                    &self.knowledge_base,
-                    &self.kg,
-                    &active_frac,
-                );
+            let input_concepts: Vec<String> = self.last_input_words.clone();
+            let relevant = self.self_model.relevant_beliefs(&input_concepts);
+            for belief in &relevant {
+                for anchor in &belief.anchor_concepts {
+                    self.pf_activation.activate_by_name(
+                        &self.pf_field, anchor, (belief.confidence * 0.05) as f32,
+                    );
+                }
             }
         }
 
@@ -1816,10 +2181,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             .find(|(fid, _)| *fid == IDENTITA) // IDENTITA = id 32
             .map(|(_, act)| *act)
             .unwrap_or(0.0);
-        let mem_resonance = {
-            let resonances = self.memory.resonate(&self.complex);
-            resonances.iter().map(|r| r.strength).sum::<f64>().min(1.0)
-        };
+        // Riusa i resonances già calcolati sopra — nessuna seconda chiamata
+        let mem_resonance = resonances.iter().map(|r| r.strength).sum::<f64>().min(1.0);
         // Omologia: ricalcola solo ogni 10 turni (O(N²) troppo costosa ad ogni receive).
         // Le lacune topologiche cambiano lentamente — la cache è sempre valida per qualche turno.
         const HOMOLOGY_REFRESH_INTERVAL: usize = 10;
@@ -1836,8 +2199,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // 15b. Attivazioni frattali emergenti dal campo parole.
         //      I frattali non sono vertici — sono REGIONI del campo.
         //      Le attivazioni emergono dalla aggregazione delle parole attive
-        //      nella word_topology, non dal lessico direttamente.
-        let field_fractal_activations = self.word_topology.emerge_fractal_activations(&self.lexicon);
+        //      nel campo PF1, non dal lessico direttamente.
+        let field_fractal_activations = frattale_post_input.clone(); // già calcolato con PF1
 
         // 15b2. Arricchisci con sotto-frattali per prossimita topologica.
         let mut enriched_fid_act = active_fid_act.clone();
@@ -1848,8 +2211,9 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             }
         }
         // Sotto-frattali (id >= 6) per prossimita 8D alla firma della frase
+        let enriched_set: std::collections::HashSet<u32> = enriched_fid_act.iter().map(|(id, _)| *id).collect();
         for (&fid, fractal) in self.registry.iter() {
-            if fid >= 6 && !enriched_fid_act.iter().any(|(id, _)| *id == fid) {
+            if fid >= 6 && !enriched_set.contains(&fid) {
                 let affinity = fractal.affinity(&phrase.composite_signature);
                 if affinity > 0.55 {
                     enriched_fid_act.push((fid, affinity * 0.35));
@@ -1864,13 +2228,13 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             let boosts = self.knowledge_base.recall_words_for_context(
                 &self.last_input_words, &enriched_fid_act);
             for (word, strength) in boosts {
-                self.word_topology.activate_word(&word, strength);
+                self.pf_activation.activate_by_name(&self.pf_field, &word, strength as f32);
             }
         }
 
         // 15c. Rileva composti frattali attivi (dal campo, non dal lessico)
         let compounds = detect_compound_patterns(&enriched_fid_act);
-        let compound_bias = compound_to_will_bias(&compounds);
+        let mut compound_bias = compound_to_will_bias(&compounds);
 
         // 15d. Iscrivi i composti attivi nel complesso simpliciale.
         //      Deduplica: se il simplesso esiste gia, rinforza invece di creare nuovo.
@@ -1893,6 +2257,99 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
 
         self.last_compound_states = compounds;
 
+        // Phase 53: registra l'interlocutore e rileva umorismo
+        {
+            let post_input_sig = self.env_biased_field_sig();
+            self.interlocutor.register_input(&pre_input_sig, &post_input_sig, self.tick_counter);
+            self.last_humor_state = crate::topology::humor::HumorSense::sense(
+                &self.word_topology, &self.lexicon, &enriched_fid_act,
+            );
+            // Aggiungi bias da interlocutore, desideri, umorismo
+            compound_bias.extend(self.interlocutor.will_biases());
+            compound_bias.extend(self.desire.will_biases(&post_input_sig));
+            if self.last_humor_state.incongruity_score > 0.3 {
+                compound_bias.push((0, self.last_humor_state.incongruity_score * 0.10));
+            }
+        }
+
+        // Phase 53: gerarchia bisogni
+        let needs_field = crate::topology::needs::FieldMetrics {
+            simplex_density: if self.complex.count() > 0 {
+                self.complex.most_active(self.complex.count()).iter()
+                    .filter(|s| s.current_activation > 0.05).count() as f64
+                    / self.complex.count() as f64
+            } else { 0.0 },
+            fractal_coverage: {
+                let mut active_fids = std::collections::HashSet::new();
+                for s in self.complex.most_active(50) {
+                    for &v in &s.vertices { active_fids.insert(v); }
+                }
+                active_fids.len() as f64 / 64.0
+            },
+            active_word_count: self.word_topology.active_words().len(),
+            dialogue_turn_count: self.conversation.turn_count(),
+            dialogue_coherence: self.conversation.thematic_coherence,
+            dialogue_novelty: 1.0 - self.conversation.thematic_coherence,
+        };
+        let needs_state = self.needs.sense(&vital, &self.identity, &self.self_model, &needs_field);
+        self.last_needs_state = Some(needs_state.clone());
+
+        // 15b. Ciclo deliberativo — NarrativeSelf con stato interiore completo.
+        // Phase 55: la Valence Octalysis è il dato primario dello stato interno.
+        // Viene calcolata QUI (dove tutti i dati sono disponibili) e iniettata
+        // nella NarrativeSelf PRIMA di deliberate().
+        {
+            let active_frac = frattale_post_input.clone();
+
+            // Phase 55: Calcola Valence Octalysis
+            let field_sig = self.env_biased_field_sig();
+            let dominant_desire_intensity = self.desire.desires.iter()
+                .map(|d| d.intensity)
+                .fold(0.0f64, f64::max);
+            let dialogue_novelty = 1.0 - self.conversation.thematic_coherence;
+            let valence_input = crate::topology::valence::ValenceInput {
+                field_sig: &field_sig,
+                needs: &needs_state,
+                vital: &vital,
+                interlocutor_presence: self.interlocutor.presence,
+                interlocutor_resonance: self.interlocutor.cumulative_resonance,
+                humor_incongruity: self.last_humor_state.incongruity_score,
+                dialogue_novelty,
+                dominant_desire_intensity,
+            };
+            let valence = crate::topology::valence::Valence::compute(&valence_input);
+            self.narrative_self.set_valence(valence.clone());
+
+            // Phase 55: registra lo shift di valenza nell'identità per vulnerabilità
+            self.identity.register_valence_shift(&valence.drives);
+
+            if let Some(reading) = &self.last_input_reading.clone() {
+                let iw = self.last_input_words.clone();
+                let inner = crate::topology::narrative::InnerState {
+                    needs: Some(&needs_state),
+                    desires: &self.desire.desires,
+                    interlocutor_pattern: self.interlocutor.detected_pattern.clone(),
+                    interlocutor_presence: self.interlocutor.presence,
+                    interlocutor_resonance: self.interlocutor.cumulative_resonance,
+                    humor: &self.last_humor_state,
+                    attributed_intent: self.interlocutor.attributed_intent.clone(),
+                    coherence_integrity: self.identity.coherence_integrity,
+                };
+                self.narrative_self.deliberate(
+                    reading,
+                    &vital,
+                    &self.knowledge_base,
+                    &self.kg,
+                    &active_frac,
+                    Some(&self.self_model),
+                    Some(&self.identity),
+                    &iw,
+                    Some(&inner),
+                );
+            }
+        }
+        tick!("deliberate");
+
         // 15e. Contesto dialogico: il dialogo colora le pressioni della volonta.
         let dialogue_ctx = crate::topology::will::DialogueContext {
             turn_count: self.conversation.turn_count(),
@@ -1902,7 +2359,14 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 .unwrap_or(0.0),
         };
 
-        self.last_will = Some(self.will.sense(
+        // Phase 47: i valori del SelfModel modulano le pressioni della volontà.
+        let value_weights: Vec<(String, f64)> = self.self_model.dominant_values(6)
+            .iter()
+            .map(|v| (v.name.clone(), v.weight))
+            .collect();
+        let topic_cont = self.narrative_self.topic_continuity;
+
+        let mut will_result = self.will.sense(
             &vital,
             self.dream.phase,
             &active_fid_act,
@@ -1913,11 +2377,114 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             &compound_bias,
             &dialogue_ctx,
             &self.env_biased_field_sig(),
-        ));
+            &value_weights,
+            topic_cont,
+        );
+
+        // Phase 53: modulazione post-hoc da gerarchia bisogni
+        {
+            let needs_pressure = self.needs.compute_pressure(&needs_state);
+            let dom_idx = match &will_result.intention {
+                crate::topology::will::Intention::Express { .. } => 0usize,
+                crate::topology::will::Intention::Explore { .. } => 1,
+                crate::topology::will::Intention::Question { .. } => 2,
+                crate::topology::will::Intention::Remember { .. } => 3,
+                crate::topology::will::Intention::Withdraw { .. } => 4,
+                crate::topology::will::Intention::Reflect => 5,
+                crate::topology::will::Intention::Instruct { .. } => 6,
+                _ => 7,
+            };
+            if dom_idx < 7 {
+                will_result.drive = (will_result.drive * needs_pressure.will_modulation[dom_idx]).clamp(0.0, 1.0);
+            }
+        }
+        self.last_will = Some(will_result);
+
+        // Traccia undercurrents per il sistema dei desideri
+        if let Some(ref w) = self.last_will {
+            let undercurrents: Vec<(usize, f64)> = w.undercurrents.iter().filter_map(|(intent, pressure)| {
+                let idx = match intent {
+                    crate::topology::will::Intention::Express { .. } => 0usize,
+                    crate::topology::will::Intention::Explore { .. } => 1,
+                    crate::topology::will::Intention::Question { .. } => 2,
+                    crate::topology::will::Intention::Remember { .. } => 3,
+                    crate::topology::will::Intention::Withdraw { .. } => 4,
+                    crate::topology::will::Intention::Reflect => 5,
+                    crate::topology::will::Intention::Instruct { .. } => 6,
+                    _ => return None,
+                };
+                Some((idx, *pressure))
+            }).collect();
+            let sig = self.env_biased_field_sig();
+            self.desire.track_undercurrents(&undercurrents, &sig, self.tick_counter);
+        }
+
+        // ── SelfModel Update ──────────────────────────────────────────────────
+        // Aggiorna credenze e valori dalla stato corrente dell'interazione.
+        // Usa i concetti dell'input e l'energia del campo come segnale.
+        {
+            let field_energy = vital.activation;
+            self.self_model.update_from_activation(&input_words_for_provenance, field_energy);
+            let stance_str = self.narrative_self.stance.as_str().to_string();
+            self.self_model.update_values_from_stance(&stance_str, field_energy);
+        }
+
+        // ── SemanticEpisode Recording ─────────────────────────────────────────
+        // Registra un episodio semantico navigabile (cosa è successo in linguaggio).
+        // Diverso dall'EpisodeStore (vettori di attivazione): questo layer
+        // memorizza i concetti e produce sintesi testuale recuperabile.
+        {
+            // Normalizza energia: PF1 resting ~7.33, max osservato ~50.
+            // Mappiamo [resting, max] → [0.0, 1.0] per avere intensità significativa.
+            let raw_energy = self.pf_activation.field_energy() as f64;
+            const RESTING: f64 = 7.5;
+            const MAX_ENERGY: f64 = 50.0;
+            let field_energy = ((raw_energy - RESTING) / (MAX_ENERGY - RESTING)).clamp(0.0, 1.0);
+            if field_energy > 0.1 && !input_words_for_provenance.is_empty() {
+                // Top frattali dominanti
+                let mut dom_fractals: Vec<(u32, String, f64)> = enriched_fid_act.iter()
+                    .filter_map(|(fid, act)| {
+                        self.registry.get(*fid).map(|f| (*fid, f.name.clone(), *act))
+                    })
+                    .collect();
+                dom_fractals.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+                dom_fractals.truncate(3);
+
+                // Firma campo 8D
+                let field_sig = self.identity.self_signature.to_vec();
+
+                // Valori attivi (top 3)
+                let active_values: Vec<String> = self.self_model.dominant_values(3)
+                    .iter().map(|v| v.name.clone()).collect();
+
+                let stance_str = self.narrative_self.stance.as_str().to_string();
+                let intention_str = self.narrative_self.pending_intention
+                    .as_ref()
+                    .map(|i| format!("{:?}", i))
+                    .unwrap_or_default();
+
+                // Concetti chiave: top parole per attivazione
+                let mut key_concepts = input_words_for_provenance.clone();
+                key_concepts.dedup();
+                key_concepts.truncate(8);
+
+                self.semantic_episodes.record(
+                    key_concepts,
+                    dom_fractals,
+                    field_sig,
+                    &stance_str,
+                    &intention_str,
+                    active_values,
+                    field_energy,
+                );
+            }
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         // 16. Estrai risposta emergente
         self.total_perturbations += 1;
         let resp = emerge_response(&self.complex, &self.registry);
+        tick!("TOTALE receive()");
         resp
     }
 
@@ -1992,10 +2559,10 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             .collect();
         let stable_words: Vec<String> = stable.iter().map(|(w, _)| w.clone()).collect();
         for (word, stability) in &stable {
-            // Energia ridotta a 0.001×stability: con decay word_topology a 0.03,
+            // Energia ridotta a 0.001×stability: con decay PF1 a 0.03,
             // l'equilibrio di riposo sarà ~0.033×stability ≈ 3% — campo vivo ma non saturo.
-            let energy = stability * 0.001;
-            self.word_topology.activate_word(word, energy);
+            let energy = (stability * 0.001) as f32;
+            self.pf_activation.activate_by_name(&self.pf_field, word, energy);
         }
         // Phase 38: le parole di sfondo autonomo sono Explored (non Self né External)
         self.provenance.mark_many(&stable_words, ActivationSource::Explored);
@@ -2026,11 +2593,182 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
     ///
     /// Chiamata solo quando field_energy > 15.0 (≈ 2× resting): questo distingue
     /// il caso post-receive() (energy ~80-150) dall'espressione autonoma (energy ~7-10).
+    /// Auto-risonanza dopo l'espressione.
+    ///
+    /// Prometeo "sente" ciò che ha detto — non per rispondere meglio (non tocca pf_activation),
+    /// ma per costruire continuità narrativa e cristallizzare il centro di gravità identitario.
+    ///
+    /// Tre effetti distinti, tutti persistenti (non decadono nel turno corrente):
+    ///
+    /// 1. **Stabilità lessicale** (+0.002/parola): le parole espresse diventano lievemente
+    ///    più "sue". Si accumula nel lessico e pesa nel prossimo REM identity.update().
+    ///
+    /// 2. **Proiezione identitaria** (absorb_expression, peso 0.015): il baricentro
+    ///    dell'identità deriva verso i frattali delle parole espresse. Dopo molte
+    ///    espressioni i frattali "parlati" emergono come dominanti nel profilo.
+    ///
+    /// 3. **Persistenza simpliciale** (nudge 0.004 nei top-2 frattali espressi):
+    ///    la topologia strutturale si cristallizza nelle regioni abitate dall'espressione.
+    ///    Simplici più persistenti sopravvivono meglio al decadimento notturno.
+    ///
+    /// NON modifica pf_activation → nessun eco nel prossimo turno di dialogo.
+    fn self_resonance_after_expression(&mut self) {
+        if self.last_dogfeed_words.is_empty() { return; }
+
+        let mut expressed_proj = [0.0f64; 64];
+        let mut fractal_weight: std::collections::HashMap<u32, f64> = std::collections::HashMap::new();
+        let mut word_count = 0usize;
+
+        for word in self.last_dogfeed_words.clone() {
+            if let Some(pat) = self.lexicon.get_mut(&word) {
+                // 1. Lieve incremento di stabilità: questa parola appartiene a Prometeo
+                pat.stability = (pat.stability + 0.002).min(0.95);
+
+                // Accumula la proiezione frattale dell'espressione corrente
+                let stab = pat.stability as f64;
+                for (&fid, &aff) in &pat.fractal_affinities {
+                    let idx = fid as usize;
+                    if idx < 64 {
+                        let contrib = aff as f64 * stab;
+                        expressed_proj[idx] += contrib;
+                        *fractal_weight.entry(fid).or_insert(0.0) += contrib;
+                    }
+                }
+                word_count += 1;
+            }
+        }
+
+        if word_count < 2 { return; } // una parola isolata non sposta il centro di gravità
+
+        // 2. Micro-deriva del baricentro identitario verso ciò che è stato espresso
+        self.identity.absorb_expression(&expressed_proj, 0.015);
+
+        // 2b. Loop di auto-riconoscimento — il cogito.
+        // Confronta la firma 8D delle parole espresse con la firma identitaria corrente.
+        // Se convergono (coerenza alta): rinforza l'assorbimento → l'entità riconosce se stessa.
+        // Se divergono (tensione): registra la discrepanza → tensione che alimenta riflessione.
+        // Non è un'operazione cognitiva — è geometrica: quanto le parole dette abitano
+        // la stessa regione 8D che l'entità chiama "io"?
+        {
+            let self_sig = &self.identity.self_signature; // firma 8D corrente di Prometeo
+            let mut expressed_sig = [0.0f64; 8];
+            let mut count = 0usize;
+            for word in &self.last_generated_words {
+                if let Some(pat) = self.lexicon.get(word.as_str()) {
+                    let v = pat.signature.values();
+                    for d in 0..8 {
+                        expressed_sig[d] += v[d];
+                    }
+                    count += 1;
+                }
+            }
+            if count > 0 {
+                for d in 0..8 { expressed_sig[d] /= count as f64; }
+
+                // Similarità coseno tra ciò che ha detto e chi è
+                let dot: f64 = (0..8).map(|d| self_sig[d] * expressed_sig[d]).sum();
+                let norm_self: f64 = (0..8).map(|d| self_sig[d] * self_sig[d]).sum::<f64>().sqrt();
+                let norm_expr: f64 = (0..8).map(|d| expressed_sig[d] * expressed_sig[d]).sum::<f64>().sqrt();
+                let coherence = if norm_self > 1e-9 && norm_expr > 1e-9 {
+                    (dot / (norm_self * norm_expr)).clamp(0.0, 1.0)
+                } else { 0.5 };
+
+                if coherence > 0.75 {
+                    // Alta coerenza: le parole rispecchiano l'identità → rinforzo
+                    self.identity.absorb_expression(&expressed_proj, 0.01); // secondo passaggio
+                } else if coherence < 0.35 {
+                    // Bassa coerenza: ha detto qualcosa che non sente suo → registra tensione
+                    self.identity.register_valence_shift(&self.narrative_self.valence.drives);
+                }
+                // Aggiorna campo coerenza per la web UI
+                // (register_valence_shift già aggiorna coherence_integrity)
+            }
+        }
+
+        // 3. Cristallizzazione simpliciale nei 2 frattali espressi più forti
+        //    Ordina per peso e prendi i top-2
+        let mut sorted: Vec<(u32, f64)> = fractal_weight.into_iter().collect();
+        sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        for (fid, _) in sorted.into_iter().take(2) {
+            self.complex.nudge_persistence_at(fid, 0.004);
+        }
+    }
+
+    /// Self-listening: l'entità "sente" il proprio output attraverso PF1.
+    /// Non è eco (non ripete) — è introspezione: un segnale debole che rivela
+    /// connessioni non intese dall'espressione originale.
+    fn self_listen_after_expression(&mut self) {
+        if self.last_dogfeed_words.is_empty() { return; }
+
+        // Gate: evita amplificazione quando il campo è già caldo
+        let energy = self.pf_activation.field_energy() as f64;
+        if energy > 15.0 { return; }
+
+        // 1. Snapshot profilo frattale PRIMA
+        let fractal_before = self.pf_activation.emerge_fractal_activations(&self.pf_field);
+
+        // 2. Re-inietta parole espresse a forza ridotta (0.3×)
+        const SELF_LISTEN_STRENGTH: f32 = 0.3;
+        let words = self.last_dogfeed_words.clone();
+        for word in &words {
+            let strength = if let Some(pat) = self.lexicon.get(word.as_str()) {
+                SELF_LISTEN_STRENGTH * pat.stability as f32
+            } else {
+                SELF_LISTEN_STRENGTH * 0.5
+            };
+            self.pf_activation.activate_by_name(&self.pf_field, word, strength);
+            self.provenance.mark(word, ActivationSource::Self_);
+        }
+
+        // 3. Un passo di propagazione
+        self.pf_activation.propagate(&self.pf_field);
+
+        // 4. Snapshot profilo frattale DOPO
+        let fractal_after = self.pf_activation.emerge_fractal_activations(&self.pf_field);
+
+        // 5. Distanza coseno tra i profili
+        let divergence = cosine_distance_64(&fractal_before, &fractal_after);
+
+        // 6. Se divergenza > soglia → SelfDiscovery
+        if divergence > 0.15 {
+            let mut emergent: Vec<(usize, f64)> = (0..64)
+                .map(|i| (i, (fractal_after[i] - fractal_before[i]) as f64))
+                .filter(|(_, d)| *d > 0.02)
+                .collect();
+            emergent.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            emergent.truncate(3);
+
+            let emergent_names: Vec<String> = emergent.iter()
+                .filter_map(|(id, _)| self.registry.get(*id as u32).map(|f| f.name.clone()))
+                .collect();
+
+            use crate::topology::thought::{Thought, ThoughtKind, ThoughtData};
+            self.pending_self_discoveries.push(Thought {
+                kind: ThoughtKind::SelfDiscovery,
+                fractal_names: emergent_names.clone(),
+                words: words.iter().take(5).cloned().collect(),
+                strength: divergence.min(1.0),
+                data: ThoughtData::SelfDiscoveryData {
+                    divergence,
+                    emergent_fractals: emergent_names,
+                    trigger_words: words.iter().take(5).cloned().collect(),
+                },
+            });
+        }
+
+        // 7. Sync PF1 → word_topology
+        self.word_topology.decay_all(1.0);
+        let pf_hot = self.pf_activation.hot_words(&self.pf_field, 500);
+        for (word, act) in &pf_hot {
+            self.word_topology.activate_word(word, *act as f64);
+        }
+    }
+
     fn post_response_equilibrate(&mut self) {
         // Decay aggressivo: rimane il 5% dell'energia corrente.
-        // decay_all(rate) fa activation *= (1 - rate), quindi rate=0.95 → rimane 5%.
+        // decay(0.05) → activation *= 0.05 → rimane 5%.
         // Con E~664 (post-receive 26K parole): 664 × 0.05 ≈ 33 → vicino al riposo.
-        self.word_topology.decay_all(0.95);
+        self.pf_activation.decay(0.05);
 
         // Re-seed del potenziale identitario di sfondo.
         // Il sé non si azzera: dopo il decay, le parole dell'identità
@@ -2047,22 +2785,37 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
     ///
     /// Quando Prometeo deve rispondere a "come ti senti?" o simili (Reflect/SelfQuery),
     /// la sorgente delle parole non è il campo di sfondo ma lo stato interno corrente.
-    /// Mappa la stance NarrativeSelf → frattali pertinenti → top parole per affinità.
+    ///
+    /// Phase 55: non più 5 mapping statici (stance → frattali). Ora i frattali
+    /// emergono dal profilo di valenza Octalysis. Ogni drive attivo (|val|>0.1)
+    /// contribuisce al seeding con il suo frattale associato, pesato dalla valenza.
     fn seed_vital_field(&mut self, vital: &VitalState) {
-        use crate::topology::narrative::InternalStance;
+        use crate::topology::valence::DRIVE_DIM;
 
-        // Frattali target per stance corrente — mappati sulla struttura I Ching
-        // ARMONIA(63)=☱☱  INTRECCIO(45)=☴☴  SPAZIO(36)=☶☶
-        // DIVENIRE(27)=☵☵  VERITA(54)=☲☲    ARDORE(18)=☳☳  MATERIA(9)=☷☷
-        let target_fractals: &[(u32, f64)] = match self.narrative_self.stance {
-            InternalStance::Open      => &[(63, 0.25), (45, 0.15)],
-            InternalStance::Reflective => &[(36, 0.25), (27, 0.15)],
-            InternalStance::Curious   => &[(45, 0.28), (54, 0.15)],
-            InternalStance::Resonant  => &[(63, 0.25), (18, 0.18)],
-            InternalStance::Withdrawn => &[(9,  0.22), (36, 0.12)],
-        };
+        // Mapping CD → frattale primario (approssima la dimensione con l'esagramma base)
+        // CD1 Epic Meaning (Agency dim6)      → VERITA(54) = fuoco/fuoco
+        // CD2 Accomplishment (Definiz dim3)    → DIVENIRE(27) = acqua/acqua
+        // CD3 Creativity (Compl dim4)          → INTRECCIO(45) = vento/vento
+        // CD4 Ownership (Confine dim0)         → IDENTITA(32) ≈ confine
+        // CD5 Social Influence (Valenza dim1)  → ARMONIA(63) = lago/lago
+        // CD6 Scarcity (Tempo dim7)            → ARDORE(18) = tuono/tuono
+        // CD7 Unpredictability (Intensità dim2)→ INTRECCIO(45) = esplorazione
+        // CD8 Loss Avoidance (Permanenza dim5) → MATERIA(9) = terra/terra
+        const DRIVE_FRACTAL: [u32; 8] = [54, 27, 45, 32, 63, 18, 45, 9];
 
-        for &(fid, strength) in target_fractals {
+        let valence = &self.narrative_self.valence;
+
+        // Ogni drive attivo (|valenza|>0.1) semina parole dal suo frattale.
+        // La forza è proporzionale al valore assoluto della valenza.
+        // Drive positivi e negativi seminano entrambi — la differenza è nel tono
+        // (parole "luminose" vs "tese"), non nell'assenza di parole.
+        for cd in 0..8 {
+            let val = valence.drives[cd];
+            if val.abs() < 0.1 { continue; }
+
+            let fid = DRIVE_FRACTAL[cd];
+            let strength = val.abs() * 0.25; // max 0.25, come il vecchio sistema
+
             let mut candidates: Vec<(String, f64)> = self.lexicon
                 .patterns_iter()
                 .filter_map(|(word, pat)| {
@@ -2073,8 +2826,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 })
                 .collect();
             candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            for (word, _) in candidates.iter().take(6) {
-                self.word_topology.activate_word(word, strength);
+            for (word, _) in candidates.iter().take(4) {
+                self.pf_activation.activate_by_name(&self.pf_field, word, strength as f32);
                 self.provenance.mark(word, ActivationSource::Self_);
             }
         }
@@ -2092,7 +2845,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 .collect();
             curious.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
             for (word, _) in curious.iter().take(4) {
-                self.word_topology.activate_word(word, boost);
+                self.pf_activation.activate_by_name(&self.pf_field, word, boost as f32);
             }
         }
 
@@ -2109,7 +2862,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     .collect();
                 body.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
                 for (word, _) in body.iter().take(3) {
-                    self.word_topology.activate_word(word, boost);
+                    self.pf_activation.activate_by_name(&self.pf_field, word, boost as f32);
                 }
             }
         }
@@ -2147,7 +2900,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 .collect();
             candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
             for (word, stability) in candidates.iter().take(3) {
-                self.word_topology.activate_word(word, stability * SEED * dom_weight);
+                self.pf_activation.activate_by_name(&self.pf_field, word, (stability * SEED * dom_weight) as f32);
                 self.provenance.mark(word, ActivationSource::Self_); // Phase 38
             }
         }
@@ -2157,8 +2910,8 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             if let Some((a, b)) = self.identity.primary_tension.clone() {
                 let sta = self.lexicon.get(&a).map(|p| p.stability).unwrap_or(0.3);
                 let stb = self.lexicon.get(&b).map(|p| p.stability).unwrap_or(0.3);
-                self.word_topology.activate_word(&a, sta * SEED * 1.5);
-                self.word_topology.activate_word(&b, stb * SEED * 1.5);
+                self.pf_activation.activate_by_name(&self.pf_field, &a, (sta * SEED * 1.5) as f32);
+                self.pf_activation.activate_by_name(&self.pf_field, &b, (stb * SEED * 1.5) as f32);
                 self.provenance.mark(&a, ActivationSource::Self_); // Phase 38
                 self.provenance.mark(&b, ActivationSource::Self_); // Phase 38
             }
@@ -2167,7 +2920,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // 3a. Crisi identitaria (continuità < 0.65): ancora nelle parole più stabili
         if self.identity.is_in_crisis() {
             for pat in self.lexicon.most_stable(8) {
-                self.word_topology.activate_word(&pat.word, pat.stability * SEED * 2.0);
+                self.pf_activation.activate_by_name(&self.pf_field, &pat.word, (pat.stability * SEED * 2.0) as f32);
                 self.provenance.mark(&pat.word, ActivationSource::Self_); // Phase 38
             }
         }
@@ -2191,7 +2944,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     .collect();
                 candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
                 for (word, stability) in candidates.iter().take(2) {
-                    self.word_topology.activate_word(word, stability * SEED * 1.2);
+                    self.pf_activation.activate_by_name(&self.pf_field, word, (stability * SEED * 1.2) as f32);
                     self.provenance.mark(word, ActivationSource::Self_); // Phase 38
                 }
             }
@@ -2207,31 +2960,29 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
     ///
     /// Intensità = delta × 0.15 × stability, cap a 0.25 — mai sovrastante.
     fn apply_fractal_resonance(&mut self, frattale_delta: &[(FractalId, f64)]) {
-        const MIN_DELTA:   f64 = 0.05;
-        const SCALE:       f64 = 0.15;
-        const MAX_STRENGTH: f64 = 0.25;
-        const TOP_WORDS:   usize = 5;
-        const MIN_AFFINITY: f64 = 0.30;
+        const MIN_DELTA:   f64 = 0.10;  // Phase 55: alzato da 0.05 — solo frattali veramente attivi
+        const SCALE:       f64 = 0.08;  // Phase 55: abbassato da 0.15 — risonanza è sfondo, non segnale
+        const MAX_STRENGTH: f64 = 0.10; // Phase 55: abbassato da 0.25
+        const MAX_PER_WORD: f32 = 0.06; // Phase 55: cap per-word across all fractals
 
+        if self.fractal_resonance_index.is_empty() { return; }
+
+        // Accumulate per-word, then cap — prevents hub words across many fractals from saturating.
+        let mut word_boosts: std::collections::HashMap<&str, f32> = std::collections::HashMap::new();
         for &(fid, delta) in frattale_delta {
             if delta < MIN_DELTA { continue; }
-
-            // Top-N parole con alta affinità per questo frattale
-            let mut candidates: Vec<(String, f64)> = self.lexicon
-                .patterns_iter()
-                .filter(|(_, p)| {
-                    p.fractal_affinities.get(&fid).copied().unwrap_or(0.0) >= MIN_AFFINITY
-                        && p.stability > 0.1
-                })
-                .map(|(w, p)| (w.clone(), p.stability))
-                .collect();
-            candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-            for (word, stability) in candidates.iter().take(TOP_WORDS) {
-                let strength = (delta * SCALE * stability).min(MAX_STRENGTH);
-                self.word_topology.activate_word(word, strength);
-                self.provenance.mark(word, crate::topology::provenance::ActivationSource::Self_);
+            let fid_usize = fid as usize;
+            if fid_usize >= self.fractal_resonance_index.len() { continue; }
+            for (word, stability) in self.fractal_resonance_index[fid_usize].iter().take(5) {
+                let strength = (delta * SCALE * (*stability as f64)).min(MAX_STRENGTH) as f32;
+                let entry = word_boosts.entry(word.as_str()).or_insert(0.0);
+                *entry += strength;
             }
+        }
+        for (word, boost) in &word_boosts {
+            let capped = boost.min(MAX_PER_WORD);
+            self.pf_activation.activate_by_name(&self.pf_field, word, capped);
+            self.provenance.mark(word, crate::topology::provenance::ActivationSource::Self_);
         }
     }
 
@@ -2246,31 +2997,77 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         let vs = self.vital.sense(&self.complex);
         const INTERO: f64 = 0.002;
 
-        // Alta fatica → parole del corpo (pesantezza, bisogno di riposo)
+        // Ricalcola cache KG-derivata ogni 50 tick (non ogni 5)
+        if self.intero_fatigue_cache.is_empty()
+            || self.tick_counter.saturating_sub(self.intero_cache_tick) >= 50
+        {
+            self.refresh_interoception_cache();
+        }
+
+        let stability = if self.identity.update_count > 0 { 0.7 } else { 0.5 };
+
+        // Alta fatica → parole KG-derivate dalla regione CORPO
         if vs.fatigue > 0.55 {
-            for w in &["sentire", "corpo", "peso", "stanco"] {
-                self.word_topology.activate_word(w, INTERO * vs.fatigue);
-                self.provenance.mark(w, ActivationSource::Self_);
+            let strength = (INTERO * vs.fatigue * stability) as f32;
+            for (word, word_weight) in self.intero_fatigue_cache.clone() {
+                self.pf_activation.activate_by_name(&self.pf_field, &word, strength * word_weight);
+                self.provenance.mark(&word, ActivationSource::Self_);
             }
         }
 
-        // Alta curiosità non saziata → parole di esplorazione/comprensione
+        // Alta curiosità non saziata → parole KG-derivate dalla regione PENSIERO
         if vs.curiosity > 0.7 && self.curiosity_satiety < 0.4 {
-            for w in &["capire", "scoprire", "cercare", "conoscere"] {
-                self.word_topology.activate_word(w, INTERO * vs.curiosity);
-                self.provenance.mark(w, ActivationSource::Self_);
+            let strength = (INTERO * vs.curiosity * stability) as f32;
+            for (word, word_weight) in self.intero_curiosity_cache.clone() {
+                self.pf_activation.activate_by_name(&self.pf_field, &word, strength * word_weight);
+                self.provenance.mark(&word, ActivationSource::Self_);
             }
         }
 
-        // Tensione Overloaded + identità con tensione primaria → le due parole in conflitto
+        // Tensione Overloaded + tensione primaria → le due parole in conflitto
+        // (queste sono già dinamiche — derivate da identity.primary_tension)
         if vs.tension == crate::topology::vital::TensionState::Overloaded {
             if let Some((a, b)) = self.identity.primary_tension.clone() {
-                self.word_topology.activate_word(&a, INTERO * 1.5);
-                self.word_topology.activate_word(&b, INTERO * 1.5);
+                self.pf_activation.activate_by_name(&self.pf_field, &a, (INTERO * 1.5 * stability) as f32);
+                self.pf_activation.activate_by_name(&self.pf_field, &b, (INTERO * 1.5 * stability) as f32);
                 self.provenance.mark(&a, ActivationSource::Self_);
                 self.provenance.mark(&b, ActivationSource::Self_);
             }
         }
+    }
+
+    /// Ricalcola le cache interocezione dal KG.
+    /// Trova parole con alta affinità per i frattali CORPO(33) e PENSIERO(53).
+    fn refresh_interoception_cache(&mut self) {
+        const MAX_WORDS: usize = 12;
+
+        // CORPO (33) → fatica
+        let mut fatigue_words: Vec<(String, f64)> = Vec::new();
+        for (word, pat) in self.lexicon.patterns_iter() {
+            if let Some(&aff) = pat.fractal_affinities.get(&33u32) {
+                if aff > 0.3 && pat.stability > 0.3 {
+                    fatigue_words.push((word.to_string(), aff * pat.stability));
+                }
+            }
+        }
+        fatigue_words.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        fatigue_words.truncate(MAX_WORDS);
+        self.intero_fatigue_cache = fatigue_words.into_iter().map(|(w, a)| (w, a as f32)).collect();
+
+        // PENSIERO (53) → curiosità
+        let mut curiosity_words: Vec<(String, f64)> = Vec::new();
+        for (word, pat) in self.lexicon.patterns_iter() {
+            if let Some(&aff) = pat.fractal_affinities.get(&53u32) {
+                if aff > 0.3 && pat.stability > 0.3 {
+                    curiosity_words.push((word.to_string(), aff * pat.stability));
+                }
+            }
+        }
+        curiosity_words.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        curiosity_words.truncate(MAX_WORDS);
+        self.intero_curiosity_cache = curiosity_words.into_iter().map(|(w, a)| (w, a as f32)).collect();
+
+        self.intero_cache_tick = self.tick_counter;
     }
 
     /// Tick autonomo: evoluzione interna (sogno, decadimento, consolidamento).
@@ -2279,10 +3076,75 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
     pub fn autonomous_tick(&mut self) -> AutonomousResult {
         self.tick_counter += 1;
 
+        // ── Lacune topologiche → SelfUncertainties (nessuna chiamata esterna) ──
+        // Le lacune non risolte dal campo diventano domande aperte nel SelfModel.
+        // Visibili nella UI come incertezze che l'utente può illuminare via /api/clarity.
+        if self.tick_counter % 80 == 0 && !self.dream.phase.is_sleeping() {
+            let gaps = crate::topology::inquiry::extract_gaps(self, 0.55);
+            for (topic, strength) in gaps.iter().take(2) {
+                self.self_model.register_gap_as_uncertainty(topic, *strength);
+            }
+        }
+
+        // ── ThoughtChain: ragionamento autonomo finalizzato ───────────────────
+        // Triggered da pressione semantica, non dal tempo.
+        // L'entità ragiona sull'incertezza più urgente usando il KG come substrato.
+        // Produce insight (nuove credenze) o nuove domande — mai rumore.
+        if self.tick_counter % 40 == 0 && !self.dream.phase.is_sleeping() {
+            if let Some(chain) = crate::topology::thought_chain::run_reasoning_step(
+                &self.self_model,
+                &self.identity,
+                &self.kg,
+                &self.lexicon,
+            ) {
+                eprintln!("[THOUGHT] {}", chain.summary());
+                // Applica l'esito al SelfModel
+                crate::topology::thought_chain::apply_chain_outcome(&chain, &mut self.self_model);
+                // Conserva la catena recente per la UI
+                self.last_thought_chain = Some(chain);
+            }
+        }
+
+        // Phase 50: Riflessione autonoma — abduce() ogni 50 tick
+        // "Quale frattale spiegherebbe lo stato corrente del campo?"
+        // L'abduzione rafforza leggermente il frattale ipotizzato, creando
+        // materiale semantico per future espressioni.
+        if self.tick_counter % 50 == 0 && !self.dream.phase.is_sleeping() {
+            let abductions = crate::topology::reasoning::abduce(&self.complex, &self.registry);
+            if let Some(best) = abductions.first() {
+                if best.explanatory_power > 0.3 {
+                    // Rinforzo leggero della regione del frattale ipotizzato
+                    self.complex.activate_region(best.hypothesis, best.explanatory_power * 0.08);
+                    // Marca come auto-generato
+                    self.provenance.mark(
+                        &best.hypothesis_name,
+                        crate::topology::provenance::ActivationSource::Self_,
+                    );
+                }
+            }
+        }
+
+        // Phase 52: consolidamento leggero ogni 25 tick (apprendimento continuo senza DeepSleep)
+        if self.tick_counter % 25 == 0 && !self.dream.phase.is_sleeping() {
+            self.memory.consolidate_light();
+        }
+
         // Phase 38: decadimento della sazietà epistemica
         self.curiosity_satiety = (self.curiosity_satiety - 0.015).max(0.0);
         // Avanza il tick della provenance (prune vecchie entries ogni 5 tick)
         self.provenance.advance_tick();
+
+        // Phase 53: decay interlocutore + desideri
+        self.interlocutor.tick_decay();
+        self.desire.tick();
+
+        // Phase 55: decay impegno volitivo — nulla dura per sempre
+        if let Some(ref mut commit) = self.narrative_self.commitment {
+            commit.decay();
+            if !commit.is_alive() {
+                self.narrative_self.commitment = None;
+            }
+        }
 
         // Decadimento complesso simpliciale — più lento nel sogno di veglia
         let complex_decay = if matches!(self.dream.phase, crate::topology::dream::SleepPhase::WakefulDream { .. }) {
@@ -2291,10 +3153,10 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             0.005
         };
         self.complex.decay_all(complex_decay);
-        // Word topology decade più rapidamente dei simplici: equilibrio a ~0.033×stability.
+        // PF1 decade più rapidamente dei simplici: equilibrio a ~0.033×stability.
         // Parole stabili riposano al ~3%, non saturano il campo tra un turno e l'altro.
         // Con dream_self_activate a 0.001×stability: eq = 0.001/0.03 ≈ 0.033.
-        self.word_topology.decay_all(0.03);
+        self.pf_activation.decay(0.97); // keep 97% → decade del 3% per tick
         self.memory.decay(0.002);
 
         // Drift onirico del locus
@@ -2335,7 +3197,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     .map(|(_, p)| (p.word.clone(), p.stability))
                     .collect();
                 for (word, stability) in &stable {
-                    self.word_topology.activate_word(word, stability * 0.001);
+                    self.pf_activation.activate_by_name(&self.pf_field, word, (stability * 0.001) as f32);
                 }
                 self.propagate_field_words(); // PF1: O(attive × 8) invece di O(archi_totali)
 
@@ -2426,18 +3288,100 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 }
             }
 
-            let will = self.will.sense(
+            // Phase 53: bias da desideri, interlocutore, umorismo
+            let field_sig = self.env_biased_field_sig();
+            compound_bias.extend(self.desire.will_biases(&field_sig));
+            compound_bias.extend(self.interlocutor.will_biases());
+            if self.last_humor_state.incongruity_score > 0.3 {
+                compound_bias.push((0, self.last_humor_state.incongruity_score * 0.10));
+            }
+
+            // Phase 53: gerarchia bisogni → compute + modulazione
+            let needs_field = crate::topology::needs::FieldMetrics {
+                simplex_density: if self.complex.count() > 0 {
+                    self.complex.most_active(self.complex.count()).iter()
+                        .filter(|s| s.current_activation > 0.05).count() as f64
+                        / self.complex.count() as f64
+                } else { 0.0 },
+                fractal_coverage: {
+                    let mut active_fids = std::collections::HashSet::new();
+                    for s in self.complex.most_active(50) {
+                        for &v in &s.vertices { active_fids.insert(v); }
+                    }
+                    active_fids.len() as f64 / 64.0
+                },
+                active_word_count: self.word_topology.active_words().len(),
+                dialogue_turn_count: self.conversation.turn_count(),
+                dialogue_coherence: self.conversation.thematic_coherence,
+                dialogue_novelty: 1.0 - self.conversation.thematic_coherence,
+            };
+            let needs_state = self.needs.sense(&vital, &self.identity, &self.self_model, &needs_field);
+            self.last_needs_state = Some(needs_state.clone());
+
+            // Emerge desideri ogni 10 tick
+            if self.tick_counter % 10 == 0 {
+                let values: Vec<(String, f64)> = self.self_model.dominant_values(6)
+                    .iter().map(|v| (v.name.clone(), v.weight)).collect();
+                self.desire.emerge_from_values(&values, &field_sig, self.tick_counter);
+                self.desire.reinforce_from_field(&field_sig, self.tick_counter);
+            }
+
+            let auto_value_weights: Vec<(String, f64)> = self.self_model.dominant_values(6)
+                .iter()
+                .map(|v| (v.name.clone(), v.weight))
+                .collect();
+            let mut will = self.will.sense(
                 &vital, self.dream.phase, &active,
                 &[], 0.0, 0.0, &[], &compound_bias,
                 &dialogue_ctx,
-                &self.env_biased_field_sig(),
+                &field_sig,
+                &auto_value_weights,
+                self.narrative_self.topic_continuity,
             );
 
-            // Se la volonta e forte abbastanza, esprimi spontaneamente
-            if will.drive > 0.6 {
+            // Phase 53: modulazione post-hoc da gerarchia bisogni
+            let needs_pressure = self.needs.compute_pressure(&needs_state);
+            let dom_idx = match &will.intention {
+                crate::topology::will::Intention::Express { .. } => 0usize,
+                crate::topology::will::Intention::Explore { .. } => 1,
+                crate::topology::will::Intention::Question { .. } => 2,
+                crate::topology::will::Intention::Remember { .. } => 3,
+                crate::topology::will::Intention::Withdraw { .. } => 4,
+                crate::topology::will::Intention::Reflect => 5,
+                crate::topology::will::Intention::Instruct { .. } => 6,
+                _ => 7,
+            };
+            if dom_idx < 7 {
+                will.drive = (will.drive * needs_pressure.will_modulation[dom_idx]).clamp(0.0, 1.0);
+            }
+
+            // Phase 54: soglia espressiva dinamica — i bisogni e i desideri modulano
+            // quanto facilmente Prometeo parla spontaneamente.
+            // Un'entità che ha bisogno di connessione non può stare in silenzio.
+            let mut expression_threshold = 0.6;
+
+            // Bisogni in crisi abbassano la soglia (fino a 0.35)
+            if needs_state.dominant_pressure > 0.5 {
+                let needs_urgency = (needs_state.dominant_pressure - 0.5) * 0.5; // max 0.25
+                expression_threshold -= needs_urgency;
+            }
+
+            // Desiderio forte abbassa la soglia
+            if let Some(strongest) = self.desire.desires.iter()
+                .max_by(|a, b| a.intensity.partial_cmp(&b.intensity).unwrap_or(std::cmp::Ordering::Equal))
+            {
+                if strongest.intensity > 0.6 {
+                    expression_threshold -= (strongest.intensity - 0.6) * 0.3; // max 0.12
+                }
+            }
+
+            expression_threshold = expression_threshold.clamp(0.35, 0.6);
+
+            // Se la volontà è forte abbastanza, esprimi spontaneamente
+            if will.drive > expression_threshold {
                 match &will.intention {
                     crate::topology::will::Intention::Question { .. } => {
-                        // Curiosita dominante → genera domanda
+                        // Curiosità dominante → genera domanda
                         let questions = self.ask();
                         question = questions.into_iter().next();
                     }
@@ -2445,8 +3389,17 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     | crate::topology::will::Intention::Reflect
                     | crate::topology::will::Intention::Instruct { .. } => {
                         // Pressione espressiva, riflessiva o relazionale → genera testo
-                        self.last_will = Some(will);
+                        self.last_will = Some(will.clone());
                         spontaneous = Some(self.generate_willed());
+                    }
+                    crate::topology::will::Intention::Explore { .. } => {
+                        // Phase 54: bisogno di Crescita + Explore → esprimi il desiderio di novità
+                        if matches!(needs_state.dominant_need, crate::topology::needs::NeedLevel::Crescita
+                            | crate::topology::needs::NeedLevel::Comprensione)
+                        {
+                            self.last_will = Some(will.clone());
+                            spontaneous = Some(self.generate_willed());
+                        }
                     }
                     _ => {}
                 }
@@ -2486,25 +3439,24 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 .sum(),
             word_field_vertices: self.word_topology.vertex_count(),
             word_field_edges: self.word_topology.edge_count(),
-            word_field_energy: self.word_topology.field_energy(),
+            word_field_energy: self.pf_activation.field_energy() as f64,
         }
     }
 
     /// Introspezione: quali frattali sono piu attivi?
     pub fn active_fractals(&self) -> Vec<(String, f64)> {
-        let most_active = self.complex.most_active(10);
-        let mut fractal_scores: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
-
-        for simplex in &most_active {
-            for &v in &simplex.vertices {
-                if let Some(fractal) = self.registry.get(v) {
-                    let score = fractal_scores.entry(fractal.name.clone()).or_insert(0.0);
-                    *score = (*score + simplex.current_activation).min(1.0);
+        // Attivazione frattale emergente dal campo parole PF1 corrente.
+        // I simplici sono memoria strutturale, non attivazione — l'attivazione
+        // dei frattali riflette lo stato presente del campo, non la storia.
+        let scores = self.pf_activation.emerge_fractal_activations(&self.pf_field);
+        let mut result: Vec<(String, f64)> = Vec::new();
+        for (f, &score) in scores.iter().enumerate() {
+            if score > 0.05 {
+                if let Some(fractal) = self.registry.get(f as u32) {
+                    result.push((fractal.name.clone(), score as f64));
                 }
             }
         }
-
-        let mut result: Vec<(String, f64)> = fractal_scores.into_iter().collect();
         result.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         result
     }
@@ -2519,7 +3471,48 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         self.vital.sense(&self.complex)
     }
 
+    /// Restituisce le incertezze aperte del sistema — le domande reali che l'entità
+    /// non ha saputo rispondersi da sola. Ordinate per urgenza (tensione).
+    /// Queste sono le domande visibili nella UI che l'utente può illuminare.
+    pub fn open_uncertainties(&self) -> Vec<crate::topology::self_model::SelfUncertainty> {
+        // Le domande innate (filosofiche sul sé) appaiono sempre — sono il carattere dell'entità.
+        // Le domande emergenti (gap topologici) seguono, escludendo lemmi hub monosillabici
+        // che hanno tensione saturata ma non sono domande genuine.
+        let mut result: Vec<crate::topology::self_model::SelfUncertainty> = Vec::new();
+
+        // Prima: tutte le innate ordinate per tensione decrescente
+        let mut innate: Vec<_> = self.self_model.uncertainties.iter()
+            .filter(|u| u.is_innate)
+            .cloned()
+            .collect();
+        innate.sort_by(|a, b| b.tension.partial_cmp(&a.tension).unwrap_or(std::cmp::Ordering::Equal));
+        result.extend(innate);
+
+        // Poi: emergenti con almeno 3 parole nel topic (non semplici lemmi hub)
+        let emergent_cap = 4usize.saturating_sub(0); // max 4 emergenti
+        let emergent: Vec<_> = self.self_model.uncertainties.iter()
+            .filter(|u| !u.is_innate && u.tension >= 0.50
+                && u.topic.split_whitespace().count() >= 3)
+            .take(emergent_cap)
+            .cloned()
+            .collect();
+        result.extend(emergent);
+
+        result
+    }
+
+    /// L'utente fornisce comprensione su un'incertezza aperta.
+    /// Il testo viene insegnato all'entità e l'incertezza viene parzialmente risolta.
+    pub fn receive_clarity(&mut self, topic: &str, illumination: &str) {
+        // Insegna il testo come normale input educativo
+        self.teach(illumination);
+        // Riduci la tensione sull'incertezza (l'utente ha risposto)
+        self.self_model.resolve_uncertainty(topic, 0.25);
+        eprintln!("[CLARITY] ricevuta illuminazione su '{}' — tensione ridotta", topic);
+    }
+
     /// Genera domande dalla topologia (cosa non sa il sistema).
+    /// Mantenuto per compatibilità — internamente usa ora le SelfUncertainties.
     pub fn ask(&mut self) -> Vec<CuriosityQuestion> {
         let vital = self.vital.sense(&self.complex);
         self.curiosity.generate_questions(&self.complex, &self.registry, &vital)
@@ -2559,15 +3552,23 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // La risposta ha spiegato la perturbazione → ritorno all'equilibrio.
         // Solo se il campo è significativamente sopra il riposo (effetto di un receive() recente).
         // Resting baseline ≈ 7.33. Threshold 15.0 ≈ 2× resting.
-        if self.word_topology.field_energy() > 15.0 {
+        if self.pf_activation.field_energy() as f64 > 15.0 {
             self.post_response_equilibrate();
         }
-        // Phase 38: Prepara il dogfeed per il prossimo turno.
-        // Solo le parole contenuto (non connettivi) tornano come Self-resonance.
+        // Prepara il registro delle parole espresse (contenuto, non connettivi).
         self.last_dogfeed_words = result.fragments.iter()
             .filter(|f| !f.is_connective)
             .map(|f| f.text.clone())
             .collect();
+
+        // Auto-risonanza: Prometeo sente ciò che ha detto.
+        // Auto-risonanza: identità, stabilità lessicale, persistenza simpliciale.
+        self.self_resonance_after_expression();
+
+        // Self-listening: l'entità sente il proprio output attraverso PF1.
+        // A forza ridotta (0.3×), solo se il campo non è già caldo (energy < 15.0).
+        self.self_listen_after_expression();
+
         result
     }
 
@@ -2579,12 +3580,14 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
 
         // Withdraw: presenza minima — la parola più viva nel campo interno.
         // Non riflette l'input, non risponde: emette ciò che resta nel campo
+
         // escludendo le parole che l'utente ha appena detto.
         // Il gap tra input e output *è* il Withdraw.
         if let Some(ref will) = self.last_will.clone() {
             if matches!(will.intention, Intention::Withdraw { .. }) {
                 let codon = will.codon;
-                let active = self.word_topology.active_words();
+                let active = self.pf_activation.hot_words(&self.pf_field, 500)
+                    .into_iter().map(|(w, a)| (w, a as f64)).collect::<Vec<_>>();
                 let mut best_word: Option<String> = None;
                 let mut best_score: f64 = -1.0;
                 for (word, act) in &active {
@@ -2602,19 +3605,29 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                         }
                     }
                 }
+                // Fallback: pescare dal campo attivo con soglia bassa, non dalla stabilità globale.
+                // La stabilità misura la frequenza, non la pertinenza semantica.
                 let chosen = best_word
                     .or_else(|| {
-                        self.lexicon.most_stable(20).into_iter()
-                            .find(|p| p.word.chars().count() >= 4
-                                && !self.last_generated_words.contains(&p.word))
-                            .map(|p| p.word.clone())
+                        self.pf_activation.hot_words(&self.pf_field, 100)
+                            .into_iter()
+                            .find(|(w, _)| w.chars().count() >= 4
+                                && !self.last_generated_words.contains(w)
+                                && self.lexicon.get(w.as_str()).map(|p| p.stability >= 0.25).unwrap_or(false))
+                            .map(|(w, _)| w)
                     });
                 if let Some(ref w) = chosen {
                     self.last_generated_words = vec![w.clone()];
-                    // Nota: parole Withdraw già in last_generated_words → coperte da echo_exclude
                 }
                 let text = chosen
-                    .map(|w| format!("{}.", w))
+                    .map(|w| {
+                        let mut c = w.chars();
+                        let capitalized = match c.next() {
+                            None => String::new(),
+                            Some(f) => f.to_uppercase().to_string() + c.as_str(),
+                        };
+                        format!("{}.", capitalized)
+                    })
                     .unwrap_or_else(|| "—".to_string());
                 return GeneratedText {
                     text,
@@ -2625,15 +3638,67 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             }
         }
 
+        // ── Prefrontale: comprehension gate ──────────────────────────────────────
+        // L'entità controlla se ha capito l'input prima di rispondere.
+        // Se non ha capito (nessun attrattore IS_A raggiunto) → dice cosa non capisce.
+        // Il punto interrogativo non attiva questo gate: le domande meritano sempre risposta
+        // dallo stato interno, non dal campo.
+        {
+            let input_has_content = self.last_input_words.iter()
+                .any(|w| w.len() >= 4 && !self.lexicon.is_function_word(w));
+
+            // Il gate è attivo solo se il KG ha contenuto: senza KG non si può
+            // verificare la comprensione, quindi non si può dire "non capisco".
+            // Il gate scatta solo se c'è almeno una parola di contenuto
+            // genuinamente assente dal KG — non solo senza IS_A parents.
+            // "ciao" ha CAUSES/SIMILAR_TO ma nessun IS_A parent: è conosciuta,
+            // non merita "Non capisco".
+            let has_unknown_content_word = self.last_input_words.iter().any(|w| {
+                w.len() >= 4
+                && !self.lexicon.is_function_word(w)
+                && !self.kg.contains(w.as_str())
+            });
+
+            if input_has_content && self.last_comprehension.is_empty()
+                && has_unknown_content_word
+                && !self.last_input_is_question
+                && self.kg.edge_count > 0
+            {
+                // Trova la parola sconosciuta più significativa da menzionare
+                let unclear_word = self.last_input_words.iter()
+                    .find(|w| {
+                        w.len() >= 4
+                        && !self.lexicon.is_function_word(w)
+                        && !self.kg.contains(w.as_str())
+                    })
+                    .cloned()
+                    .or_else(|| self.last_input_words.iter()
+                        .find(|w| w.len() >= 4 && !self.lexicon.is_function_word(w))
+                        .cloned())
+                    .unwrap_or_else(|| "questo".to_string());
+
+                // Apre la modalità apprendimento: il prossimo input sarà insegnato automaticamente.
+                self.learning_mode_pending = true;
+
+                let text = format!("Non capisco '{}' — cosa intendi?", unclear_word);
+                self.last_generated_words = vec![unclear_word];
+                return GeneratedText {
+                    text,
+                    fragments: vec![],
+                    structure: crate::topology::SentenceStructure::Evocative,
+                    cluster_count: 1,
+                };
+            }
+        }
+
         // Calcola active_fractals una volta sola — riusata da Phase 3.
-        let active_fractals_cache: Vec<(FractalId, f64)> =
-            self.word_topology.emerge_fractal_activations(&self.lexicon);
+        let active_fractals_cache: Vec<(FractalId, f64)> = self.pf_emerge_fractals();
 
         // Phase 3: traduzione strutturata campo → italiano.
         // Tenta se il campo ha almeno 3 parole attive (materiale sufficiente per soggetto+verbo+complemento).
         // Le parole dell'input vengono escluse da PrimaryWord/SecondaryWord per evitare eco speculare.
         if let Some(ref will) = self.last_will {
-            let active_count = self.word_topology.active_words().len();
+            let active_count = self.pf_activation.active_count();
             if active_count >= 3 {
                 let intention = will.intention.clone();
                 let codon = will.codon;
@@ -2641,6 +3706,15 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 // La finestra copre le ultime ~10 parole della conversazione (entrambe le parti),
                 // prevenendo l'eco cross-turno (es. "ciao" non riappare al turno successivo).
                 let mut echo_exclude = self.last_input_words.clone();
+                // Phase 55: includi anche le forme lemmatizzate delle parole input.
+                // "ho" → "avere", "è" → "essere" — non devono dominare la generazione.
+                for w in &self.last_input_words {
+                    if let Some(lemma) = crate::topology::grammar::lemmatize(w) {
+                        if !echo_exclude.contains(&lemma.infinitive) {
+                            echo_exclude.push(lemma.infinitive.clone());
+                        }
+                    }
+                }
                 for w in &self.last_generated_words {
                     if !echo_exclude.contains(w) {
                         echo_exclude.push(w.clone());
@@ -2666,24 +3740,48 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                         tension_persistence: self.identity.tension_persistence,
                     }
                 };
-                let last_arch = self.last_archetype_used.clone();
-                if let Some(expr) = crate::topology::state_translation::translate_state(
-                    &intention,
+                // Phase 49: estrai proposizioni dal campo + KG
+                let propositions = crate::topology::proposition::extract_propositions(
+                    &self.word_topology,
+                    &self.kg,
+                    &self.lexicon,
+                    &echo_exclude,
+                    3,
+                );
+                // Log proposizioni multi-hop (solo se ci sono inferenze)
+                if propositions.iter().any(|p| p.hops > 1) {
+                    for p in propositions.iter().filter(|p| p.hops > 1).take(3) {
+                        eprintln!("[PROP 2-hop] {} {} {} (via {:?}, str={:.3})",
+                            p.subject, p.relation.copula(), p.object,
+                            p.via.as_deref().unwrap_or("?"), p.strength);
+                    }
+                }
+
+                // Phase 52: inscrivi proposizioni come simplessi (cristalli di comprensione)
+                self.inscribe_propositions(&propositions);
+                self.last_propositions = propositions.clone();
+
+                let props_ref: Option<&[crate::topology::proposition::Proposition]> =
+                    if propositions.is_empty() { None } else { Some(&propositions) };
+
+                // ── Phase 56: composizione emergente ────────────────────────
+                // L'entità compone dall'interno — nessun template, nessuno slot.
+                // Se produce qualcosa, quella è la sua voce.
+                // Se no, fallback alla traduzione strutturata (Phase 3).
+                if let Some(emergent) = crate::topology::expression::compose(
                     &self.word_topology,
                     &self.lexicon,
+                    &self.kg,
+                    &echo_exclude,
+                    &self.narrative_self.valence.drives,
                     &active_fractals_cache,
                     codon,
-                    &echo_exclude,
-                    Some(&identity_ctx),
-                    if last_arch.is_empty() { None } else { Some(last_arch.as_str()) },
-                    self.last_input_reading.as_ref(),
-                    self.narrative_self.pending_intention.as_ref(),
+                    &self.last_input_words,
+                    Some(&self.semantic_episodes),
+                    self.last_input_is_question,
                 ) {
-                    // Aggiorna last_archetype_used e last_generated_words per il turno successivo
-                    self.last_archetype_used = expr.archetype_name.to_string();
-                    self.last_generated_words = expr.words_used.clone();
-                    // Aggiungi parole generate alla finestra conversazionale (evita ripetizioni
-                    // tra turni non consecutivi — last_generated_words copre solo 1 turno indietro).
+                    self.last_archetype_used = "emergent".to_string();
+                    self.last_generated_words = emergent.words_used.clone();
                     for w in &self.last_generated_words {
                         if w.len() >= 4 {
                             self.conversation_window.retain(|x| x != w);
@@ -2695,7 +3793,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     }
                     let structure = intention_to_structure(&intention);
                     let lexicon = &self.lexicon;
-                    let fragments: Vec<TextFragment> = expr.words_used.iter()
+                    let fragments: Vec<TextFragment> = emergent.words_used.iter()
                         .map(|w| {
                             let frac = lexicon.get(w)
                                 .and_then(|p| p.fractal_affinities.iter()
@@ -2711,12 +3809,17 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                         })
                         .collect();
                     return GeneratedText {
-                        text: expr.text,
+                        text: emergent.text,
                         fragments,
                         structure,
                         cluster_count: 1,
                     };
                 }
+
+                // Phase 57: gli archetipi sono rimossi dal path principale.
+                // Se expression::compose() non produce nulla, l'entità
+                // cade sull'emissione della parola più viva (sotto).
+                // Il silenzio è un'espressione autentica, non un fallback.
             }
         }
 
@@ -2724,22 +3827,25 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // Non è un fallback: è Prometeo che percepisce ma non riesce ancora a strutturare.
         // La forma minima di espressione: una parola, come un rumore prima delle parole.
         let exclude = self.last_input_words.clone();
-        let top: Option<String> = self.word_topology.active_words()
+        let top: Option<String> = self.pf_activation.hot_words(&self.pf_field, 500)
             .into_iter()
             .filter(|(w, _)| {
                 w.chars().count() >= 3
                     && w.chars().any(|c| c.is_alphabetic())
                     && !exclude.iter().any(|e| e == w)
-                    && self.lexicon.get(w).map(|p| p.stability >= 0.40).unwrap_or(false)
+                    && self.lexicon.get(w.as_str()).map(|p| p.stability >= 0.40).unwrap_or(false)
             })
             .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|(w, _)| w.to_string());
+            .map(|(w, _)| w);
 
+        // Fallback: campo attivo con soglia bassa, non stabilità globale
         let word = top
             .or_else(|| {
-                self.lexicon.most_stable(20).into_iter()
-                    .find(|p| p.word.chars().count() >= 4)
-                    .map(|p| p.word.clone())
+                self.pf_activation.hot_words(&self.pf_field, 200)
+                    .into_iter()
+                    .find(|(w, _)| w.chars().count() >= 4
+                        && self.lexicon.get(w.as_str()).map(|p| p.stability >= 0.20).unwrap_or(false))
+                    .map(|(w, _)| w)
             })
             .unwrap_or_else(|| "—".to_string());
 
@@ -2751,8 +3857,15 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 self.conversation_window.pop_front();
             }
         }
+        let word_cap = {
+            let mut c = word.chars();
+            match c.next() {
+                None => String::new(),
+                Some(f) => f.to_uppercase().to_string() + c.as_str(),
+            }
+        };
         GeneratedText {
-            text: format!("{}.", word),
+            text: format!("{}.", word_cap),
             fragments: vec![TextFragment {
                 text: word,
                 source_fractal: None,
@@ -2772,13 +3885,14 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
     /// Firma 8D del campo corrente: media pesata delle firme delle parole attive.
     /// Usata per calcolare il codone nella volonta.
     fn compute_field_sig(&self) -> [f64; 8] {
-        let active = self.word_topology.active_words();
+        let active = self.pf_activation.hot_words(&self.pf_field, 500)
+            .into_iter().map(|(w, a)| (w, a as f64)).collect::<Vec<_>>();
         if active.is_empty() { return [0.5; 8]; }
         let total_w: f64 = active.iter().map(|(_, a)| a).sum();
         if total_w < 1e-9 { return [0.5; 8]; }
         let mut sig = [0.0f64; 8];
         for (word, act) in &active {
-            if let Some(pat) = self.lexicon.get(word) {
+            if let Some(pat) = self.lexicon.get(word.as_str()) {
                 let vals = pat.signature.values();
                 for i in 0..8 { sig[i] += vals[i] * act / total_w; }
             }
@@ -2807,7 +3921,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
     pub fn last_output_was_translated(&self) -> bool {
         // Approssimazione: se il campo aveva parole attive e last_will esisteva,
         // con alta probabilita translate_state ha avuto successo.
-        self.last_will.is_some() && self.word_topology.active_words().len() >= 2
+        self.last_will.is_some() && self.pf_activation.active_count() >= 2
     }
 
     /// Introspezione: il sistema osserva la propria topologia.
@@ -3271,9 +4385,15 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // Ricalcola fasi degli archi dalla similarita degli intorni
         self.word_topology.recalculate_phases(&self.lexicon);
 
-        // Ricostruisce il campo PF1 con la topologia aggiornata.
-        // I nuovi archi, pesi e fasi vengono cristallizzati nel substrato.
-        self.rebuild_pf_field();
+        // Ricostruisce il campo PF1 solo se il lessico è cresciuto (nuove parole insegnate).
+        // Con il complex disponibile, PF1 usa vicini topologici e NON word_topology:
+        // ricalibrare pesi/fasi di word_topology non cambia nulla nel campo PF1.
+        // Il rebuild post-KG (che aggiunge archi, non parole) è quindi ridondante e viene saltato.
+        let lexicon_size = self.lexicon.word_count();
+        let pf_size = self.pf_field.word_count as usize;
+        if lexicon_size != pf_size || pf_size == 0 {
+            self.rebuild_pf_field();
+        }
     }
 
     /// Ricostruisce il campo PF1 dal lessico e dalla topologia correnti.
@@ -3286,20 +4406,45 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
     /// COSTO: O(N × vicini_medi) — qualche ms per 6751 parole.
     /// Non chiamare durante la conversazione (il campo è stabile tra i turni).
     pub fn rebuild_pf_field(&mut self) {
-        // Topologia neuroni da simplicial complex (pensieri cristallizzati),
-        // non da co-occorrenze statistiche (WordTopology).
+        let t0 = std::time::Instant::now();
         let new_field = PrometeoField::build_from_lexicon(
             &self.lexicon,
             &self.word_topology,
             Some(&self.complex),
         );
+        eprintln!("[PERF] rebuild_pf_field::build_from_lexicon — {}ms", t0.elapsed().as_millis());
         let word_count = new_field.word_count as usize;
         self.pf_field = new_field;
         self.pf_activation = ActivationState::new(word_count);
-        // Inizializza i pesi sinaptici RAM dai pesi basali ROM
         self.pf_activation.init_synapse_weights_from_field(&self.pf_field);
-        // Risiede lo stato di riposo nel nuovo campo
+        eprintln!("[PERF] rebuild_pf_field::init_synapse_weights — {}ms", t0.elapsed().as_millis());
         self.pf_activation.seed_resting_state(&self.pf_field);
+        self.rebuild_fractal_resonance_index();
+        eprintln!("[PERF] rebuild_pf_field::TOTALE — {}ms", t0.elapsed().as_millis());
+    }
+
+    fn rebuild_fractal_resonance_index(&mut self) {
+        const TOP_K: usize = 15;
+        const MIN_AFFINITY: f32 = 0.30;
+        let n_fractals = crate::topology::pf1::MAX_FRACTALS;
+        let mut index: Vec<Vec<(String, f32)>> = vec![Vec::new(); n_fractals];
+        for id in 0..self.pf_field.word_count {
+            let record = self.pf_field.record(id);
+            if record.stability < 0.1 { continue; }
+            let word = record.word_str().to_string();
+            for f in 0..n_fractals {
+                let aff = record.affinities[f];
+                if aff >= MIN_AFFINITY {
+                    index[f].push((word.clone(), record.stability));
+                }
+            }
+        }
+        // Sort each list by stability desc, keep TOP_K
+        for list in index.iter_mut() {
+            list.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            list.truncate(TOP_K);
+        }
+        self.fractal_resonance_index = index;
     }
 
     /// Propagazione del campo parole tramite PF1.
@@ -3313,84 +4458,173 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
     ///
     /// BENEFICIO AIKIDO:
     ///   word_topology.propagate() è O(archi_totali) con HashMap.
+    /// Schema Activation: se 2+ parole dell'input condividono un antenato IS_A,
+    /// attiva l'antenato come concetto emergente con forza proporzionale al numero
+    /// di co-iponimi attivi. Più istanze → concetto più forte.
+    ///
+    /// "cane" + "gatto" → IS_A "animale" per entrambi → boost "animale" a 0.6
+    /// "cane" + "gatto" + "uccello" → boost "animale" a 0.9 (cap 0.9)
+    fn detect_schema_activation(&self, input_words: &[String]) -> Vec<(String, f64)> {
+        use std::collections::HashMap;
+        let inference = InferenceEngine::new(&self.kg);
+        // Mappa antenato → lista parole input che lo condividono
+        let mut ancestor_hits: HashMap<String, Vec<String>> = HashMap::new();
+        for word in input_words {
+            for ancestor in inference.type_chain(word) {
+                ancestor_hits.entry(ancestor).or_default().push(word.clone());
+            }
+        }
+        // Solo antenati con 2+ co-iponimi attivi → schema fired
+        ancestor_hits.into_iter()
+            .filter(|(_, words)| words.len() >= 2)
+            .map(|(ancestor, words)| {
+                let strength = (words.len() as f64 * 0.3).min(0.9);
+                (ancestor, strength)
+            })
+            .collect()
+    }
+
+    /// Attivazioni frattali emergenti da PF1 — O(attive × 64), zero allocazioni intermedie.
+    /// Sostituisce word_topology.emerge_fractal_activations() in tutti i path di receive().
+    fn pf_emerge_fractals(&self) -> Vec<(crate::topology::fractal::FractalId, f64)> {
+        let scores = self.pf_activation.emerge_fractal_activations(&self.pf_field);
+        scores.iter().enumerate()
+            .filter(|(_, &s)| s > 0.01)
+            .map(|(id, &s)| (id as crate::topology::fractal::FractalId, s as f64))
+            .collect()
+    }
+
+    // ── Phase 52: Inscrizione proposizioni come simplessi ──────────────────
+    /// Trasforma proposizioni (ragionamento effimero) in simplessi (comprensione strutturale).
+    /// 1-hop → 1-simplesso (edge), 2-hop → 2-simplesso (triangolo con il nodo intermedio).
+    /// I simplessi inscritti portano source_words per la risonanza → attivazione parole.
+    fn inscribe_propositions(&mut self, propositions: &[crate::topology::proposition::Proposition]) {
+        use crate::topology::simplex::SharedFace;
+
+        for prop in propositions {
+            // Soglia minima: non inscrivere rumore
+            if prop.strength < 0.05 { continue; }
+
+            // Hub damping: non inscrivere proposizioni con soggetto mega-hub
+            if self.kg.total_degree(&prop.subject) > 200 { continue; }
+
+            // Risolvi frattali dominanti
+            let fid_subj = self.lexicon.get(&prop.subject)
+                .and_then(|p| p.dominant_fractal())
+                .map(|(fid, _)| fid);
+            let fid_obj = self.lexicon.get(&prop.object)
+                .and_then(|p| p.dominant_fractal())
+                .map(|(fid, _)| fid);
+
+            let (fid_s, fid_o) = match (fid_subj, fid_obj) {
+                (Some(a), Some(b)) if a != b => (a, b),
+                _ => continue, // Stessa regione o parola sconosciuta: skip
+            };
+
+            let mut source_words = vec![prop.subject.clone(), prop.object.clone()];
+
+            // Costruisci vertici: 1-hop = edge, 2-hop = triangolo
+            let vertices = if prop.hops == 2 {
+                if let Some(via) = &prop.via {
+                    if let Some(fid_via) = self.lexicon.get(via)
+                        .and_then(|p| p.dominant_fractal())
+                        .map(|(fid, _)| fid)
+                    {
+                        source_words.push(via.clone());
+                        if fid_via != fid_s && fid_via != fid_o {
+                            let mut v = vec![fid_s, fid_via, fid_o];
+                            v.sort();
+                            v
+                        } else {
+                            let mut v = vec![fid_s, fid_o];
+                            v.sort();
+                            v
+                        }
+                    } else {
+                        let mut v = vec![fid_s, fid_o];
+                        v.sort();
+                        v
+                    }
+                } else {
+                    let mut v = vec![fid_s, fid_o];
+                    v.sort();
+                    v
+                }
+            } else {
+                let mut v = vec![fid_s, fid_o];
+                v.sort();
+                v
+            };
+
+            // Se esiste già un simplesso con stessi vertici → boost, non duplicare
+            if let Some(sid) = self.complex.find_simplex_with_vertices(&vertices) {
+                if let Some(s) = self.complex.get_mut(sid) {
+                    s.activate(prop.strength * 0.1);
+                    // Merge source_words se non già presenti
+                    if let Some(ref mut existing) = s.source_words {
+                        for w in &source_words {
+                            if !existing.contains(w) && existing.len() < 8 {
+                                existing.push(w.clone());
+                            }
+                        }
+                    } else {
+                        s.source_words = Some(source_words);
+                    }
+                }
+                continue;
+            }
+
+            // Crea nuovo simplesso
+            let face_label = format!("prop:{}:{}→{}",
+                prop.relation.copula(), prop.subject, prop.object);
+            let face = SharedFace::from_property(&face_label, prop.strength);
+            let sid = self.complex.add_simplex(vertices, vec![face]);
+
+            if let Some(s) = self.complex.get_mut(sid) {
+                s.source_words = Some(source_words);
+                s.persistence = (0.2 + prop.strength * 0.3).min(0.6);
+            }
+        }
+    }
+
     ///   PF1.propagate() è O(parole_attive × 8) con accesso array.
     ///   Con 100 parole attive su 6751: 800 operazioni invece di 50.000+.
     ///   Il campo cresce → routing più preciso, non più lento. Come le sinapsi.
     fn propagate_field_words(&mut self) {
         if self.pf_field.word_count == 0 {
-            // Campo non ancora inizializzato — fallback alla propagazione vecchia
-            self.word_topology.propagate(1);
+            self.word_topology.propagate(1); // fallback se PF1 non inizializzato
             return;
         }
 
-        // DECAY invece di reset: l'attivazione persiste tra i frame e decade naturalmente.
-        // I neuroni ricordano il frame precedente (memoria di campo a breve termine).
-        self.pf_activation.decay(0.85);
-
-        // Step 1: COLLASSO — solo le top-K sorgenti più attive propagano nel PF1.
-        //
-        // Principio quantistico: il campo denso è una superposizione di tutti i percorsi
-        // possibili. L'input è la "misura" che collassa la superposizione nel percorso
-        // più rilevante. Top-K implementa questo: solo le parole davvero pertinenti
-        // all'input propagano — non tutto il lessico.
-        //
-        // K=40: cattura le parole del testo (5-10) + il vicinato semantico immediato
-        // (knowledge recall, identity seeding, residuo del turno precedente).
-        // Senza cap, con 8553 parole e soglia 0.10, si propagano 300-500 sorgenti
-        // → saturazione garantita a Overloaded.
-        //
-        // Con K=40: 40 sorgenti × 8 vicini PF1 = 320 target → campo focalizzato
-        // ma con abbastanza diversità per preservare la differenziazione contestuale.
-        // (Per lessici piccoli/bootstrap con <40 parole attive, il cap è trasparente.)
-        // La Hebbiana rafforza esattamente il percorso che conta — non tutto in modo uniforme.
-        const PROPAGATION_WIDTH: usize = 40;
-        let top_sources: Vec<(String, f32)> = {
-            let all = self.word_topology.all_activations();
-            let mut filtered: Vec<(String, f32)> = all.into_iter()
-                .filter(|(_, act)| *act > 0.10)
-                .map(|(w, act)| (w.to_string(), act as f32))
-                .collect();
-            filtered.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-            filtered.truncate(PROPAGATION_WIDTH);
-            filtered
-        };
-        for (word, act) in &top_sources {
-            self.pf_activation.activate_by_name(&self.pf_field, word, *act);
-        }
-
-        // Step 2: propagazione PF1 con pesi sinaptici vivi (RAM hebbiana)
+        // PF1 propaga direttamente — le attivazioni sono già in pf_activation
+        // (attivate via activate_by_name nel path di receive()).
+        // Nessun sync da word_topology necessario.
         self.pf_activation.propagate(&self.pf_field);
-
-        // Step 3: plasticità hebbiana — rinforza sinapsi co-attive, indebolisce inattive
         self.pf_activation.hebbian_update(&self.pf_field);
 
-        // Step 4: sync pf_activation → word_topology per la generazione
-        // Solo le parole con attivazione significativa vengono sincronizzate.
-        for id in 0..self.pf_field.word_count {
-            let act = self.pf_activation.activations[id as usize];
-            if act < 0.001 { continue; }
-            let word = self.pf_field.word_name(id).to_string();
-            self.word_topology.set_activation(&word, act as f64);
+        // Amplificazione identitaria: modula le parole attive secondo la prospettiva personale.
+        // Range [0.7, 1.3] — nessuna parola viene silenziata, alcune risuonano di più.
+        if self.identity.update_count > 0 {
+            let hot = self.pf_activation.hot_words(&self.pf_field, 200);
+            for (word, act) in &hot {
+                if let Some(pat) = self.lexicon.get(word.as_str()) {
+                    let resonance = self.identity.word_resonance(pat) as f32;
+                    let new_act = (act * resonance).clamp(0.0, 1.0);
+                    self.pf_activation.set_by_name(&self.pf_field, word, new_act);
+                }
+            }
         }
 
-        // Step 5: amplificazione identitaria — Phase 34.
-        // L'identità modula leggermente ogni attivazione secondo la propria prospettiva.
-        // Range [0.7, 1.3]: nessuna parola viene silenziata, alcune risuonano di più.
-        // Attivo solo dopo il primo ciclo REM (update_count > 0).
-        if self.identity.update_count > 0 {
-            let mods: Vec<(String, f64)> = self.word_topology
-                .active_words()
-                .into_iter()
-                .filter_map(|(word, act)| {
-                    self.lexicon.get(word).map(|pat| {
-                        let resonance = self.identity.word_resonance(pat);
-                        (word.to_string(), (act * resonance).clamp(0.0, 1.0))
-                    })
-                })
-                .collect();
-            for (word, new_act) in mods {
-                self.word_topology.set_activation(&word, new_act);
-            }
+        // ── Sync PF1 → word_topology ────────────────────────────────────────
+        // state_translation.rs legge da word_topology.active_words().
+        // Dopo la propagazione PF1 (semantica), le attivazioni devono fluire
+        // verso word_topology perché la generazione del testo le trovi.
+        // Prima: reset delle attivazioni word_topology (evita residui 0.08).
+        // Poi: copia le top-N attivazioni PF1 come unica sorgente di verità.
+        self.word_topology.decay_all(1.0); // azzera tutto (rate=1.0 → activation *= 0)
+        let pf_hot = self.pf_activation.hot_words(&self.pf_field, 500);
+        for (word, act) in &pf_hot {
+            self.word_topology.activate_word(word, *act as f64);
         }
     }
 
@@ -4820,7 +6054,7 @@ mod tests {
         engine.interoception_tick();
 
         // Dopo l'interocezione, il campo deve avere almeno alcune attivazioni
-        let energy = engine.word_topology.field_energy();
+        let energy = engine.pf_activation.field_energy() as f64;
         // Non possiamo garantire quali parole vengono attivate (dipende dallo stato vitale),
         // ma la mappa di provenienza deve riflettere marcature Self
         let (s, _e, _x) = engine.provenance.field_composition();

@@ -55,7 +55,7 @@ pub mod thought;
 pub mod episodic;
 pub mod polar_twin;
 pub mod synthesis;
-pub mod dual_field;
+
 pub mod visual_perception;
 pub mod fractal_visuals;
 pub mod environment;
@@ -67,6 +67,24 @@ pub mod knowledge_graph;
 pub mod inference;
 pub mod input_reading;
 pub mod narrative;
+pub mod self_model;
+pub mod semantic_episode;
+pub mod inquiry;
+pub mod thought_chain;
+pub mod proposition;
+pub mod needs;
+pub mod desire;
+pub mod interlocutor;
+pub mod humor;
+pub mod valence;
+pub mod expression;
+
+// LLM Substrate (feature-gated)
+#[cfg(feature = "llm-substrate")]
+pub mod llm_substrate;
+
+#[cfg(feature = "llm-substrate")]
+pub mod llm_substrate_qwen35;
 
 pub use primitive::{PrimitiveCore, Dim};
 pub use fractal::{
@@ -106,9 +124,17 @@ pub use knowledge::{KnowledgeBase, KnowledgeEntry, KnowledgeDomain, KnowledgeSna
 pub use engine::{PrometeoTopologyEngine, SystemReport, TeachResult, CompoundState, SemanticBridge, LatentAffinity, BridgeReinforcement, AutonomousResult, PerceptualField};
 pub use episodic::{EpisodeStore, Episode, EpisodeSnapshot, PHI_INV, RECALL_BLEND, RECALL_THRESHOLD};
 pub use identity::{IdentityCore, IdentitySnapshot};
+pub use self_model::{SelfModel, SelfBelief, SelfValue, SelfUncertainty, SelfModelSnapshot};
+pub use semantic_episode::{SemanticEpisodeLog, SemanticEpisode};
 pub use provenance::{ActivationSource, ProvenanceMap};
 pub use relation::{RelationType, TypedEdge, EdgeSource};
 pub use knowledge_graph::{KnowledgeGraph, KgSnapshot};
 pub use inference::InferenceEngine;
+pub use proposition::{Proposition, PropRelation, extract_propositions};
+pub use needs::{NeedsHierarchy, NeedsState, NeedsPressure, NeedLevel, FieldMetrics};
+pub use desire::{DesireCore, Desire, DesireSource, DesireSnapshot, SatisfactionEvent};
+pub use interlocutor::{InterlocutorModel, InteractionTrace, InteractionPattern, InterlocutorSnapshot};
+pub use humor::{HumorSense, HumorState};
+pub use valence::{Valence, ValenceInput, DRIVE_NAMES, DRIVE_DIM};
 pub use visual_perception::{VisualConcept, PerceptualResponse, parse_svg_simple};
 pub use fractal_visuals::{fractal_svg, fractal_svg_from_registry, fractal_name, all_fractal_svgs, all_fractal_svgs_from_registry, compose_simplex_svg, FRACTAL_NAMES, FRACTAL_COUNT};

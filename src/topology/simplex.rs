@@ -4,7 +4,7 @@
 /// Piu strutture condividono, piu profonda e la connessione.
 /// La topologia risultante E il sapere di Prometeo.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::topology::fractal::FractalId;
 use crate::topology::primitive::Dim;
 
@@ -78,6 +78,9 @@ pub struct Simplex {
     pub activation_count: u64,
     /// Attivazione corrente [0.0, 1.0] — quanto e "illuminato" in questo momento
     pub current_activation: f64,
+    /// Phase 52: parole sorgente che hanno generato questo simplesso (proposizioni inscritte).
+    /// Usato dalla risonanza per riattivare parole dal passato nella generazione.
+    pub source_words: Option<Vec<String>>,
 }
 
 impl Simplex {
@@ -92,6 +95,7 @@ impl Simplex {
             plasticity: 0.9,
             activation_count: 0,
             current_activation: 0.0,
+            source_words: None,
         }
     }
 
@@ -140,6 +144,9 @@ pub struct SimplicialComplex {
     next_id: SimplexId,
     /// Soglia di attivazione globale (veglia vs sogno)
     pub activation_threshold: f64,
+    /// Set sparso dei simplessi attualmente attivi (sopra soglia).
+    /// Aggiornato incrementalmente: O(active) per active_simplices() invece di O(19K).
+    active_set: HashSet<SimplexId>,
 }
 
 impl SimplicialComplex {
@@ -149,6 +156,7 @@ impl SimplicialComplex {
             fractal_index: HashMap::new(),
             next_id: 0,
             activation_threshold: 0.15,
+            active_set: HashSet::new(),
         }
     }
 
@@ -190,7 +198,8 @@ impl SimplicialComplex {
     /// Usato dalla persistenza per ricostruire il complesso esatto salvato.
     pub fn restore_simplex(&mut self, id: SimplexId, vertices: Vec<FractalId>,
                            shared_faces: Vec<SharedFace>,
-                           persistence: f64, plasticity: f64, activation_count: u64) {
+                           persistence: f64, plasticity: f64, activation_count: u64,
+                           source_words: Option<Vec<String>>) {
         // Aggiorna indice
         for &v in &vertices {
             self.fractal_index.entry(v).or_default().push(id);
@@ -200,6 +209,7 @@ impl SimplicialComplex {
         simplex.persistence = persistence;
         simplex.plasticity = plasticity;
         simplex.activation_count = activation_count;
+        simplex.source_words = source_words;
         self.simplices.insert(id, simplex);
 
         // Assicura che next_id sia sempre oltre l'id più alto
@@ -212,6 +222,7 @@ impl SimplicialComplex {
     pub fn clear(&mut self) {
         self.simplices.clear();
         self.fractal_index.clear();
+        self.active_set.clear();
         self.next_id = 0;
     }
 
@@ -230,11 +241,42 @@ impl SimplicialComplex {
         self.fractal_index.get(&fractal).cloned().unwrap_or_default()
     }
 
+    /// Top-N simplessi per persistenza decrescente per un frattale.
+    /// Pre-computa la persistenza prima del sort (evita HashMap lookup per ogni confronto).
+    pub fn top_persistent_simplices_of(&self, fractal: FractalId, limit: usize) -> Vec<SimplexId> {
+        let sids = match self.fractal_index.get(&fractal) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+        let mut with_p: Vec<(SimplexId, f32)> = sids.iter()
+            .filter_map(|&id| self.simplices.get(&id).map(|s| (id, s.persistence as f32)))
+            .collect();
+        with_p.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        with_p.into_iter().take(limit).map(|(id, _)| id).collect()
+    }
+
+    /// Precomputa una cache (frattale → top-N simplessi ordinati per persistenza).
+    /// Costo: O(N_frattali × N_simplessi_per_frattale × log).
+    /// Usato da build_from_lexicon per evitare 75K sort ridondanti durante il loop parole.
+    pub fn build_fractal_simplex_cache(&self, limit: usize) -> HashMap<FractalId, Vec<SimplexId>> {
+        self.fractal_index.keys().map(|&fid| {
+            (fid, self.top_persistent_simplices_of(fid, limit))
+        }).collect()
+    }
+
     /// Tutti i simplessi condivisi tra due frattali.
+    /// O(sa + sb) via HashSet — evita O(sa × sb) della versione naive.
     pub fn shared_simplices(&self, a: FractalId, b: FractalId) -> Vec<SimplexId> {
-        let sa = self.simplices_of(a);
-        let sb = self.simplices_of(b);
-        sa.into_iter().filter(|id| sb.contains(id)).collect()
+        let sa = match self.fractal_index.get(&a) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+        let sb = match self.fractal_index.get(&b) {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+        let set_a: HashSet<SimplexId> = sa.iter().copied().collect();
+        sb.iter().filter(|id| set_a.contains(id)).copied().collect()
     }
 
     /// Vicinanza topologica tra due frattali:
@@ -271,6 +313,7 @@ impl SimplicialComplex {
                 let relevance = strength * simplex.persistence * (1.0 + simplex.face_count() as f64 * 0.1);
                 if relevance > self.activation_threshold {
                     simplex.activate(relevance.min(1.0));
+                    self.active_set.insert(sid);
                     activated.push(sid);
                 }
             }
@@ -326,6 +369,7 @@ impl SimplicialComplex {
             for (sid, strength) in to_activate {
                 if let Some(s) = self.simplices.get_mut(&sid) {
                     s.activate(strength);
+                    self.active_set.insert(sid);
                 }
             }
         }
@@ -333,9 +377,14 @@ impl SimplicialComplex {
 
     /// Decadimento globale: riduce l'attivazione di tutti i simplessi.
     pub fn decay_all(&mut self, rate: f64) {
+        let threshold = self.activation_threshold;
         for simplex in self.simplices.values_mut() {
             simplex.decay(rate);
         }
+        // Aggiorna active_set: rimuovi quelli scesi sotto soglia
+        self.active_set.retain(|id| {
+            self.simplices.get(id).map_or(false, |s| s.current_activation > threshold)
+        });
     }
 
     /// Elimina i simplessi dinamici (id >= bootstrap_count) con attivazione e persistenza basse.
@@ -363,13 +412,16 @@ impl SimplicialComplex {
                         list.retain(|sid| sid != id);
                     }
                 }
+                self.active_set.remove(id);
             }
         }
     }
 
     /// Restituisce i simplessi attualmente attivi (sopra soglia).
+    /// O(active) grazie all'active_set — invece di O(19K) scansione completa.
     pub fn active_simplices(&self) -> Vec<&Simplex> {
-        self.simplices.values()
+        self.active_set.iter()
+            .filter_map(|id| self.simplices.get(id))
             .filter(|s| s.current_activation > self.activation_threshold)
             .collect()
     }
@@ -400,6 +452,19 @@ impl SimplicialComplex {
 
     /// Dissolvi simplessi con persistenza troppo bassa e attivazione zero.
     /// Restituisce il numero di simplessi rimossi.
+    /// Incrementa la persistenza strutturale dei simplessi in un frattale senza attivarli.
+    /// Usato dalla self-resonance: ciò che Prometeo esprime si cristallizza topologicamente,
+    /// ma non crea eco nel campo di attivazione.
+    /// `delta` tipicamente 0.003–0.005 per espressione.
+    pub fn nudge_persistence_at(&mut self, center: FractalId, delta: f64) {
+        let ids = self.simplices_of(center);
+        for sid in ids {
+            if let Some(s) = self.simplices.get_mut(&sid) {
+                s.persistence = (s.persistence + delta).min(1.0);
+            }
+        }
+    }
+
     pub fn dissolve_weak(&mut self, min_persistence: f64) -> usize {
         let to_remove: Vec<SimplexId> = self.simplices.iter()
             .filter(|(_, s)| s.persistence < min_persistence && s.activation_count < 3)
@@ -415,6 +480,7 @@ impl SimplicialComplex {
                         ids.retain(|sid| sid != id);
                     }
                 }
+                self.active_set.remove(id);
             }
         }
         count
