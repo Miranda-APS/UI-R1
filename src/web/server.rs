@@ -148,6 +148,7 @@ pub async fn run(port: u16) {
         .route("/api/biennale/field", get(api::get_biennale_field))
         .route("/api/biennale/word", get(api::get_biennale_word))
         .route("/api/biennale/journey", get(api::get_biennale_journey))
+        .route("/ui-r1", get(api::uir1_index))
         .route("/ws", get(ws::ws_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);

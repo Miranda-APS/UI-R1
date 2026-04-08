@@ -644,4 +644,21 @@ conflitto	IS_A	stato
 conflitto	CAUSES	danno
 cooperazione	IS_A	azione
 cooperazione	CAUSES	risultato
-cooperazione	OPPOSITE_OF	conflitto
+cooperazione	OPPOSITE_OF	conflittotriste	IS_A	tristezza	1.00
+triste	IS_A	emozione	1.00
+triste	SIMILAR_TO	malinconico	0.85
+triste	SIMILAR_TO	afflitto	0.85
+triste	CAUSES	pianto	0.90
+felice	IS_A	gioia	1.00
+felice	IS_A	emozione	1.00
+felice	CAUSES	sorriso	0.90
+arrabbiato	IS_A	rabbia	1.00
+arrabbiato	IS_A	emozione	1.00
+spaventato	IS_A	paura	1.00
+spaventato	IS_A	emozione	1.00
+solo	IS_A	solitudine	0.90
+solo	IS_A	emozione	0.85
+confuso	IS_A	confusione	0.90
+dispiacere	IS_A	emozione	0.90
+scontento	IS_A	emozione	0.85
+triste	IS_A	tristezza	1.00

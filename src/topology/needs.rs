@@ -96,6 +96,9 @@ pub struct FieldMetrics {
     pub dialogue_coherence: f64,
     /// Novità nel dialogo [0, 1]
     pub dialogue_novelty: f64,
+    /// Phase 62: valenza emotiva dell'Altro [-1, +1].
+    /// Negativa = distress (tristezza/paura/dolore). Zero = neutro.
+    pub other_emotional_valence: f64,
 }
 
 /// Stato di soddisfazione completo.
@@ -107,6 +110,8 @@ pub struct NeedsState {
     pub dominant_need: NeedLevel,
     /// Pressione del bisogno dominante [0, 1]
     pub dominant_pressure: f64,
+    /// Phase 62: valenza emotiva dell'Altro (propagata da FieldMetrics per compute_pressure).
+    pub other_emotional_valence: f64,
 }
 
 /// Output per will.rs: modulazione delle 7 intenzioni.
@@ -184,10 +189,24 @@ impl NeedsHierarchy {
         // mentre qualcuno è lì con te. Un umano non dice "cerco connessione"
         // a chi gli sta parlando: risponde a ciò che gli viene detto.
         // dialogue_turn_count include il turno corrente (incrementato in receive())
+        //
+        // Phase 62: se l'Altro esprime distress, la connessione richiede risposta attiva.
+        // Non basta esserci — bisogna impegnarsi con il loro bisogno.
+        // "Confortare è il modo in cui si crea connessione quando il bisogno è quello."
         let has_interlocutor = if field.dialogue_turn_count > 2 {
-            0.90  // dialogo in corso → connessione soddisfatta
+            if field.other_emotional_valence < -0.3 {
+                // L'Altro è in distress — la connessione non è soddisfatta finché non rispondo.
+                // Abbasso la soddisfazione per attivare Question intention.
+                0.65
+            } else {
+                0.90  // dialogo in corso → connessione soddisfatta
+            }
         } else if field.dialogue_turn_count > 0 {
-            0.75  // qualcuno sta parlando → base alta
+            if field.other_emotional_valence < -0.3 {
+                0.55  // qualcuno parla in distress fin dall'inizio — ancora più urgente
+            } else {
+                0.75  // qualcuno sta parlando → base alta
+            }
         } else {
             0.50  // anche da solo, la connessione non è in crisi (0.50 > threshold 0.5)
         };
@@ -223,6 +242,7 @@ impl NeedsHierarchy {
             satisfaction: sat,
             dominant_need: NeedLevel::from_index(dominant_idx),
             dominant_pressure: 1.0 - dominant_sat,
+            other_emotional_valence: field.other_emotional_valence,
         }
     }
 
@@ -270,11 +290,21 @@ impl NeedsHierarchy {
             m[2] *= 1.0 + comp * 0.7;
         }
 
-        // L5: Connessione bassa → Instruct + Express
+        // L5: Connessione bassa → modulazione dipende dal tipo di bisogno.
+        // Phase 62: se l'Altro è in distress, la connessione si crea ascoltando e
+        // aprendo spazio — non istruendo. Question + Reflect, non Instruct + Express.
         let conn = def(4);
         if conn > 0.2 {
-            m[6] *= 1.0 + conn * 0.6;
-            m[0] *= 1.0 + conn * 0.4;
+            if state.other_emotional_valence < -0.3 {
+                // Distress dell'Altro: apri spazio, ascolta, poi condividi.
+                m[2] *= 1.0 + conn * 0.8;  // Question: invita a condividere
+                m[5] *= 1.0 + conn * 0.3;  // Reflect: comprendi la loro situazione
+                m[6] *= (1.0 - conn * 0.3).max(0.2); // riduce Instruct
+            } else {
+                // Connessione bassa senza distress specifico → comportamento standard
+                m[6] *= 1.0 + conn * 0.6;
+                m[0] *= 1.0 + conn * 0.4;
+            }
         }
 
         // L6: Crescita bassa → Explore
@@ -354,6 +384,7 @@ mod tests {
             dialogue_turn_count: 3,
             dialogue_coherence: 0.6,
             dialogue_novelty: 0.4,
+            other_emotional_valence: 0.0,
         }
     }
 

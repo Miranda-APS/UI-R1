@@ -1003,6 +1003,372 @@ pub fn detect_pos_from_word(word: &str) -> Option<PartOfSpeech> {
     None
 }
 
+// ─── Genere e Numero ─────────────────────────────────────────────────────────
+
+/// Genere grammaticale italiano.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Gender {
+    Maschile,
+    Femminile,
+}
+
+/// Numero grammaticale italiano.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Number {
+    Singolare,
+    Plurale,
+}
+
+/// Inferisce genere e numero da una parola italiana usando euristica morfologica.
+///
+/// Precisione ~85-90% su lessico comune. Suffissi prioritari:
+///   -o/-i → maschile (sing/plur)
+///   -a/-e → femminile (sing/plur)
+///   -ione/-zione/-sione → femminile singolare
+///   -tà/-ità → femminile singolare
+///   -ore/-tore → maschile singolare
+///   -ura → femminile singolare
+///   -mento/-aggio → maschile singolare
+///   -ezza → femminile singolare
+/// Ambiguo (termina in -e o -i indistinti) → default maschile singolare.
+pub fn detect_gender_number(word: &str) -> (Gender, Number) {
+    let len = word.chars().count();
+    if len == 0 {
+        return (Gender::Maschile, Number::Singolare);
+    }
+
+    // Casi speciali ad alta frequenza
+    match word {
+        "paura" | "gioia" | "tristezza" | "rabbia" | "pace" | "forza" |
+        "vita" | "morte" | "mente" | "anima" | "voce" | "notte" | "luce" |
+        "terra" | "acqua" | "aria" | "casa" | "mano" | "mani" |
+        "realtà" | "identità" | "libertà" | "verità" | "qualità" |
+        "presenza" | "assenza" | "speranza" | "distanza" | "fiducia" => {
+            // Determina il numero dalla desinenza anche per i casi speciali
+            if word.ends_with('i') && !["mani"].contains(&word) {
+                return (Gender::Femminile, Number::Plurale);
+            }
+            return (Gender::Femminile, Number::Singolare);
+        }
+        "campo" | "tempo" | "spazio" | "mondo" | "sogno" | "corpo" |
+        "cuore" | "silenzio" | "sangue" | "pensiero" | "fuoco" | "vento" |
+        "calore" | "dolore" | "amore" | "pericolo" | "piacere" |
+        "coraggio" | "viaggio" | "paesaggio" | "senso" | "confine" |
+        "male" | "bene" | "nome" | "piede" | "dente" | "ponte" | "sole" |
+        "mare" | "padre" | "fiore" | "fiume" | "monte" | "leone" | "pane" |
+        "timore" | "tremore" | "ardore" | "terrore" | "errore" | "orrore" |
+        "valore" | "colore" | "odore" | "sapore" | "sapere" | "volere" => {
+            return (Gender::Maschile, Number::Singolare);
+        }
+        _ => {}
+    }
+
+    // Suffissi femminili con alta affidabilità
+    if len >= 5 && (word.ends_with("ione") || word.ends_with("zione") || word.ends_with("sione")) {
+        return (Gender::Femminile, Number::Singolare);
+    }
+    if word.ends_with("tà") || word.ends_with("tà") {
+        return (Gender::Femminile, Number::Singolare);
+    }
+    if len >= 5 && word.ends_with("ezza") {
+        return (Gender::Femminile, Number::Singolare);
+    }
+    if len >= 6 && word.ends_with("tura") {
+        return (Gender::Femminile, Number::Singolare);
+    }
+    if len >= 6 && (word.ends_with("anza") || word.ends_with("enza")) {
+        return (Gender::Femminile, Number::Singolare);
+    }
+    if len >= 5 && word.ends_with("trice") {
+        return (Gender::Femminile, Number::Singolare);
+    }
+
+    // Suffissi maschili con alta affidabilità
+    if len >= 5 && word.ends_with("mento") {
+        return (Gender::Maschile, Number::Singolare);
+    }
+    if len >= 5 && word.ends_with("aggio") {
+        return (Gender::Maschile, Number::Singolare);
+    }
+    if len >= 5 && (word.ends_with("tore") || word.ends_with("sore")) {
+        return (Gender::Maschile, Number::Singolare);
+    }
+    if len >= 5 && word.ends_with("ismo") {
+        return (Gender::Maschile, Number::Singolare);
+    }
+    // -ore: tremore, dolore, calore, ardore, terrore — 95%+ maschile
+    if len >= 5 && word.ends_with("ore") {
+        return (Gender::Maschile, Number::Singolare);
+    }
+    // -ere: potere, piacere, volere — maschile singolare
+    if len >= 5 && word.ends_with("ere") && !word.ends_with("iere") {
+        return (Gender::Maschile, Number::Singolare);
+    }
+
+    // Desinenze standard
+    let last = word.chars().last().unwrap();
+    match last {
+        'o' => (Gender::Maschile, Number::Singolare),
+        'a' => (Gender::Femminile, Number::Singolare),
+        'i' => {
+            // -i può essere maschile plurale o femminile plurale
+            // Euristica: se penultima è vocale → più spesso femminile (-ai non tipico)
+            // Default: maschile plurale (gatti, campi, sogni)
+            (Gender::Maschile, Number::Plurale)
+        }
+        'e' => {
+            // -e ambiguo: notte (f), amore (m), torre (f), nome (m)
+            // Default: femminile singolare (leggermente più frequente nel lessico comune)
+            (Gender::Femminile, Number::Singolare)
+        }
+        _ => (Gender::Maschile, Number::Singolare),
+    }
+}
+
+/// Articolo determinativo italiano per una parola.
+///
+/// Regole di selezione dell'articolo:
+///   Maschile singolare:
+///     "lo" → davanti a s+consonante, z, gn, ps, x, y, pn
+///     "l'" → davanti a vocale (eliso: "l'amore", non "l' amore")
+///     "il" → altrimenti
+///   Maschile plurale:
+///     "gli" → davanti a vocale, s+consonante, z, gn, ps, x, y, pn
+///     "i"   → altrimenti
+///   Femminile singolare:
+///     "l'" → davanti a vocale (eliso)
+///     "la" → altrimenti
+///   Femminile plurale:
+///     "le"  → sempre
+pub fn with_definite_article(word: &str) -> String {
+    let (gender, number) = detect_gender_number(word);
+    let article = italian_definite_article(word, gender, number);
+    // "l'" si elide direttamente con la parola (no spazio): "l'amore"
+    if article == "l'" {
+        format!("{}{}", article, word)
+    } else {
+        format!("{} {}", article, word)
+    }
+}
+
+/// Calcola solo l'articolo determinativo (senza la parola).
+pub fn definite_article(word: &str) -> &'static str {
+    let (gender, number) = detect_gender_number(word);
+    italian_definite_article(word, gender, number)
+}
+
+fn italian_definite_article(word: &str, gender: Gender, number: Number) -> &'static str {
+    let starts_vowel = word.chars().next()
+        .map(|c| "aeiouàèéìòóùAEIOU".contains(c))
+        .unwrap_or(false);
+
+    // Controlla se inizia con s+consonante, z, gn, ps, x, y, pn
+    let needs_lo = {
+        let mut chars = word.chars();
+        match chars.next() {
+            Some('s') | Some('S') => {
+                // s + consonante → "lo"
+                chars.next().map(|c| !"aeiouàèéìòóù".contains(c)).unwrap_or(false)
+            }
+            Some('z') | Some('Z') | Some('x') | Some('X') | Some('y') | Some('Y') => true,
+            Some('g') | Some('G') => {
+                // gn → "lo"
+                chars.next().map(|c| c == 'n' || c == 'N').unwrap_or(false)
+            }
+            Some('p') | Some('P') => {
+                // ps, pn → "lo"
+                chars.next().map(|c| c == 's' || c == 'S' || c == 'n' || c == 'N').unwrap_or(false)
+            }
+            _ => false,
+        }
+    };
+
+    match (gender, number) {
+        (Gender::Maschile, Number::Singolare) => {
+            if starts_vowel { "l'" }
+            else if needs_lo { "lo" }
+            else { "il" }
+        }
+        (Gender::Maschile, Number::Plurale) => {
+            if starts_vowel || needs_lo { "gli" }
+            else { "i" }
+        }
+        (Gender::Femminile, Number::Singolare) => {
+            if starts_vowel { "l'" }
+            else { "la" }
+        }
+        (Gender::Femminile, Number::Plurale) => "le",
+    }
+}
+
+/// Articolo indeterminativo italiano per una parola.
+pub fn with_indefinite_article(word: &str) -> String {
+    let (gender, number) = detect_gender_number(word);
+    let article = italian_indefinite_article(word, gender, number);
+    // "un'" si elide direttamente con la parola (no spazio): "un'essenza"
+    if article.ends_with('\'') {
+        format!("{}{}", article, word)
+    } else {
+        format!("{} {}", article, word)
+    }
+}
+
+fn italian_indefinite_article(word: &str, gender: Gender, number: Number) -> &'static str {
+    let starts_vowel = word.chars().next()
+        .map(|c| "aeiouàèéìòóùAEIOU".contains(c))
+        .unwrap_or(false);
+
+    let needs_uno = {
+        let mut chars = word.chars();
+        match chars.next() {
+            Some('s') | Some('S') => {
+                chars.next().map(|c| !"aeiouàèéìòóù".contains(c)).unwrap_or(false)
+            }
+            Some('z') | Some('Z') | Some('x') | Some('X') | Some('y') | Some('Y') => true,
+            Some('g') | Some('G') => chars.next().map(|c| c == 'n' || c == 'N').unwrap_or(false),
+            Some('p') | Some('P') => chars.next().map(|c| c == 's' || c == 'S' || c == 'n' || c == 'N').unwrap_or(false),
+            _ => false,
+        }
+    };
+
+    match (gender, number) {
+        (Gender::Maschile, Number::Singolare) => {
+            if starts_vowel || needs_uno { "un" } else { "un" }
+        }
+        (Gender::Maschile, Number::Plurale) => "dei",
+        (Gender::Femminile, Number::Singolare) => {
+            if starts_vowel { "un'" } else { "una" }
+        }
+        (Gender::Femminile, Number::Plurale) => "delle",
+    }
+}
+
+/// Preposizione articolata: "di" + articolo + parola.
+/// Es: with_articulated_preposition("di", "cane") → "del cane"
+///     with_articulated_preposition("a", "amore") → "all'amore"
+pub fn with_articulated_preposition(prep: &str, word: &str) -> String {
+    let (gender, number) = detect_gender_number(word);
+    let art = italian_definite_article(word, gender, number);
+
+    // Contrazione preposizione + articolo
+    let contracted = match (prep, art) {
+        ("di", "il")  => "del".to_string(),
+        ("di", "lo")  => "dello".to_string(),
+        ("di", "la")  => "della".to_string(),
+        ("di", "l'")  => format!("dell'{}", word),
+        ("di", "i")   => "dei".to_string(),
+        ("di", "gli") => "degli".to_string(),
+        ("di", "le")  => "delle".to_string(),
+        ("a",  "il")  => "al".to_string(),
+        ("a",  "lo")  => "allo".to_string(),
+        ("a",  "la")  => "alla".to_string(),
+        ("a",  "l'")  => format!("all'{}", word),
+        ("a",  "i")   => "ai".to_string(),
+        ("a",  "gli") => "agli".to_string(),
+        ("a",  "le")  => "alle".to_string(),
+        ("da", "il")  => "dal".to_string(),
+        ("da", "lo")  => "dallo".to_string(),
+        ("da", "la")  => "dalla".to_string(),
+        ("da", "l'")  => format!("dall'{}", word),
+        ("da", "i")   => "dai".to_string(),
+        ("da", "gli") => "dagli".to_string(),
+        ("da", "le")  => "dalle".to_string(),
+        ("in", "il")  => "nel".to_string(),
+        ("in", "lo")  => "nello".to_string(),
+        ("in", "la")  => "nella".to_string(),
+        ("in", "l'")  => format!("nell'{}", word),
+        ("in", "i")   => "nei".to_string(),
+        ("in", "gli") => "negli".to_string(),
+        ("in", "le")  => "nelle".to_string(),
+        ("su", "il")  => "sul".to_string(),
+        ("su", "lo")  => "sullo".to_string(),
+        ("su", "la")  => "sulla".to_string(),
+        ("su", "l'")  => format!("sull'{}", word),
+        ("su", "i")   => "sui".to_string(),
+        ("su", "gli") => "sugli".to_string(),
+        ("su", "le")  => "sulle".to_string(),
+        // Preposizioni non contratte (con, per, tra, fra)
+        _ => return format!("{} {} {}", prep, art, word),
+    };
+
+    // Per l'apostrofo, la parola è già inclusa nella contrazione
+    if contracted.contains('\'') {
+        contracted
+    } else {
+        format!("{} {}", contracted, word)
+    }
+}
+
+/// Inflessione aggettivo per genere e numero.
+///
+/// Gestisce i quattro pattern principali degli aggettivi italiani:
+///   tipo 1 (bello/bella/belli/belle): -o/-a/-i/-e
+///   tipo 2 (grande/grandi): -e/-i (invariante per genere)
+///   tipo 3 (rosa, blu, viola): invariante (fine vocale/consonante atipica)
+pub fn inflect_adjective(adj: &str, gender: Gender, number: Number) -> String {
+    // Aggettivi invarianti (non cambiano forma)
+    const INVARIANTI: &[&str] = &[
+        "rosa", "blu", "viola", "beige", "bordeaux", "lilla", "marrone",
+        "arancione", "pari", "dispari", "impari",
+    ];
+    if INVARIANTI.contains(&adj) {
+        return adj.to_string();
+    }
+
+    let len = adj.chars().count();
+    if len < 2 {
+        return adj.to_string();
+    }
+
+    // Aggettivi in -e/-i: stessa forma per maschile e femminile
+    // grande → grande (sg), grandi (pl)
+    if adj.ends_with('e') {
+        return match number {
+            Number::Singolare => adj.to_string(),
+            Number::Plurale => {
+                let base = &adj[..adj.len()-1];
+                format!("{}i", base)
+            }
+        };
+    }
+
+    // Aggettivi in -o/-a/-i/-e (tipo bello)
+    if adj.ends_with('o') {
+        let base = &adj[..adj.len()-1];
+        return match (gender, number) {
+            (Gender::Maschile, Number::Singolare) => adj.to_string(),
+            (Gender::Femminile, Number::Singolare) => format!("{}a", base),
+            (Gender::Maschile, Number::Plurale)   => format!("{}i", base),
+            (Gender::Femminile, Number::Plurale)   => format!("{}e", base),
+        };
+    }
+
+    // Aggettivi in -a (raro: belga → belga/belghe)
+    if adj.ends_with('a') {
+        let base = &adj[..adj.len()-1];
+        return match (gender, number) {
+            (Gender::Maschile, Number::Singolare) => adj.to_string(),
+            (Gender::Femminile, Number::Singolare) => adj.to_string(),
+            (Gender::Maschile, Number::Plurale)   => format!("{}i", base),
+            (Gender::Femminile, Number::Plurale)   => format!("{}he", base),
+        };
+    }
+
+    // Aggettivi in -i (già plurale, tipo: semplici, facili)
+    if adj.ends_with('i') {
+        // Se è già plurale, usalo direttamente per le forme plurali
+        let base = &adj[..adj.len()-1];
+        return match (gender, number) {
+            (_, Number::Plurale) => adj.to_string(),
+            (Gender::Maschile, Number::Singolare) => format!("{}e", base),
+            (Gender::Femminile, Number::Singolare) => format!("{}e", base),
+        };
+    }
+
+    // Invariante fallback
+    adj.to_string()
+}
+
 // ─── Test ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

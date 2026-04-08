@@ -1,9 +1,9 @@
 # Prometeo — Architettura Tecnica
 
-**Versione**: 6.4.0 — Phase 55
-**Data**: 2026-03-27
+**Versione**: 6.12.0 — Phase 64
+**Data**: 2026-04-08
 **Linguaggio**: Rust
-**Metriche**: 25.579 parole · 64 frattali · 185.857 archi KG · 19.334 simplessi · 458 test
+**Metriche**: 25.875 parole · 64 frattali · 165.326 archi KG · ~40.000 nodi · 476 test
 
 ---
 
@@ -170,7 +170,7 @@ struct KgTarget {
 }
 ```
 
-**Metriche attuali:** 185.857 archi, 47.004 nodi.
+**Metriche attuali:** 165.326 archi, ~40.000 nodi. Firme 8D riderivate da struttura KG per 21.709 parole (Phase 63 — geometria = relazioni, non co-occorrenze statistiche).
 
 **Fonti dati:**
 
@@ -391,12 +391,21 @@ Il sistema ha due substrati di attivazione (PF1 semantico e word_topology legacy
 
 Sette pressioni calcolate dallo stato del campo. La più forte determina l'intenzione (drive), le due dimensioni più attive determinano il codon [usize; 2]:
 
-**Express** — pressione a comunicare:
+**Express** — pressione a comunicare (Phase 64 — drive-dipendente):
 ```
-activation × (1.0 - fatigue) × has_content × 0.8
+max_drive = max(|octalysis_drives[i]|)
+
+Se max_drive > 0.25:
+  pressione = max_drive × freshness × has_content × 0.8    — drive dominante attivo
+Altrimenti:
+  pressione = activation × freshness × has_content × 0.20  — canale passivo
+
   has_content = 1.0 se active_fractals non vuoto
+  freshness = 1.0 - fatigue
   soglia: > 0.05
 ```
+
+**Principio Phase 64 (Express come canale)**: Express non è un movente — è il canale attraverso cui passa un contenuto guidato da un drive Octalysis specifico. Senza un drive attivo (|d| > 0.25), la pressione Express scende da 0.8× a 0.20× dell'attivazione. L'entità non esprime per abitudine: esprime perché qualcosa di specifico la muove.
 
 **Explore** — pressione ad esplorare:
 ```
@@ -594,11 +603,30 @@ SATISFACTION_DISTANCE = 0.2 (coseno)
 SATISFACTION_TICKS = 3
 ```
 
-**Sorgenti di desiderio:**
-- Undercurrent will: stessa intenzione come sottocorrente ≥5 volte
-- Valori forti: SelfModel value con peso > 0.75
-- Tensioni identitarie irrisolte
-- Tracce episodiche (emozioni positive passate)
+**Sorgenti di desiderio (Phase 64):**
+
+| Fonte | Condizione | Intensità iniziale |
+|-------|------------|-------------------|
+| `OctalysisDriven(cd, val)` | `last_comprehension` non vuoto + `\|drives[cd]\|` > 0.28 | `drive_abs × 0.65` |
+| `Undercurrent(intention)` | stessa intenzione come sottocorrente ≥5 volte | decrescente |
+| `Value(label)` | SelfModel value con peso > 0.75 | proporzionale al peso |
+| `IdentityTension` | tensioni identitarie irrisolte | fisso |
+| `EpisodicEcho` | tracce episodiche con emozione positiva | proporzionale alla salienza |
+
+**Fonte primaria Phase 64 — OctalysisDriven:**
+```
+DRIVE_DIM = [6,3,4,0,1,7,2,5]  (CD1→8 mappati su dim 0→7 dello spazio 8D)
+
+Trova CD dominante: cd = argmax(|drives[i]| > 0.28)
+target_sig = field_sig.clone()
+target_sig[DRIVE_DIM[cd]] += 0.35 × drive_abs
+  +0.12 × comprehension_weight per ogni concetto IS_A compreso
+
+Se desiderio simile esiste: intensity += 0.08 × drive_abs
+Altrimenti: crea nuovo desiderio OctalysisDriven(cd, drive_val)
+```
+
+**Il principio**: il desiderio nasce dall'incrocio tra *cosa il KG ha capito* (last_comprehension: attrattori IS_A raggiunti) e *quale drive Octalysis risponde* a quella comprensione. Non "voglio esprimere" (circolare) ma "data comprensione X e CD5 Relazione attivo, voglio connettere nella direzione del campo".
 
 **Soddisfazione:**
 ```
@@ -736,6 +764,26 @@ cosine_similarity(current_fractals, media_ultimi_3_turni)
 Alta continuità: riduce Explore, amplifica Reflect
 Bassa continuità: amplifica Explore, Question
 ```
+
+**Coerenza narrativa (Phase 64):**
+
+`coherence_score(active_fractals)` — similarità coseno tra frattali proposti e media degli ultimi 4 turni:
+```
+Se turns < 4: usa quanto disponibile
+history_avg[fid] = Σ(strengths) / n_turns_con_quel_fid
+coherence = cosine_sim(active_vector, history_avg_vector) ∈ [0, 1]
+```
+
+`recent_fractal_attractor(n)` — top-5 frattali medi degli ultimi N turni.
+
+**Narrative pull (Phase 64):** in `receive()`, dopo il calcolo dei frattali arricchiti:
+```
+Se coherence < 0.30 E turns ≥ 3:
+  Per ogni (fid, strength) in recent_fractal_attractor(3):
+    activate_region(fid, strength × 0.08)
+```
+
+La narrativa non è più un diario senza lettore: orienta la generazione verso la propria traiettoria recente con un pull soft. Non vincola — suggerisce. L'entità mantiene coerenza narrativa senza perdere la capacità di rispondere autenticamente all'input.
 
 ### 8.2 InputReading — Comprensione via IS_A chain (Phase 55)
 

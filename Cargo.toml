@@ -92,3 +92,11 @@ path = "src/bin/test_grammar.rs"
 [[bin]]
 name = "chat"
 path = "src/bin/chat.rs"
+
+[[bin]]
+name = "reset-simplices"
+path = "src/bin/reset_simplices.rs"
+
+[[bin]]
+name = "rederive-signatures"
+path = "src/bin/rederive_signatures.rs"

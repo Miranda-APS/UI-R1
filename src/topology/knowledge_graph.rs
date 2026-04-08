@@ -379,6 +379,19 @@ impl KnowledgeGraph {
         self.out_degree(word) + self.in_degree(word)
     }
 
+    /// Grado totale massimo su tutti i nodi del KG.
+    /// Usato come normalizzatore nella derivazione firme 8D (dim Complessità).
+    pub fn max_total_degree(&self) -> usize {
+        let all_nodes: std::collections::HashSet<&str> = self.outgoing.keys()
+            .map(|s| s.as_str())
+            .chain(self.incoming.keys().map(|s| s.as_str()))
+            .collect();
+        all_nodes.iter()
+            .map(|w| self.total_degree(w))
+            .max()
+            .unwrap_or(1)
+    }
+
     // ─── Caricamento da TSV ──────────────────────────────────────────────────
 
     /// Carica triple da un file TSV.
@@ -458,12 +471,21 @@ impl KnowledgeGraph {
         for &word in input_words {
             if word.len() < 3 { continue; }
 
+            // Fattore specificità: attrattori con POCHI figli IS_A (specifici) vengono
+            // preferiti a mega-attrattori come "azione" (5906 figli) o "qualita" (3503).
+            // sweet_spot = 300 → "emozione" (209 figli) riceve punteggio pieno (>1.0),
+            // "qualita" riceve ~0.086, "azione" riceve ~0.051.
+            // Formula: specificity(n) = min(2.0, 300.0 / max(n, 1))
+            let specificity = |n: usize| -> f64 {
+                (300.0_f64 / (n.max(1) as f64)).min(2.0)
+            };
+
             // Hop 1: direct IS_A parents
             for parent in self.query_objects(word, RelationType::IsA) {
                 let n_children = self.query_subjects(parent, RelationType::IsA).len();
                 if n_children >= min_isa_children {
                     let e = attractor_map.entry(parent).or_insert((0.0, Vec::new()));
-                    e.0 += 1.0;
+                    e.0 += specificity(n_children);
                     if !e.1.contains(&word.to_string()) { e.1.push(word.to_string()); }
                 }
                 // Hop 2: grandparent IS_A
@@ -471,7 +493,7 @@ impl KnowledgeGraph {
                     let n_gc = self.query_subjects(grandparent, RelationType::IsA).len();
                     if n_gc >= min_isa_children {
                         let e = attractor_map.entry(grandparent).or_insert((0.0, Vec::new()));
-                        e.0 += 0.6;  // decay per hop
+                        e.0 += 0.6 * specificity(n_gc);  // decay per hop + specificità
                         if !e.1.contains(&word.to_string()) { e.1.push(word.to_string()); }
                     }
                 }
@@ -510,6 +532,255 @@ impl KnowledgeGraph {
                     .map(|_| node.clone())
             })
             .collect()
+    }
+
+    // ─── Firma 8D KG-derivata ─────────────────────────────────────────────────
+
+    /// Phase 63: Calcola la firma 8D di una parola dalla sua struttura nel grafo.
+    ///
+    /// Principio: la geometria IS il significato quando la "luce" è coerente.
+    /// Le 8 dimensioni I Ching emergono dalle proprietà relazionali della parola —
+    /// non dalle co-occorrenze statistiche con altri token testuali.
+    ///
+    /// Restituisce None se la parola non esiste nel KG.
+    /// `max_degree`: grado massimo osservato nel grafo (per normalizzare Complessità).
+    /// `valence_scores`: mappa parola → valenza pre-calcolata via BFS dalle radici emotive.
+    pub fn derive_8d_from_kg(
+        &self,
+        word: &str,
+        max_degree: usize,
+        valence_scores: &std::collections::HashMap<String, f64>,
+    ) -> Option<[f64; 8]> {
+        if !self.contains(word) { return None; }
+
+        let mut sig = [0.5f64; 8];
+
+        // Contatori strutturali
+        let causes_out = self.query_objects(word, crate::topology::relation::RelationType::Causes).len();
+        let causes_in  = self.query_subjects(word, crate::topology::relation::RelationType::Causes).len();
+        let isa_parents = self.query_objects(word, crate::topology::relation::RelationType::IsA).len();
+        let isa_children = self.query_subjects(word, crate::topology::relation::RelationType::IsA).len();
+        let has_opposite = !self.query_objects(word, crate::topology::relation::RelationType::OppositeOf).is_empty();
+        let total_deg = self.total_degree(word);
+
+        // ── Dim 0: Agency (☰ Cielo) ──────────────────────────────────────────
+        // Quanto questa parola è AGENTE di cambiamento vs. passiva ricevente?
+        // CAUSES outgoing = la parola produce effetti nel mondo → alto Agency
+        // CAUSES incoming = la parola è effetto di altro → basso Agency
+        // Le pure categorie (animale, qualità) hanno agency media — non causano, non sono causate
+        let causes_total = causes_out + causes_in;
+        sig[0] = if causes_total > 0 {
+            (causes_out as f64 / causes_total as f64).clamp(0.05, 0.95)
+        } else if isa_children > 5 {
+            0.20  // categoria astratta con molti figli: permanente, non agente
+        } else {
+            0.50  // parola senza relazioni causali: agency neutra
+        };
+
+        // ── Dim 1: Permanenza (☷ Terra) ──────────────────────────────────────
+        // Quanto questo concetto è stabile/immutabile nel mondo?
+        // Categorie astratte con molti figli IS_A (emozione, animale) → permanenti
+        // Concetti specifici, eventi, azioni → transitori
+        sig[1] = if isa_children > 50 {
+            0.85  // mega-categoria: molto permanente
+        } else if isa_children > 10 {
+            0.65  // categoria media
+        } else if isa_children > 0 {
+            0.40  // categoria piccola
+        } else if causes_out > 3 {
+            0.20  // agente attivo: poco permanente
+        } else {
+            0.35  // concetto specifico: transitorio
+        };
+
+        // ── Dim 2: Intensità (☳ Tuono) ────────────────────────────────────────
+        // Quanto questa parola porta energia/forza/urgenza?
+        // Proxy: parole con molti CAUSES outgoing + bassa permanenza → intense
+        // Anche: parole che sono SIMILAR_TO ad altri nodi ad alta intensità
+        // (propagato via valence_scores come secondo canale)
+        let intensity_from_causes = if causes_out > 0 {
+            ((causes_out as f64) / (causes_out as f64 + 3.0)).min(0.9)
+        } else { 0.2 };
+        // Boost se è un'emozione forte (prossima alle radici emotive)
+        let valence = valence_scores.get(word).copied().unwrap_or(0.5);
+        let emotional_intensity = (valence - 0.5).abs() * 2.0; // 0=neutro, 1=carico
+        sig[2] = (intensity_from_causes * 0.6 + emotional_intensity * 0.4).clamp(0.05, 0.95);
+
+        // ── Dim 3: Tempo (☵ Acqua) ────────────────────────────────────────────
+        // Quanto questa parola è radicata in processi/flussi temporali?
+        // Parole in catene causali (sia source che target) → alto Tempo
+        // Categorie pure (IS_A hierarchy) → basso Tempo
+        sig[3] = if causes_total > 0 {
+            ((causes_total as f64) / (causes_total as f64 + 5.0)).min(0.9)
+        } else if isa_children > 20 {
+            0.15  // categoria statica: fuori dal tempo
+        } else {
+            0.35  // concetto con poca storia causale
+        };
+
+        // ── Dim 4: Confine (☶ Montagna) ───────────────────────────────────────
+        // Quanto questo concetto è preciso/delimitato?
+        // Pochi figli IS_A → specificità alta → alto Confine
+        // Mega-categorie → molte cose ci appartengono → basso Confine
+        // Avere OPPOSITE_OF = confine netto (sa cosa non è)
+        let specificity = if isa_children == 0 {
+            0.80  // foglia del grafo IS_A: massimamente specifico
+        } else {
+            (5.0 / (isa_children as f64 + 1.0)).min(0.75)
+        };
+        let polarity_bonus = if has_opposite { 0.15 } else { 0.0 };
+        sig[4] = (specificity + polarity_bonus).clamp(0.05, 0.95);
+
+        // ── Dim 5: Complessità (☴ Vento) ──────────────────────────────────────
+        // Quanto questo nodo è connesso/intrecciato con altri?
+        // Hub con molte relazioni → alta Complessità
+        // Foglie con poche relazioni → bassa Complessità
+        let max_deg_f = (max_degree.max(1)) as f64;
+        sig[5] = if total_deg > 0 {
+            ((total_deg as f64).ln() / max_deg_f.ln()).clamp(0.05, 0.95)
+        } else { 0.05 };
+
+        // ── Dim 6: Definizione (☲ Fuoco) ──────────────────────────────────────
+        // Quanto questo concetto è ben definito/chiaro?
+        // Molti genitori IS_A = localizzato precisamente nella tassonomia
+        // Avere OPPOSITE_OF = polarità netta → alta Definizione
+        // Parole prive di relazioni = indefinite
+        let parents_contribution = (isa_parents as f64 / (isa_parents as f64 + 3.0)).min(0.7);
+        let opposite_contribution = if has_opposite { 0.3 } else { 0.0 };
+        sig[6] = (parents_contribution + opposite_contribution).clamp(0.05, 0.95);
+
+        // ── Dim 7: Valenza (☱ Lago) ───────────────────────────────────────────
+        // Carica emotiva/sociale della parola [0=negativo, 0.5=neutro, 1=positivo]
+        // Derivata da BFS dalle radici emotive (pre-calcolato in valence_scores)
+        sig[7] = valence_scores.get(word).copied().unwrap_or(0.5);
+
+        Some(sig)
+    }
+
+    /// Phase 63: Propagazione BFS della valenza emotiva dal KG.
+    ///
+    /// Parte da radici semantiche positive e negative, propaga via SIMILAR_TO/IS_A/CAUSES
+    /// con decadimento per hop. Restituisce una mappa parola → [0,1] dove:
+    ///   0.0 = fortemente negativo (dolore/paura)
+    ///   0.5 = neutro
+    ///   1.0 = fortemente positivo (gioia/amore)
+    ///
+    /// Non è una lista hardcoded di sentimenti — è la geometria della rete
+    /// che propaga la carica dalle radici conosciute verso la periferia.
+    pub fn compute_valence_scores(&self) -> std::collections::HashMap<String, f64> {
+        use std::collections::{HashMap, VecDeque};
+
+        // Radici semantiche — non "lista di parole emotive" ma ancoraggi KG.
+        // Le parole vicine ereditano la carica proporzionalmente alla distanza.
+        const POS_ROOTS: &[(&str, f64)] = &[
+            ("gioia", 1.0), ("felicità", 1.0), ("amore", 0.95), ("speranza", 0.90),
+            ("piacere", 0.85), ("entusiasmo", 0.85), ("serenità", 0.85),
+            ("gratitudine", 0.80), ("armonia", 0.80), ("fiducia", 0.80),
+        ];
+        const NEG_ROOTS: &[(&str, f64)] = &[
+            ("dolore", -1.0), ("sofferenza", -1.0), ("paura", -0.95), ("tristezza", -0.95),
+            ("angoscia", -0.95), ("rabbia", -0.85), ("ansia", -0.85),
+            ("disperazione", -0.90), ("odio", -0.90), ("lutto", -0.85),
+        ];
+
+        // Propagazione: SIMILAR_TO (forte), IS_A (media), CAUSES (debole, bidirezionale)
+        const SIMILAR_DECAY: f64 = 0.85;
+        const ISA_DECAY:     f64 = 0.60;
+        const CAUSES_DECAY:  f64 = 0.40;
+        const MAX_HOPS: usize = 4;
+
+        // scores: parola → carica cumulativa (somma pesata da tutti i cammini)
+        // counts: parola → numero di cammini (per fare media)
+        let mut scores: HashMap<String, f64> = HashMap::new();
+        let mut counts: HashMap<String, usize> = HashMap::new();
+
+        // BFS da ogni radice
+        let all_roots: Vec<(&str, f64)> = POS_ROOTS.iter().chain(NEG_ROOTS.iter())
+            .map(|&(w, v)| (w, v))
+            .collect();
+
+        for (root, charge) in &all_roots {
+            // queue: (parola, carica_attuale, hop)
+            let mut queue: VecDeque<(String, f64, usize)> = VecDeque::new();
+            let mut visited: HashMap<String, f64> = HashMap::new();
+
+            queue.push_back((root.to_string(), *charge, 0));
+            visited.insert(root.to_string(), *charge);
+
+            while let Some((word, current_charge, hop)) = queue.pop_front() {
+                // Accumula questo cammino nella parola
+                *scores.entry(word.clone()).or_insert(0.0) += current_charge;
+                *counts.entry(word.clone()).or_insert(0) += 1;
+
+                if hop >= MAX_HOPS { continue; }
+
+                // Espandi via SIMILAR_TO (bidirezionale — la similarità non ha direzione)
+                for neighbor in self.query_objects(&word, crate::topology::relation::RelationType::SimilarTo) {
+                    let new_charge = current_charge * SIMILAR_DECAY;
+                    if new_charge.abs() < 0.05 { continue; }
+                    if !visited.contains_key(neighbor) {
+                        visited.insert(neighbor.to_string(), new_charge);
+                        queue.push_back((neighbor.to_string(), new_charge, hop + 1));
+                    }
+                }
+                for neighbor in self.query_subjects(&word, crate::topology::relation::RelationType::SimilarTo) {
+                    let new_charge = current_charge * SIMILAR_DECAY;
+                    if new_charge.abs() < 0.05 { continue; }
+                    if !visited.contains_key(neighbor) {
+                        visited.insert(neighbor.to_string(), new_charge);
+                        queue.push_back((neighbor.to_string(), new_charge, hop + 1));
+                    }
+                }
+
+                // Espandi via IS_A verso i figli (gli specializzati ereditano dalla categoria)
+                for child in self.query_subjects(&word, crate::topology::relation::RelationType::IsA) {
+                    let new_charge = current_charge * ISA_DECAY;
+                    if new_charge.abs() < 0.05 { continue; }
+                    if !visited.contains_key(child) {
+                        visited.insert(child.to_string(), new_charge);
+                        queue.push_back((child.to_string(), new_charge, hop + 1));
+                    }
+                }
+
+                // Espandi via CAUSES in avanti (le cause trasmettono valenza agli effetti)
+                for effect in self.query_objects(&word, crate::topology::relation::RelationType::Causes) {
+                    let new_charge = current_charge * CAUSES_DECAY;
+                    if new_charge.abs() < 0.05 { continue; }
+                    if !visited.contains_key(effect) {
+                        visited.insert(effect.to_string(), new_charge);
+                        queue.push_back((effect.to_string(), new_charge, hop + 1));
+                    }
+                }
+            }
+        }
+
+        // OPPOSITE_OF inverte la valenza: se "gioia" è 1.0, "tristezza" via OPPOSITE_OF è -1.0
+        // (già catturato dalle radici dirette, ma gestisce casi non in radici)
+        let opposite_words: Vec<String> = scores.keys().cloned().collect();
+        for word in &opposite_words {
+            let word_score = *scores.get(word.as_str()).unwrap_or(&0.0);
+            if word_score.abs() < 0.1 { continue; }
+            for opp in self.query_objects(word, crate::topology::relation::RelationType::OppositeOf) {
+                let inv = -word_score * 0.9;
+                let existing = scores.get(opp).copied().unwrap_or(0.0);
+                // Prendi il valore più estremo (non fare media se già opposto)
+                if inv.abs() > existing.abs() {
+                    scores.insert(opp.to_string(), inv);
+                    counts.insert(opp.to_string(), 1);
+                }
+            }
+        }
+
+        // Normalizza: media dei cammini → [0, 1] (da [-1, +1])
+        let mut result = HashMap::new();
+        for (word, total) in &scores {
+            let n = counts.get(word).copied().unwrap_or(1) as f64;
+            let avg = (total / n).clamp(-1.0, 1.0);
+            // Mappa [-1, +1] → [0, 1]
+            result.insert(word.clone(), (avg + 1.0) / 2.0);
+        }
+
+        result
     }
 
     // ─── Serializzazione ─────────────────────────────────────────────────────
@@ -570,9 +841,55 @@ pub struct AttractorHit {
     pub causes: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct KgSnapshot {
     pub edges: Vec<TypedEdge>,
+}
+
+impl<'de> serde::Deserialize<'de> for KgSnapshot {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use crate::topology::relation::{EdgeSource, RelationType};
+        use serde::Deserialize as _;
+
+        // Struttura intermedia con `relation` come stringa — tollera varianti sconosciute.
+        #[derive(serde::Deserialize)]
+        struct RawEdge {
+            subject: String,
+            relation: String,
+            object: String,
+            #[serde(default = "default_conf")]
+            confidence: f32,
+            #[serde(default)]
+            source: EdgeSource,
+            #[serde(default)]
+            via: Option<String>,
+        }
+        fn default_conf() -> f32 { 1.0 }
+
+        #[derive(serde::Deserialize)]
+        struct RawSnap { edges: Vec<RawEdge> }
+
+        let raw = RawSnap::deserialize(deserializer)?;
+        let mut skipped = 0usize;
+        let mut edges = Vec::with_capacity(raw.edges.len());
+        for e in raw.edges {
+            match RelationType::from_str(&e.relation) {
+                Some(rel) => edges.push(crate::topology::relation::TypedEdge {
+                    subject:    e.subject,
+                    relation:   rel,
+                    object:     e.object,
+                    confidence: e.confidence,
+                    source:     e.source,
+                    via:        e.via,
+                }),
+                None => { skipped += 1; }
+            }
+        }
+        if skipped > 0 {
+            eprintln!("[KG] {} archi con relazione sconosciuta saltati", skipped);
+        }
+        Ok(KgSnapshot { edges })
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

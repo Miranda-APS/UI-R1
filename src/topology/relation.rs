@@ -278,8 +278,9 @@ impl RelationType {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Da dove viene questa relazione.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum EdgeSource {
+    #[default]
     /// Estratto da Wikidata (entità/categorie italiane)
     Wikidata,
     /// Da WordNet italiano (sinonimi, iperonimi, antonimi)

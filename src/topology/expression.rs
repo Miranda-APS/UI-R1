@@ -17,7 +17,7 @@
 //   campo + KG → comprensione (nuclei) → colorati da Octalysis → grammatica → testo
 // ──────────────────────────────────────────────────────────────────────────────
 
-use crate::topology::grammar::{self, Person, Tense, PartOfSpeech};
+use crate::topology::grammar::{self, Person, Tense, PartOfSpeech, with_definite_article, with_indefinite_article};
 use crate::topology::knowledge_graph::KnowledgeGraph;
 use crate::topology::lexicon::Lexicon;
 use crate::topology::relation::RelationType;
@@ -180,6 +180,9 @@ pub fn compose(
     input_words: &[String],
     episodes: Option<&SemanticEpisodeLog>,
     is_question: bool,
+    // Phase 62: l'Altro ha espresso distress emotivo (tristezza/paura/dolore).
+    // Attiva voce in seconda persona + modo interrogativo: apre spazio empatico.
+    other_in_distress: bool,
 ) -> Option<Expression> {
     // 1. Raccogli le parole attive del campo — la materia disponibile.
     let active = word_topology.active_words();
@@ -217,7 +220,15 @@ pub fn compose(
     // 4. Determina la voce dell'entità dal suo stato.
     //    Usa comprehension_pool (non candidates) perché la voce emerge da
     //    TUTTO ciò che l'entità sente, incluso l'input.
-    let voice = derive_voice(valence_drives, active_fractals, codon, &comprehension_pool, lexicon);
+    let mut voice = derive_voice(valence_drives, active_fractals, codon, &comprehension_pool, lexicon);
+
+    // Phase 62: se l'Altro è in distress, la voce diventa empatica (2a persona + interrogativo).
+    // "Confortare è il meccanismo con cui si crea connessione quando il bisogno è quello."
+    // Non è un template: è la geometria del campo che parla verso l'Altro, non verso di sé.
+    if other_in_distress && !matches!(voice.mood, ExpressionMood::Silent) {
+        voice.person = crate::topology::grammar::Person::Second;
+        voice.mood = ExpressionMood::Interrogative;
+    }
 
     // 5. Componi l'espressione.
     let expr = if !nuclei.is_empty() {
@@ -225,6 +236,10 @@ pub fn compose(
     } else {
         compose_from_field(&voice, &candidates, lexicon, echo_exclude, valence_drives)
     };
+
+    // Nota: is_question (input utente contiene '?') influenza l'interpretazione
+    // dell'input ma non necessariamente la risposta — la voce è già determinata.
+    let _ = is_question;
 
     expr
 }
@@ -599,8 +614,8 @@ fn render_nucleus(nucleus: &SemanticNucleus, voice: &EntityVoice, lexicon: &Lexi
     }
 
     // Prima persona: l'entità esprime dal suo stato, non cita fatti del mondo.
-    // "saluto CAUSES risposta" + Person::First → "Percepisco risposta."
-    // "saluto IsA comunicazione" + Person::First → "C'è comunicazione."
+    // "saluto CAUSES risposta" + Person::First → "Percepisco la risposta."
+    // "saluto IsA comunicazione" + Person::First → "C'è una comunicazione."
     // Non è un template: è la stessa relazione resa in voce interiore.
     if voice.person == Person::First {
         match nucleus.relation {
@@ -610,28 +625,75 @@ fn render_nucleus(nucleus: &SemanticNucleus, voice: &EntityVoice, lexicon: &Lexi
                     crate::topology::grammar::Tense::Imperfect => "percepivo",
                     _ => "percepisco",
                 };
-                return format!("{} {}", verb, object);
+                // Articolo determinativo: percepisco la paura, percepisco il tremore
+                return format!("{} {}", verb, with_definite_article(object));
             }
             RelationType::IsA | RelationType::PartOf => {
-                return format!("c'è {}", object);
+                // Articolo indeterminativo: c'è una connessione, c'è un animale
+                return format!("c'è {}", with_indefinite_article(object));
             }
             RelationType::Has | RelationType::SimilarTo => {
-                return format!("sento {}", object);
+                // Articolo determinativo: sento la paura, sento il peso
+                return format!("sento {}", with_definite_article(object));
+            }
+            _ => {}
+        }
+    }
+
+    // Seconda persona (Phase 62): voce empatica rivolta all'Altro.
+    // Usata quando l'Altro esprime distress — apre spazio verso di loro.
+    // "tristezza CAUSES dolore" + Person::Second → "Senti il dolore?"
+    // "pianto IsA tristezza" + Person::Second → "Provi la tristezza?"
+    // La "?" viene aggiunta da finalize_expression() con mood Interrogative.
+    if voice.person == Person::Second {
+        match nucleus.relation {
+            RelationType::Causes | RelationType::Enables | RelationType::SimilarTo => {
+                let verb = match voice.tense {
+                    crate::topology::grammar::Tense::Future => "sentirai",
+                    crate::topology::grammar::Tense::Imperfect => "sentivi",
+                    _ => "senti",
+                };
+                return format!("{} {}", verb, with_definite_article(object));
+            }
+            RelationType::IsA | RelationType::PartOf => {
+                let verb = match voice.tense {
+                    crate::topology::grammar::Tense::Future => "proverai",
+                    crate::topology::grammar::Tense::Imperfect => "provavi",
+                    _ => "provi",
+                };
+                return format!("{} {}", verb, with_indefinite_article(object));
+            }
+            RelationType::Has => {
+                let verb = match voice.tense {
+                    crate::topology::grammar::Tense::Future => "avrai",
+                    crate::topology::grammar::Tense::Imperfect => "avevi",
+                    _ => "hai",
+                };
+                return format!("{} {}", verb, with_definite_article(object));
             }
             _ => {}
         }
     }
 
     // Seconda o terza persona / impersonale: forma standard soggetto-copula-oggetto.
+    // Il soggetto è preceduto dall'articolo determinativo: "Il cane abbaia."
     let copula = relation_to_copula(nucleus.relation, voice, lexicon, subject);
+    let subject_with_art = with_definite_article(subject);
     if copula.is_empty() {
         // Relazione DOES: il soggetto compie l'azione-oggetto.
-        // "sole riscalda" — il soggetto è un nome proprio (3a persona),
-        // non l'entità che parla.
+        // "Il sole riscalda" — il soggetto è un nome proprio (3a persona).
         let conjugated = crate::topology::grammar::conjugate(object, Person::Third, voice.tense);
-        format!("{} {}", subject, conjugated)
+        format!("{} {}", subject_with_art, conjugated)
     } else {
-        format!("{} {} {}", subject, copula, object)
+        // IS_A → articolo indeterminativo per l'oggetto ("Il cane è un animale")
+        // HAS/CAUSES → articolo determinativo ("Il cane ha il pelo")
+        let obj_with_art = match nucleus.relation {
+            RelationType::IsA | RelationType::PartOf =>
+                with_indefinite_article(object),
+            _ =>
+                with_definite_article(object),
+        };
+        format!("{} {} {}", subject_with_art, copula, obj_with_art)
     }
 }
 
@@ -640,21 +702,26 @@ fn render_nucleus(nucleus: &SemanticNucleus, voice: &EntityVoice, lexicon: &Lexi
 /// Altrimenti rende la forma completa "S copula O".
 fn render_nucleus_brief(nucleus: &SemanticNucleus, primary: &SemanticNucleus) -> Option<String> {
     let copula = relation_to_copula_simple(nucleus.relation);
+    let obj_with_art = match nucleus.relation {
+        RelationType::IsA | RelationType::PartOf =>
+            with_indefinite_article(&nucleus.object),
+        _ =>
+            with_definite_article(&nucleus.object),
+    };
 
     if nucleus.subject == primary.subject || nucleus.subject == primary.object {
         // Soggetto già noto — basta il predicato (italiano permette omissione)
         if copula.is_empty() {
-            // DOES: soggetto implicito + "fa [azione]"
-            Some(format!("fa {}", nucleus.object))
+            Some(format!("fa {}", with_definite_article(&nucleus.object)))
         } else {
-            Some(format!("{} {}", copula, nucleus.object))
+            Some(format!("{} {}", copula, obj_with_art))
         }
     } else {
-        // Soggetto diverso — forma completa
+        // Soggetto diverso — forma completa con articolo
         if copula.is_empty() {
-            Some(format!("{} fa {}", nucleus.subject, nucleus.object))
+            Some(format!("{} fa {}", with_definite_article(&nucleus.subject), with_definite_article(&nucleus.object)))
         } else {
-            Some(format!("{} {} {}", nucleus.subject, copula, nucleus.object))
+            Some(format!("{} {} {}", with_definite_article(&nucleus.subject), copula, obj_with_art))
         }
     }
 }

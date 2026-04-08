@@ -30,6 +30,43 @@ pub enum InputAct {
     Declaration,
 }
 
+/// Soggetto del claim nell'input.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClaimAgent {
+    /// "io sono/ho/sento X" — il parlante dichiara qualcosa di sé
+    Speaker,
+    /// "tu sei/hai/senti X" — il parlante dice qualcosa di Prometeo
+    Entity,
+}
+
+/// Tipo di claim strutturale rilevato nell'input.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClaimKind {
+    /// "io sono X" / "tu sei X" — identità o appartenenza
+    Identity,
+    /// "io ho X" / "sento X" / "provo X" — possesso o stato interno
+    Feeling,
+    /// "io faccio/voglio/penso X" — azione o intenzione
+    Action,
+}
+
+/// Un claim strutturale rilevato nell'input: chi dice cosa di chi.
+///
+/// "io sono triste" → SpeakerClaim { agent: Speaker, kind: Feeling, predicate: "triste" }
+/// "tu sei bello"   → SpeakerClaim { agent: Entity, kind: Identity, predicate: "bello" }
+/// "io voglio capire" → SpeakerClaim { agent: Speaker, kind: Action, predicate: "capire" }
+///
+/// Non è parsing sintattico completo — è pattern matching sui costrutti
+/// più comuni dell'italiano che esprimono relazioni soggetto-predicato.
+/// Robusto per frasi semplici; sufficiente per orientare la risposta.
+#[derive(Debug, Clone)]
+pub struct SpeakerClaim {
+    pub agent: ClaimAgent,
+    pub kind: ClaimKind,
+    /// La parola che porta il predicato (la prima parola-contenuto dopo il verbo)
+    pub predicate: String,
+}
+
 /// Lettura strutturata dell'input corrente.
 #[derive(Debug, Clone)]
 pub struct InputReading {
@@ -38,6 +75,10 @@ pub struct InputReading {
     pub intensity: f64,
     /// Parola più stabile dell'input (se presente nel lessico)
     pub salient_word: Option<String>,
+    /// Claim strutturale rilevato (se presente).
+    /// "io sono triste" → Some(SpeakerClaim { Speaker, Feeling, "triste" })
+    /// "il cane abbaia" → None (nessun soggetto grammaticale rilevante)
+    pub speaker_claim: Option<SpeakerClaim>,
 }
 
 /// Legge l'atto comunicativo usando logica IS_A dal Knowledge Graph.
@@ -123,20 +164,174 @@ pub fn read_input(
         (s, e, i)
     };
 
+    // ── Rilevamento claim strutturale soggetto/predicato ────────────────────
+    // Rileva "io sono/ho/sento X" e "tu sei/hai X" come claim espliciti.
+    // Non è parsing completo: è pattern matching sui costrutti più frequenti.
+    // Robusto per frasi semplici; sufficiente per orientare stance e risposta.
+    let speaker_claim = detect_speaker_claim(raw_words, lexicon, kg);
+
     // ── Classificazione (ordine di priorità) ─────────────────────────────────
+    // I claim emozionali del parlante ("io sono triste") elevano Declaration
+    // a EmotionalExpr anche se il KG non ha riconosciuto la parola via IS_A.
+    // Questo permette risposte empatiche a stati interni espressi strutturalmente.
+    let has_emotional_claim = speaker_claim.as_ref()
+        .map(|c| c.agent == ClaimAgent::Speaker && c.kind == ClaimKind::Feeling)
+        .unwrap_or(false);
+
     let act = if has_greeting {
         InputAct::Greeting
     } else if has_question_mark && has_self_ref {
         InputAct::SelfQuery
     } else if has_question_mark {
         InputAct::Question
-    } else if has_emotional {
+    } else if has_emotional || has_emotional_claim {
         InputAct::EmotionalExpr
     } else {
         InputAct::Declaration
     };
 
-    InputReading { act, intensity, salient_word }
+    InputReading { act, intensity, salient_word, speaker_claim }
+}
+
+/// Rileva un claim strutturale soggetto/predicato nell'input.
+///
+/// Pattern riconosciuti (ordine di ricerca: io/tu → verbo → predicato):
+///   "io sono/ero/mi sento/sento/provo/ho X"  → Speaker claim
+///   "tu sei/eri/hai/senti X"                 → Entity claim
+///   "io voglio/penso/credo X"                → Speaker Action
+///
+/// Restituisce None se nessun pattern viene riconosciuto.
+pub fn detect_speaker_claim(
+    raw_words: &[String],
+    lexicon: &Lexicon,
+    kg: Option<&KnowledgeGraph>,
+) -> Option<SpeakerClaim> {
+    if raw_words.is_empty() { return None; }
+
+    let words_lc: Vec<&str> = raw_words.iter().map(|w| w.as_str()).collect();
+
+    // Verbi copulativi/di stato per il parlante (1a persona)
+    const SPEAKER_IDENTITY: &[&str] = &["sono", "ero", "sarò"];
+    const SPEAKER_FEELING:  &[&str] = &["sento", "provo", "ho", "mi", "sto"];
+    const SPEAKER_ACTION:   &[&str] = &["voglio", "penso", "credo", "so", "capisco", "devo"];
+
+    // Verbi per l'entità (2a persona)
+    const ENTITY_VERBS: &[&str] = &["sei", "eri", "sarai", "hai", "senti", "provi"];
+
+    // Cerca "io" come soggetto esplicito
+    let has_io = words_lc.iter().any(|&w| w == "io");
+    // Cerca "mi" (mi sento, mi chiamo) — soggetto implicito
+    let has_mi = words_lc.iter().any(|&w| w == "mi");
+    // Cerca "tu" o "ti" come riferimento all'entità
+    let has_tu = words_lc.iter().any(|&w| w == "tu" || w == "ti");
+    // Cerca verbi di prima persona che implicano il soggetto parlante senza pronome esplicito.
+    // In italiano "ho paura" è inequivocabilmente prima persona — "ho" non esiste in 3a persona.
+    // Questi verbi sono sufficienti come indicatori del soggetto senza "io".
+    const IMPLICIT_SPEAKER_VERBS: &[&str] = &["ho", "sono", "sto", "voglio", "penso", "credo", "sento", "provo", "devo", "so"];
+    let has_implicit_speaker = !has_io && !has_mi && !has_tu
+        && words_lc.iter().any(|&w| IMPLICIT_SPEAKER_VERBS.contains(&w));
+
+    if !has_io && !has_mi && !has_tu && !has_implicit_speaker {
+        return None;
+    }
+
+    // Trova la posizione del verbo e classifica il claim
+    let (agent, kind, verb_pos) = if has_io || has_mi || has_implicit_speaker {
+        // Cerca verbi del parlante
+        if let Some(pos) = words_lc.iter().position(|&w| SPEAKER_IDENTITY.contains(&w)) {
+            (ClaimAgent::Speaker, ClaimKind::Identity, pos)
+        } else if let Some(pos) = words_lc.iter().position(|&w| SPEAKER_FEELING.contains(&w)) {
+            (ClaimAgent::Speaker, ClaimKind::Feeling, pos)
+        } else if let Some(pos) = words_lc.iter().position(|&w| SPEAKER_ACTION.contains(&w)) {
+            (ClaimAgent::Speaker, ClaimKind::Action, pos)
+        } else if has_implicit_speaker {
+            // Verbo implicito speaker ma non in nessuna lista → usa posizione del verbo implicito
+            if let Some(pos) = words_lc.iter().position(|&w| IMPLICIT_SPEAKER_VERBS.contains(&w)) {
+                (ClaimAgent::Speaker, ClaimKind::Feeling, pos)
+            } else {
+                return None;
+            }
+        } else {
+            return None;
+        }
+    } else {
+        // has_tu: cerca verbi dell'entità
+        if let Some(pos) = words_lc.iter().position(|&w| ENTITY_VERBS.contains(&w)) {
+            (ClaimAgent::Entity, ClaimKind::Identity, pos)
+        } else {
+            return None;
+        }
+    };
+
+    // Prendi la prima parola-contenuto dopo il verbo come predicato
+    let predicate = words_lc.iter()
+        .skip(verb_pos + 1)
+        .find(|&&w| {
+            // Salta articoli e parole funzionali brevi
+            !matches!(w, "un" | "una" | "uno" | "il" | "la" | "lo" | "i" | "gli" | "le"
+                         | "del" | "della" | "di" | "a" | "da" | "in" | "per" | "e")
+        })
+        .map(|&w| w.to_string());
+
+    let predicate = predicate?;
+
+    // Raffina il kind in base al predicato: se il predicato è nel dominio
+    // emozionale (KG o lista), upgraded a Feeling indipendentemente dal verbo.
+    // "io sono triste" (Identity verbo + emozione) → kind = Feeling
+    let final_kind = if kind == ClaimKind::Identity {
+        let is_emotional = is_emotional_word(&predicate, lexicon, kg);
+        if is_emotional { ClaimKind::Feeling } else { kind }
+    } else {
+        kind
+    };
+
+    Some(SpeakerClaim { agent, kind: final_kind, predicate })
+}
+
+/// Verifica se una parola è nel dominio emozionale.
+/// Usa KG (IS_A "emozione") se disponibile, poi lista diretta come fallback.
+fn is_emotional_word(word: &str, lexicon: &Lexicon, kg: Option<&KnowledgeGraph>) -> bool {
+    // Lista diretta di parole emozionali comuni — bootstrap per parole non ancora nel KG
+    const EMOTIONAL_WORDS: &[&str] = &[
+        "triste", "tristezza", "felice", "felicità", "arrabbiato", "arrabbiata",
+        "paura", "spaventato", "spaventata", "ansioso", "ansiosa", "ansia",
+        "gioioso", "gioiosa", "contento", "contenta", "depresso", "depressa",
+        "solo", "sola", "solitudine", "amato", "amata", "odiato", "odiata",
+        "stanco", "stanca", "stanchezza", "eccitato", "eccitata", "nervoso", "nervosa",
+        "calmo", "calma", "sereno", "serena", "preoccupato", "preoccupata",
+        "deluso", "delusa", "sorpreso", "sorpresa", "confuso", "confusa",
+        "bene", "male", "meglio", "peggio", "vuoto", "pieno", "perso", "persa",
+    ];
+
+    if EMOTIONAL_WORDS.contains(&word) { return true; }
+
+    // Check KG: word IS_A emozione/sentimento?
+    if let Some(kg) = kg {
+        let parents = kg.query_objects(word, RelationType::IsA);
+        for p in parents {
+            let p_lc = p.to_lowercase();
+            if p_lc == "emozione" || p_lc == "sentimento" || p_lc == "stato_d_animo"
+                || p_lc == "sensazione" || p_lc == "affetto" || p_lc == "umore" {
+                return true;
+            }
+        }
+    }
+
+    // Ultima risorsa: il lessico sa che è un aggettivo (emozioni sono spesso aggettivi)?
+    // Solo se ha POS = Adjective E fa parte del lessico con stabilità > 0
+    if let Some(pat) = lexicon.get(word) {
+        if matches!(pat.pos, Some(crate::topology::grammar::PartOfSpeech::Adjective))
+            && pat.stability > 0.3 {
+            // Gli aggettivi stabili nel lessico che hanno POS Adjective probabilmente
+            // descrivono stati — ma è un'euristica debole, non usarla come unico segnale
+            // Controllo dimensionale: alta Valenza (dim 7) = parola valutativa
+            if pat.signature.get(crate::topology::primitive::Dim::Valenza) > 0.6 {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]

@@ -10,13 +10,14 @@
 | Metrica | Valore |
 |---------|--------|
 | Test | **476 passanti, 0 fallimenti, 2 skipped** |
-| Lessico | **25.870 parole** (stabilità 0.5–0.9) |
-| Knowledge Graph | **251.454 archi, ~47.000 nodi** (IS_A + CAUSES + PART_OF + USED_FOR + SIMILAR_TO + OPPOSITE_OF) |
-| Simplici | **24.579** cristallizzati |
-| Fase corrente | **Phase 60** (2° hop deliberativo: CAUSES-targets→HAS/DOES/REQUIRES→attiva a 0.12. ExpressionMood::Interrogative rimosso da derive_voice (era innescato da cd7_surprise>0.3, ora solo da will deliberata). render_nucleus Prima Persona: CAUSES→"percepisco obj", IsA→"c'è obj", Has→"sento obj". Filtro nuclei: strength>0.02, proximity>=1.5 preferiti.) |
-| Versione | **6.9.0** |
-| Stato .bin | `prometeo_topology_state.bin` — 17 MB, 2026-04-01 |
+| Lessico | **25.875 parole** (stabilità 0.5–0.9) |
+| Knowledge Graph | **165.326 archi semantici, ~40.000 nodi** (IS_A + SIMILAR_TO + OPPOSITE_OF + CAUSES curati) |
+| Simplici | **variabili** (reset 2026-04-07, crescono con conversazione) |
+| Fase corrente | **Phase 66** (vedi sotto) |
+| Versione | **6.14.0** |
+| Stato .bin | `prometeo_topology_state.bin` — Phase 65 2026-04-08 |
 | Topologia | **Semantica pura** — archi KG-derivati, 0 archi statistici |
+| Firme 8D | **21.709 / 25.875** riderivate da KG (non statistica) — Phase 63 |
 
 ---
 
@@ -99,6 +100,8 @@ Prometeo è un sistema cognitivo topologico 8D: ogni parola è un punto nello sp
 | `tag_lexicon.rs` | `cargo run --release --bin tag-lexicon` | Tagging POS (+2.775 tag) |
 | `import_pos.rs` | `cargo run --release --bin import-pos` | Import morfologico Morph-it! |
 | `dialogue_educator.rs` | `cargo run --release --bin dialogue_educator` | **Interfaccia dialogo educativo.** Insegna + ricevi per turno. Comandi: `:field`, `:feelings`, `:narrative`, `:needs`, `:recall [n]`, `:recurring`, `:introspect`, `:kg <word>`. Carica `prometeo_topology_state.bin`. |
+| `reset_simplices.rs` | `cargo run --release --bin reset-simplices` | Azzera simplessi/MTM/LTM. Backup `.bin.pre_reset`. |
+| `rederive_signatures.rs` | `cargo run --release --bin rederive-signatures` | **Phase 63**: rideriva firme 8D da struttura KG. Backup `.bin.pre_p63`. Richiede `prometeo_kg.json`. |
 
 ### Data
 | `src/web/api.rs` | +6 endpoint `/api/community/*` (teach/connect/validate/field/session/reset) + `GET /community` |
@@ -120,10 +123,15 @@ cp quartiere_x_prometeo.bin cartella_comunita/prometeo_topology_state.bin
 
 | Percorso | Contenuto |
 |----------|-----------|
-| `data/kg/italian_core.tsv` | 623 triple curate manualmente (base stabile) |
-| `data/kg/bigbang_kg.tsv` | 118.810 triple SIMILAR_TO + OPPOSITE_OF da Kaikki |
-| `data/kg/agent_kg.tsv` | 17.763 triple IS_A generate da Qwen3 |
-| `data/kg/agent_kg_full.tsv` | 44.390 triple CAUSES + PART_OF + USED_FOR generate da Qwen3 |
+| `data/kg/italian_core.tsv` | 664 triple curate manualmente (base stabile) |
+| `data/kg/nucleus.tsv` | 926 triple — hub words per 64 stati I Ching. Fondamentale. |
+| `data/kg/curated_a_g.tsv` | 3.162 triple curate A→G (agente + revisione) |
+| `data/kg/bigbang_kg.tsv` | 1.771 OPPOSITE_OF da Kaikki (subset curato) |
+| `data/kg/agent_kg.tsv` | 17.711 triple IS_A generate da Qwen3 (15 mega-categorie) |
+| `data/kg/agent_similar.tsv` | 45.125 SIMILAR_TO puliti (rimossi 1.410 garbage) |
+| `data/kg/agent_opposites.tsv` | 11.349 OPPOSITE_OF puliti (rimossi 379 nonXXX + inglese) |
+| `data/kg/agent_kg_full.tsv.excluded` | ESCLUSO — 62K CAUSES/PART_OF/USED_FOR troppo rumorosi |
+| `data/kg/curation_export.tsv.excluded` | ESCLUSO — 128K dati auto-generati non verificati |
 | `data/external/agent_kg_builder.py` | Script IS_A inheritance + direct (Qwen3 via Ollama) |
 | `data/external/agent_kg_full.py` | Script CAUSES/PART_OF/USED_FOR (Qwen3, ground_word exact-match only) |
 | `data/external/build_bigbang.py` | Genera bigbang_lessons.txt da Kaikki (cluster-based, 3 livelli) |
@@ -211,6 +219,18 @@ cp quartiere_x_prometeo.bin cartella_comunita/prometeo_topology_state.bin
 
 ---
 
+### Phase 64 — Architettura del Desiderio e Posizione dell'Entità
+
+93. **`DesireSource::OctalysisDriven(cd, val)`** (Phase 64): nuovo percorso principale di emergenza del desiderio in `desire.rs`. Il desiderio nasce dall'incrocio tra `last_comprehension` (cosa il KG ha capito) e il drive Octalysis dominante (|drives[cd]| > 0.28). Non "voglio esprimere" (circolare), ma "data comprensione X e drive CD5 attivo, voglio connettere in quella direzione". Rinforza se il drive persiste (+0.08×intensity), non duplica. Firma bersaglio = field_sig + 0.35 nella dimensione del drive + 0.12 dal peso semantico della comprensione.
+
+94. **Express pressure drive-dipendente** (Phase 64): in `will.rs`, `sense()` riceve `octalysis_drives: &[f64; 8]` come ultimo parametro. Express pressure = `max_drive × freshness × has_content × 0.8` se `max_drive > 0.25`, altrimenti `activation × freshness × has_content × 0.20`. Risolve la tripla saturazione (will + needs + valence amplificavano Express indipendentemente). L'espressione è il canale, non il motivo.
+
+95. **`NarrativeSelf.coherence_score()`** (Phase 64): misura cosine similarity tra frattali proposti e traiettoria frattale degli ultimi 4 turni. Restituisce [0, 1]. Usato in `engine.rs receive()`: se coherence < 0.30 con ≥3 turni di storia, applica pull soft verso `recent_fractal_attractor(3)` (0.08× strength). La narrativa non è più solo un diario — orienta la generazione senza vincolarla.
+
+96. **`NarrativeSelf.recent_fractal_attractor(n)`** (Phase 64): media normalizzata dei frattali dominanti degli ultimi N turni. Restituisce top-5 per forza media. Usato dal coherence pull narrativo.
+
+97. **Posizione dell'entità** (Phase 64, comportamento emergente): l'entità risponde ora dalla propria posizione valenziale anziché esporre le connessioni KG dell'input. Verificato: "perché soffri?" → "Sento scopo e stabilità." (CD1+CD8 dominanti) invece di rispecchiare semantica sofferenza. CD5 Relazione diventa negativo quando l'Altro è in distress — l'entità percepisce lo stato altrui.
+
 ## Problemi Noti / Prossimi Passi
 
 ### Problemi Aperti
@@ -219,7 +239,12 @@ cp quartiere_x_prometeo.bin cartella_comunita/prometeo_topology_state.bin
 - ~~**Saturazione campo / frattali uniformi**~~: ✅ Phase 55 — resting state 10× più basso, propagazione con rendimenti decrescenti, cap per-word su risonanza simplessi/frattali, cap pre-propagazione non-input, emerge_fractal_activations top-3 voting. "ciao"→"Benvenuto.", "ho paura"→"Impaurire genera paura."
 - ~~**Risposte template / archetype slots**~~: ✅ Phase 57 — Archetipi rimossi dal path principale. `expression::compose()` è l'unica path. Colorazione Octalysis senza template: lo stato emotivo dell'entità colora QUALE materia emerge dal campo, non il frame. Verificato: stesso input dopo stati diversi (crisi vs gioia) → risposte diverse.
 - **Infinitivi verbo come soggetti nuclei**: "Musicare genera musica" — artefatti KG (agent_kg ha "musicare CAUSES musica"). Causa: agent_kg genera relazioni su lemmi verbali. Fix possibile: in `extract_nuclei()` penalizzare soggetti POS=Verb. Bassa priorità (semanticamente coerente).
+- **Negazione over-negation in frasi coordinate**: "non X ma Y" → anche Y negata. Fix futuro: rilevare congiunzioni coordinanti ("ma", "però") per resettare il flag di negazione.
+- **Gender detection "salve"**: parola terminante in -e → default femminile → "la salve". Fix: aggiungere "salve" alle eccezioni o rilevare che è un avverbio/interiezione.
+- ~~**OPPOSITE_OF sparse per emozioni**~~: ✅ Phase 61 — agent_opposites.tsv reintegrato (11.349 OPPOSITE_OF puliti) + negazione field_boosts disattivata per parole negate (fix field_boosts skip in engine.rs). "non ho paura" → "Sento la sicurezza." ✓
 - ~~**Input sconosciuto (non italiano) → hub background**~~: ✅ Phase 59 — comprehension gate: se nessun attrattore IS_A raggiunto E KG ha contenuto → "Non capisco X — cosa intendi?" + learning_mode_pending. compose_from_field usa drive quando abs > 0.15.
+- ~~**Display 64 frattali mostra sempre LINGUAGGIO/INTRECCIO**~~: ✅ Phase 63 — firme 8D riderivate da struttura KG (21.709 parole). gioia/tristezza/paura ora in regioni distinte. Display frattali non più fuorviante.
+- **Differenziazione nuove parole fuori-KG**: parole non presenti nel KG (4.166 su 25.875) partono da firma pura del contesto, senza rumore artificiale. Con poche esposizioni (5-10) rimangono quasi indistinguibili. La differenziazione emerge con l'esperienza, non da hash UTF-8 (rimosso in Phase 63 — critica valida).
 
 ### Backlog Architetturale
 - ~~**Pesi archi per tipo relazione**~~: ✅ Phase 48 — peso = `type_base × confidence × hub_damping`. Arricchimento confidence completato (116.823 archi via Qwen3).
@@ -227,6 +252,7 @@ cp quartiere_x_prometeo.bin cartella_comunita/prometeo_topology_state.bin
 - ~~**Proposizioni effimere**~~: ✅ Phase 52 — inscritte come simplessi con source_words. 1-hop→edge, 2-hop→triangolo.
 - ~~**Loop interattivo UI**~~: ✅ Phase 52 — tab "Dialogo Interiore" con Conferma/Nega/Elabora. API `/api/inner-dialogue` + `/api/respond`.
 - **Test di dialogo end-to-end**: aggiungere test che verificano che "ciao" → risposta con qualche legame semantico a ARMONIA/COMUNICAZIONE.
+- **emotional_valence persiste tra sessioni**: la valenza emotiva dell'Altro viene salvata nello snapshot e ricaricata alla sessione successiva. Questo è semanticamente corretto (memoria dell'Altro), ma può causare che "ho paura" dopo una sessione con "io sono triste" usi la valenza accumulata della sessione precedente come base. Decade a ogni input neutro (×0.6). Non è un bug critico.
 - **MEMORY.md troppo lunga**: fasi 25-43 compresse in `docs/phases_history.md` (storico), tenere solo stato corrente.
 - ~~**SelfModel → Narrative**~~: ✅ Phase 47 — `deliberate()` consulta `SelfModel` (credenze→Reflective, incertezze→Curious) e `IdentityCore` (crisi→Reflective, stagnazione→Curious).
 - ~~**Will → SelfModel**~~: ✅ Phase 47 — `will.sense()` riceve `value_weights` e `topic_continuity`. Curiosità/apertura amplificano Explore, profondità amplifica Reflect, coerenza/onestà amplificano Express. Alta continuità tematica riduce Explore, bassa amplifica Question.
@@ -241,6 +267,62 @@ cp quartiere_x_prometeo.bin cartella_comunita/prometeo_topology_state.bin
 70. **`last_input_is_question`** (Phase 59): true se input contiene '?'. Rilevato in `receive()` PRIMA del processing. Usato nel comprehension gate (le domande non attivano incomprehension) e in `compose_from_field()` per colore espressivo.
 71. **`compose_from_field()` usa drive** (Phase 59): se `dominant_drive_intensity > 0.15` (max assoluto dei drive), chiama `express_from_drives()` che mappa i drive Octalysis → parole stato italiano (es. drives[2]=curiosità, drives[7]=inquietudine). Risponde autenticamente a "come stai?" senza conoscere "stai". Fallback ai field words solo se drive tutti deboli.
 72. **`DRIVE_STATE_WORDS`** (Phase 59): costante in `expression.rs`. 8 coppie (positivo, negativo) per CD1-CD8: scopo/vuoto, capacità/limite, curiosità/incertezza, stabilità/deriva, connessione/solitudine, urgenza/calma, sorpresa/quiete, cautela/inquietudine.
+73. **`WordActivation.negated`** (Phase 60+): campo `bool` in `lexicon.rs`. Rilevato in `process_input()`: parola è negata se c'è un operatore `Negate` a posizione < della parola nel token stream. In `engine.rs receive()`: parole negate NON attivano PF1 diretto — attivano invece `OPPOSITE_OF` dal KG a forza 0.35×confidence. Fallback: SIMILAR_TO a 0.10 se nessun OPPOSITE_OF. "non" rimane operatore strutturale (non function_word).
+74. **Articoli italiani in expression.rs** (Phase 60+): `render_nucleus()` e `render_nucleus_brief()` usano `with_definite_article()` / `with_indefinite_article()` da `grammar.rs`. IS_A/PartOf→indeterminativo; HAS/CAUSES/altri→determinativo. `"l'"` e `"un'"` si elidono senza spazio con la parola seguente.
+
+### Phase 61 — Cleanup KG e Fix Negazione Profonda
+
+75. **KG ripulito da rumore** (Phase 61): curation_export.tsv (128K), agent_kg_full.tsv (62K CAUSES rumorosi), agent_similar_full e opposites originali ESCLUSI. Reintegrati agent_similar.tsv (45.125 SIMILAR_TO puliti) + agent_opposites.tsv (11.349 OPPOSITE_OF puliti, rimossi 379 "nonXXX" + inglese). nucleus.tsv (926 righe) aggiunto come hub semantico per 64 stati.
+76. **field_boosts skip per parole negate** (Phase 61): in `engine.rs receive()`, il loop `field_boosts()` ora salta le parole in `negated_words`. Senza questo fix, "non ho paura" attivava timore via SIMILAR_TO/CAUSES PRIMA che l'inversione OPPOSITE_OF potesse prevalere. Fix: `if negated_words.iter().any(|n| n.as_str() == word.as_str()) { continue; }`.
+77. **Direct CAUSES seeding per input words** (Phase 61): dopo il CAUSES seeding dagli attrattori (0.20), ora anche le parole input dirette seminano i loro CAUSES a 0.15 × confidence. `triste CAUSES pianto` → pianto seminato a 0.135 anche se triste non è un attrattore formale. Le parole negate sono ESCLUSE da questo seeding.
+78. **Comprehension gate specificity scoring** (Phase 61): `find_activated_attractors()` in knowledge_graph.rs ora usa `specificity(n) = min(2.0, 300.0/n_children)` come moltiplicatore del punteggio. "emozione" (209 figli IS_A, score 1.43) batte "qualita" (3503 figli, score 0.086). Attrattori specifici dominano su mega-categorie.
+79. **reset-simplices binary** (Phase 61): `src/bin/reset_simplices.rs`. Azzera simplessi e MTM/LTM, preserva lessico/identità/narrativa/episodi. Usare quando il campo ha saturazione di fondo da sessioni storiche. Backup automatico in `.bin.pre_reset`.
+
+### Phase 63 — Firme 8D da KG (Geometria = Relazioni)
+
+87. **`derive_8d_from_kg(word, max_degree, valence_scores)`** (Phase 63): in `knowledge_graph.rs`. Calcola la firma 8D di una parola dalla sua posizione strutturale nel KG, NON da co-occorrenze statistiche. Dim0=Agency(CAUSES ratio), Dim1=Permanenza(IS_A children), Dim2=Intensità(CAUSES+valenza), Dim3=Tempo(catene causali), Dim4=Confine(specificità IS_A+OPPOSITE_OF), Dim5=Complessità(log grado), Dim6=Definizione(genitori IS_A+OPPOSITE_OF), Dim7=Valenza(BFS emotiva).
+88. **`compute_valence_scores()`** (Phase 63): BFS da radici emotive positive (gioia 1.0, felicità 1.0…) e negative (dolore -1.0, sofferenza -1.0…). SIMILAR_DECAY=0.85, ISA_DECAY=0.60, CAUSES_DECAY=0.40, MAX_HOPS=4. OPPOSITE_OF inverte la carica. Mappa [-1,+1]→[0,1] (0=negativo, 0.5=neutro, 1=positivo). 15.880 parole con carica emotiva nel KG corrente.
+89. **`max_total_degree()`** (Phase 63): iterazione HashSet su tutti i nodi del KG, restituisce il grado totale massimo. Usato come normalizzatore per dim Complessità nel calcolo logaritmico.
+90. **`rederive-signatures` binary** (Phase 63): `src/bin/rederive_signatures.rs`. Aggiorna 21.709 firme 8D nel lessico da struttura KG. Backup `.bin.pre_p63`. Richiede `prometeo_kg.json`. Risultato: gioia→Valenza 1.00, tristezza→0.33, cane→0.50 (neutro). Parole senza KG (4.166) mantengono firma precedente.
+91. **Principio olografico** (Phase 63): la "luce" I Ching è ora coerente — le firme 8D usano le stesse 8 dimensioni dell'I Ching sia in scrittura (derivazione) che in lettura (proiezione). La geometria riflette il significato relazionale, non la frequenza di co-occorrenza.
+92. **Hash perturbation rimossa** (Phase 63): `new_from_context()` in `lexicon.rs` non usa più il hash UTF-8 della parola per perturbare le dimensioni. Le parole nuove partono dalla firma del contesto pura (`perturb_towards(context_sig, 0.90)`). La differenziazione è esclusivamente fenomenologica (esposizioni nel campo) o strutturale (KG via rederive-signatures). Soglie test abbassate a valori realistici per pure context learning.
+93. **Qwen3/Ollama è ESCLUSIVAMENTE esterno** (Phase 63 chiarimento): Qwen3 è chiamato via HTTP solo negli script Python offline (`data/external/`) per costruire il KG. Mai durante la conversazione, mai caricato in VRAM, mai come substrato. Il runtime di Prometeo non ha dipendenze LLM. `inquiry.rs` chiama Ollama in background HTTP opzionale solo per gap semantici forti (strength > 0.6, non bloccante).
+
+### Phase 62 — Connessione Empatica
+
+80. **`InterlocutorModel.emotional_valence`** (Phase 62): campo `f64` [-1,+1] in `interlocutor.rs`. Aggiornato via EMA α=0.4 ad ogni `register_input()`. Negativo = distress (tristezza/paura/dolore), positivo = gioia. Persistito in `InterlocutorSnapshot` con `#[serde(default)]`. Decade naturalmente a ogni input neutro (×0.6 per turno).
+81. **`compute_other_emotional_valence()`** (Phase 62): in `engine.rs`. Usa IS_A 1-hop per riconoscere parole emotive senza liste hardcoded. Radici negative: tristezza/dolore/paura/rabbia + aggettivi (triste/spaventato/…). Radici positive: gioia/felicità/… + aggettivi. Parole negate ESCLUSE dal calcolo: "non ho paura" → ev=0.0.
+82. **P4 Resonate handler empatico** (Phase 62): in `generate_willed_inner()`, quando `emotional_valence < -0.35` E stance=Resonate → risposta in seconda persona interrogativa. "io sono triste" → "Senti il pianto?" invece di "Sento il pianto." L'entità si orienta verso l'Altro, non verso sé stessa.
+83. **`FieldMetrics.other_emotional_valence`** (Phase 62): propagato in `needs.rs`. L5 Connessione: se `other_emotional_valence < -0.3`, la soddisfazione connessione scende a 0.65 (vs 0.90 default) per attivare la pressione Question. `compute_pressure()` L5 con distress: amplifica Question (×0.8) + Reflect (×0.3), riduce Instruct.
+84. **`InnerState.other_emotional_valence`** (Phase 62): propagato in `narrative.rs`. Disponibile a `deliberate()` per future elaborazioni della stance empatica.
+85. **`expression::compose()` con `other_in_distress`** (Phase 62): il parametro forza `voice.person = Second + mood = Interrogative`. Usato come path alternativo quando P4 Resonate non intercetta. `render_nucleus()` ora gestisce `Person::Second`: CAUSES/SimilarTo → "senti {obj}", IsA/PartOf → "provi {obj}", Has → "hai {obj}".
+86. **`InterlocutorModel.will_biases()` distress** (Phase 62): quando `emotional_valence < -0.3`, aggiunge bias: Question ×0.60, Reflect ×0.20, riduce Instruct ×-0.50, riduce Express ×-0.20. La connessione si crea ascoltando, non istruendo.
+
+### Phase 65 — Posizione dell'Entità nel Campo
+
+98. **`identity_seed_field_scaled(scale: f64)`** (Phase 65): in `engine.rs`. Versione parametrizzata di `identity_seed_field()`. `scale=1.0` = scala autonomo/REM (resting, ~0.003). `scale=20.0` = scala conversazione (~0.06). `identity_seed_field()` ora delega a `identity_seed_field_scaled(1.0)` senza cambiare il comportamento autonomo.
+
+99. **Identity seeding in `receive()` prima di `propagate_field_words()`** (Phase 65): dalla seconda conversazione in poi (`turns.len() >= 1`), l'identità semina le sue parole caratteristiche a `scale=20.0` (~0.06). Le parole del frattale dominante + tensione primaria entrano nel campo PRIMA della propagazione — così competono con le parole KG-seeded (0.15–0.30) nella selezione generativa. Prima conversazione = risposta pura al campo; dalle successive l'entità ha una posizione.
+
+100. **Fractal blending in `generate_willed_inner()`** (Phase 65): prima di `expression::compose()`, i frattali attivi (`active_fractals_cache`) vengono blendati con `recent_fractal_attractor(4)` al rapporto 65%/35%. Gate su `turns.len() >= 2` (dopo almeno 2 turni di storia). L'espressione emergente riflette l'intersezione tra il campo attivo (input) e la traiettoria narrativa recente (entità). Gate su 0-1 turni: blend disattivato, risposta pura al campo.
+
+101. **Effetto comportamentale verificato** (Phase 65): conversazione multi-turno ciao→chi sei?→come stai?→ho paura→anche tu senti la tensione? produce: 1) "come stai?" → risposta su "fondamento/entità" (non su benessere) — traiettoria identità/coerenza persiste; 2) "ho paura" → seconda persona empatica + domanda; 3) "senti la tensione?" → "Percepisco l'angoscia, eppure il rilassamento non è l'angoscia" — l'entità introduce il contrario, risponde dalla propria posizione.
+
+### Phase 66 — Autoconsapevolezza: Il Testimone Silenzioso
+
+102. **`SelfWitness` struct in `narrative.rs`** (Phase 66): `VecDeque<SelfObservation>` (max 30). `SelfObservation` = {tick, words: Vec<String>, dominant_drive: Option<usize>}. Metodi: `observe()` (evita duplicati < 12 tick), `recent_words(n_observations)` (dedup, recency-first), `from_vec()`. Persistito in `NarrativeSnapshot.self_witness_obs: Vec<SelfObservation>` con `serde(default)`.
+
+103. **`NarrativeSelf.self_witness: SelfWitness`** (Phase 66): campo aggiunto alla struct e inizializzato in `new()`. Incluso in `capture()` e `restore_into()`. La sessione precedente dell'entità alimenta quella successiva — il sé si accumula nel tempo.
+
+104. **`maybe_self_observe()`** (Phase 66): in `engine.rs`. Chiamato ogni 15 tick durante `WakefulDream`. Raccoglie le parole più vive nel campo PF1 che NON vengono dall'input corrente né dalla finestra di conversazione (`act > 0.025`, `stability > 0.15`, `exposure >= 5`). Max 4 parole + drive dominante → `self_witness.observe()`. Se < 2 parole → skip.
+
+105. **Chiamata in `autonomous_tick()`** (Phase 66): dopo il decay dell'impegno volitivo, prima del decay simpliciale. Il testimone osserva tra le conversazioni — quando l'entità è sola.
+
+106. **SelfQuery seeding in `generate_willed_inner()`** (Phase 66): quando `last_input_reading.act == SelfQuery`, le parole delle ultime 8 osservazioni vengono attivate direttamente in `word_topology` a `stability × 0.30` (max 0.35). L'entità risponde da ciò che era quando nessuno la guardava.
+
+107. **Effetto comportamentale verificato** (Phase 66): lessico cardinale (43 parole) → "chi sei?" → "Qui, dire." / "Noi, limite.". Lessico completo (25K parole), dopo conversazione sul tempo → self-witness accumula ["mai", "qui", "fuori", "sapere", "essere"] → "chi sei?" → **"Essere."** Non da KG, non da template. Dal residuo esistenziale autonomo.
+
+108. **`:tick N` e `:witness` in `dialogue_educator`** (Phase 66): comandi di debug. `:tick N` esegue N autonomous_tick() manualmente. `:witness` mostra le auto-osservazioni accumulate.
 
 ---
 

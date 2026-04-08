@@ -71,21 +71,12 @@ impl WordPattern {
     /// dalla firma 8D, non copiate dal contesto (niente statistiche ereditarie).
     /// Applica perturbazione per differenziare parole con contesti simili.
     pub fn new_from_context(word: &str, context_sig: &PrimitiveCore, _context_aff: &[(FractalId, f64)]) -> Self {
+        // La firma iniziale è quella del contesto in cui la parola è apparsa per la prima volta.
+        // Nessuna perturbazione artificiale basata sull'encoding UTF-8 della parola:
+        // il significato deve emergere esclusivamente dalle esposizioni nel campo (perturb_towards),
+        // oppure dalla derivazione KG (rederive-signatures) se la parola è nel grafo.
         let mut sig = PrimitiveCore::neutral();
         sig.perturb_towards(context_sig, 0.90);
-
-        // Differenzia parole con contesti simili (gioia vs tristezza, caldo vs freddo)
-        // Perturba 3 dimensioni in modo deterministico basato sull'hash della parola
-        let hash = word.bytes().map(|b| b as u64).sum::<u64>();
-        let n_perturb = 3; // Sempre 3 dimensioni per massima differenziazione
-        for i in 0..n_perturb {
-            let dim_idx = ((hash + i as u64) % 8) as usize;
-            let dim = Dim::ALL[dim_idx];
-            let shift = ((hash >> (i * 8)) % 100) as f64 / 100.0; // 0.0-0.99
-            let delta = (shift - 0.5) * 0.50; // ±0.25 (aumentato da ±0.15)
-            let current = sig.get(dim);
-            sig.set(dim, (current + delta).clamp(0.0, 1.0));
-        }
 
         Self {
             word: word.to_lowercase(),
@@ -495,21 +486,41 @@ impl Lexicon {
             }
         }
 
+        // Fase 3b: determina quali parole sono sotto negazione.
+        // Regola: una parola contenuto alla posizione P è negata se esiste un
+        // operatore Negate a qualsiasi posizione Q < P nel token stream.
+        // Questo cattura i pattern più comuni dell'italiano:
+        //   "non paura"      → paura.negated = true
+        //   "non ho paura"   → avere.negated = true, paura.negated = true
+        //   "ho paura"       → nessuna negazione
+        //   "ho paura, non gioia" → gioia.negated = true, paura non negata
+        // Limite noto: "non X ma Y" — anche Y viene negata (over-negation).
+        // Accettabile per ora: il beneficio supera il costo dei casi rari.
+        let word_negated: Vec<bool> = canonical_content_words.iter()
+            .map(|(pos, _)| {
+                operator_positions.iter().any(|(op_pos, kind)| {
+                    matches!(kind, OperatorKind::Negate) && *op_pos < *pos
+                })
+            })
+            .collect();
+
         // Fase 4: genera attivazioni con affinita calcolate (usa forme canoniche)
         let mut activations = Vec::new();
-        for (canonical, _) in &canonical_words {
+        for (i, (canonical, _)) in canonical_words.iter().enumerate() {
             let word = canonical;
             if let Some(pat) = self.patterns.get(word.as_str()) {
                 let affinities: Vec<(FractalId, f64)> = pat.fractal_affinities.iter()
                     .filter(|(_, &v)| v > 0.05)
                     .map(|(&k, &v)| (k, v))
                     .collect();
+                let negated = word_negated.get(i).copied().unwrap_or(false);
                 activations.push(WordActivation {
                     word: word.clone(),
                     signature: pat.signature,
                     affinities,
                     strength: pat.perturbation_strength(),
                     is_known: pat.is_stable(),
+                    negated,
                 });
             }
         }
@@ -1349,6 +1360,10 @@ pub struct WordActivation {
     pub affinities: Vec<(FractalId, f64)>,
     pub strength: f64,
     pub is_known: bool,
+    /// La parola è sotto negazione (es. "non paura" → paura.negated = true).
+    /// In engine.rs, le parole negate NON attivano il loro campo diretto —
+    /// attivano invece il dominio OPPOSITE_OF nel KG.
+    pub negated: bool,
 }
 
 /// Asse semantico: una sotto-dimensione emergente tra due parole opposte.

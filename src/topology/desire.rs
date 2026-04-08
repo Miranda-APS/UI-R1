@@ -19,6 +19,7 @@
 /// raggiunge la configurazione bersaglio.
 
 use serde::{Serialize, Deserialize};
+use crate::topology::knowledge_graph::AttractorHit;
 
 // ═══════════════════════════════════════════════════════════════
 // Tipi
@@ -27,6 +28,10 @@ use serde::{Serialize, Deserialize};
 /// Sorgente generativa di un desiderio.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DesireSource {
+    /// Drive Octalysis attivo che ha incontrato una comprensione KG (CD index 0-7, valore drive).
+    /// Questo è il percorso principale: desiderio emerge da COSA è stato capito × QUALE drive è attivo.
+    /// Non "voglio esprimere" — ma "data la comprensione X e il drive Y, voglio [connettere/capire/esplorare]".
+    OctalysisDriven(usize, f64),
     /// Un'intenzione che continua a emergere come undercurrent (indice, conteggio).
     RecurrentUndercurrent(usize, u32),
     /// Un valore forte del SelfModel (nome, peso).
@@ -307,6 +312,73 @@ impl DesireCore {
         });
     }
 
+    // ─── Percorso principale: Octalysis × KG-comprensione ────────
+
+    /// Genera un desiderio dall'incrocio tra comprensione KG e drive Octalysis attivi.
+    ///
+    /// Questo è il percorso principale di emergenza del desiderio:
+    /// non "voglio esprimere" (generico), ma "dato che ho capito X e il mio drive Y
+    /// è attivo, voglio [connettere / capire / esplorare / proteggere] IN QUELLA direzione".
+    ///
+    /// Il desiderio cristallizza dove il campo DOVREBBE andare, non il fatto che parli.
+    /// Chiamato in receive() dopo che valence è computata e last_comprehension è disponibile.
+    pub fn emerge_from_octalysis(
+        &mut self,
+        comprehension: &[AttractorHit],
+        drives: &[f64; 8],
+        field_sig: &[f64; 8],
+        current_tick: u32,
+    ) {
+        // DRIVE_DIM: CD index → dimensione 8D (da valence.rs: [6,3,4,0,1,7,2,5])
+        const DRIVE_DIM: [usize; 8] = [6, 3, 4, 0, 1, 7, 2, 5];
+        const ACTIVATION_THRESHOLD: f64 = 0.28;
+
+        if comprehension.is_empty() { return; }
+
+        // Drive dominante (per valore assoluto)
+        let (dominant_cd, dominant_val) = drives.iter().enumerate()
+            .max_by(|a, b| a.1.abs().partial_cmp(&b.1.abs()).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(i, v)| (i, *v))
+            .unwrap_or((0, 0.0));
+
+        if dominant_val.abs() < ACTIVATION_THRESHOLD { return; }
+
+        // Rinforza se esiste già un desiderio per questo drive
+        let existing_idx = self.desires.iter().position(|d| {
+            matches!(&d.source, DesireSource::OctalysisDriven(cd, _) if *cd == dominant_cd)
+        });
+        if let Some(idx) = existing_idx {
+            self.desires[idx].intensity = (self.desires[idx].intensity + 0.08 * dominant_val.abs()).min(1.0);
+            self.desires[idx].last_reinforced = current_tick;
+            return;
+        }
+
+        // Firma bersaglio: campo corrente + spinta nella dimensione del drive
+        let dim = DRIVE_DIM[dominant_cd];
+        let mut target = *field_sig;
+        target[dim] = (target[dim] + 0.35 * dominant_val.abs()).min(1.0);
+
+        // Arricchisci con il peso semantico della comprensione
+        let comprehension_weight = comprehension.iter()
+            .take(2)
+            .map(|a| a.activation_score)
+            .sum::<f64>()
+            .min(1.0) * 0.12;
+        target[dim] = (target[dim] + comprehension_weight).min(1.0);
+
+        let context = comprehension.first().map(|a| a.concept.as_str()).unwrap_or("contesto");
+        let drive_name = DRIVE_NAMES_IT[dominant_cd];
+
+        self.add_desire(Desire {
+            name: format!("{}_{}", drive_name, context),
+            target_signature: target,
+            intensity: dominant_val.abs() * 0.65,
+            source: DesireSource::OctalysisDriven(dominant_cd, dominant_val),
+            age: 0,
+            last_reinforced: current_tick,
+        });
+    }
+
     // ─── Modulazione will ─────────────────────────────────────
 
     /// Calcola i bias per la volontà da tutti i desideri attivi.
@@ -401,6 +473,18 @@ fn dim_to_intention(dim: usize) -> usize {
         _ => 0,
     }
 }
+
+/// Nomi italiani brevi dei Core Drive Octalysis (per label desideri).
+const DRIVE_NAMES_IT: [&str; 8] = [
+    "significato",    // CD1 Epic Meaning
+    "realizzazione",  // CD2 Accomplishment
+    "creativita",     // CD3 Creativity
+    "appartenenza",   // CD4 Ownership
+    "relazione",      // CD5 Social Influence
+    "scarsita",       // CD6 Scarcity
+    "sorpresa",       // CD7 Unpredictability
+    "preservazione",  // CD8 Loss Avoidance
+];
 
 fn intention_name(idx: usize) -> &'static str {
     match idx {

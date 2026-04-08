@@ -164,13 +164,12 @@ impl WillCore {
         dialogue: &DialogueContext,
         field_sig: &[f64; 8],
         // Phase 47: i valori del SelfModel modulano le pressioni.
-        // Ogni valore ha un peso [0,1] e un nome.
-        // La curiosità amplifica Explore/Question, la profondità amplifica Reflect, etc.
         value_weights: &[(String, f64)],
         // Phase 47: la continuità tematica modula Explore/Question.
-        // Alta continuità → meno bisogno di esplorare (siamo in profondità).
-        // Bassa continuità → più bisogno di domandare (tema nuovo).
         topic_continuity: f64,
+        // Phase B: drive Octalysis correnti [-1,+1]. Express emerge da un drive dominante,
+        // non dall'attivazione generica del campo. Slice neutro (&[0.0;8]) = comportamento legacy.
+        octalysis_drives: &[f64; 8],
     ) -> WillResult {
         // Se il sistema dorme, l'intenzione e onirica
         if dream_phase.is_sleeping() {
@@ -187,12 +186,27 @@ impl WillCore {
         let mut pressures: Vec<(Intention, f64)> = Vec::new();
 
         // --- ESPRIMERE ---
-        // Pressione: campo attivo e non affaticato
+        // L'espressione è sempre il CANALE di output — non un desiderio in sé.
+        // La pressione espressiva deve derivare da un drive specifico attivo,
+        // non dal semplice fatto che il campo sia attivato.
+        //
+        // Con drive dominante: l'entità ha qualcosa da dire DA quella posizione.
+        // Senza drive dominante: pressione residua molto ridotta (il campo è neutro).
+        //
+        // Questo risolve la tripla saturazione: will + needs + valence amplificavano
+        // tutti Express indipendentemente. Ora Express richiede una motivazione specifica.
         let express_pressure = {
-            let activation = vital.activation;
             let freshness = 1.0 - vital.fatigue;
             let has_content = if active_fractals.is_empty() { 0.0 } else { 1.0 };
-            activation * freshness * has_content * 0.8
+            let max_drive = octalysis_drives.iter().map(|d| d.abs()).fold(0.0f64, f64::max);
+
+            if max_drive > 0.25 {
+                // Drive specifico attivo → espressione motivata da una posizione interna
+                max_drive * freshness * has_content * 0.8
+            } else {
+                // Nessun drive dominante → pressione residua (il campo c'è ma non spinge)
+                vital.activation * freshness * has_content * 0.20
+            }
         };
         if express_pressure > 0.05 {
             let salient: Vec<FractalId> = active_fractals.iter()
@@ -518,6 +532,7 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],  // drive neutri
         );
         assert!(matches!(result.intention, Intention::Withdraw { reason: WithdrawReason::Stillness }),
             "Campo calmo senza input → silenzio. Ottenuto: {:?}", result.intention);
@@ -546,6 +561,7 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],  // drive neutri → pressione express residua
         );
         assert!(matches!(result.intention, Intention::Express { .. }),
             "Campo attivo → esprimere. Ottenuto: {:?}", result.intention);
@@ -574,6 +590,7 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],
         );
         assert!(matches!(result.intention, Intention::Explore { .. }),
             "Parole sconosciute + curiosita → esplorare. Ottenuto: {:?}", result.intention);
@@ -602,6 +619,7 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],
         );
         assert!(matches!(result.intention, Intention::Withdraw { reason: WithdrawReason::Fatigue }),
             "Fatica alta → ritirarsi. Ottenuto: {:?}", result.intention);
@@ -623,6 +641,7 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],
         );
         assert!(matches!(result.intention, Intention::Dream { .. }),
             "Nel sogno, l'intenzione e onirica. Ottenuto: {:?}", result.intention);
@@ -651,6 +670,7 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],
         );
         assert!(matches!(result.intention, Intention::Question { .. }),
             "Curiosita alta + lacune → domandare. Ottenuto: {:?}", result.intention);
@@ -679,9 +699,10 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],  // drive neutri → express residua 0.054, reflect vince
         );
-        // Con EGO=0.8 e activation=0.3, reflect_pressure = 0.8*0.6*0.9 = 0.432
-        // express_pressure = 0.3*0.9*1.0*0.8 = 0.216
+        // Con EGO=0.8 e activation=0.3: reflect_pressure = 0.8*0.6*0.9 = 0.432
+        // express_pressure (drive neutri) = 0.3*0.9*1.0*0.20 = 0.054 → Reflect vince ✓
         assert!(matches!(result.intention, Intention::Reflect),
             "EGO attivo → riflettere. Ottenuto: {:?}", result.intention);
     }
@@ -709,6 +730,7 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],
         );
         // Ci dovrebbero essere correnti sotterranee
         assert!(!result.undercurrents.is_empty(),
@@ -739,6 +761,7 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],
         );
         // relational = (0.75 + 0.65) * 0.5 = 0.70
         // identita = 0.15 → relational > identita + 0.15 → 0.70 > 0.30 ✓
@@ -771,6 +794,7 @@ mod tests {
             &[0.5f64; 8],
             &[],
             0.0,
+            &[0.0f64; 8],
         );
         assert!(!matches!(result.intention, Intention::Instruct { .. }),
             "IDENTITA dominante → NON istruire. Ottenuto: {:?}", result.intention);
@@ -801,13 +825,13 @@ mod tests {
             &vital, SleepPhase::Awake, &[(0, 0.3)],
             &["novità".to_string()], 0.0, 0.0, &[0, 1], &[],
             &DialogueContext::empty(), &[0.5f64; 8],
-            &values_high_curiosity, 0.0,
+            &values_high_curiosity, 0.0, &[0.0f64; 8],
         );
         let result_low = will.sense(
             &vital, SleepPhase::Awake, &[(0, 0.3)],
             &["novità".to_string()], 0.0, 0.0, &[0, 1], &[],
             &DialogueContext::empty(), &[0.5f64; 8],
-            &values_low_curiosity, 0.0,
+            &values_low_curiosity, 0.0, &[0.0f64; 8],
         );
         // Alta curiosità → drive più alto
         assert!(result_high.drive >= result_low.drive,
@@ -830,14 +854,14 @@ mod tests {
             &vital, SleepPhase::Awake, &[(0, 0.3)],
             &["test".to_string()], 0.0, 0.0, &[], &[],
             &DialogueContext::empty(), &[0.5f64; 8],
-            &[], 0.9,
+            &[], 0.9, &[0.0f64; 8],
         );
         // Bassa continuità (0.1) → Question amplificato
         let result_novel = will.sense(
             &vital, SleepPhase::Awake, &[(0, 0.3)],
             &["test".to_string()], 0.0, 0.0, &[0], &[],
             &DialogueContext::empty(), &[0.5f64; 8],
-            &[], 0.1,
+            &[], 0.1, &[0.0f64; 8],
         );
         // Il drive deve essere diverso — la continuità deve avere effetto
         // (non possiamo predire esattamente quale intenzione vince,

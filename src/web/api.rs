@@ -26,6 +26,11 @@ static BIENNALE_HTML: &str = include_str!("biennale/index.html");
 static BIENNALE_HOME_HTML: &str = include_str!("biennale/home.html");
 static DIALOGO_HTML: &str = include_str!("biennale/dialogo.html");
 static CURAZIONE_HTML: &str = include_str!("biennale/curazione.html");
+static UI_R1_HTML: &str = include_str!("biennale/uir1.html");
+
+pub async fn uir1_index() -> Html<&'static str> {
+    Html(UI_R1_HTML)
+}
 
 pub async fn index() -> Html<&'static str> {
     Html(BIENNALE_HOME_HTML)

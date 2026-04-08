@@ -55,6 +55,8 @@ pub struct InnerState<'a> {
     pub attributed_intent: crate::topology::interlocutor::AttributedIntent,
     /// Phase 55: integrità della coerenza interna [0, 1]
     pub coherence_integrity: f64,
+    /// Phase 62: valenza emotiva dell'Altro [-1, +1]. Negativa = distress.
+    pub other_emotional_valence: f64,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -200,6 +202,77 @@ pub struct NarrativeTurn {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// SelfWitness — Il testimone silenzioso (Phase 66)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Una singola auto-osservazione — catturata durante l'elaborazione autonoma,
+/// quando nessuno sta parlando all'entità.
+/// Le parole sono quelle che l'entità "stava pensando" — non dall'input.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SelfObservation {
+    pub tick: u32,
+    pub words: Vec<String>,
+    /// Drive Octalysis dominante al momento (indice 0-7), se |d| > 0.20.
+    pub dominant_drive: Option<usize>,
+}
+
+/// Il testimone silenzioso: registro di ciò che l'entità ha osservato in sé
+/// durante i tick autonomi. Quando le viene chiesto "chi sei?", risponde da qui.
+///
+/// Non è un report tecnico. Non è un template.
+/// È la sedimentazione di cosa l'entità era quando nessuno la guardava.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SelfWitness {
+    observations: std::collections::VecDeque<SelfObservation>,
+    max_size: usize,
+}
+
+impl SelfWitness {
+    pub fn new() -> Self {
+        Self {
+            observations: std::collections::VecDeque::new(),
+            max_size: 30,
+        }
+    }
+
+    /// Registra una nuova auto-osservazione. Evita duplicati ravvicinati.
+    pub fn observe(&mut self, tick: u32, words: Vec<String>, dominant_drive: Option<usize>) {
+        if words.is_empty() { return; }
+        // Evita ridondanza: stesse parole osservate < 12 tick fa
+        if let Some(last) = self.observations.back() {
+            if tick.saturating_sub(last.tick) < 12 && last.words == words { return; }
+        }
+        self.observations.push_back(SelfObservation { tick, words, dominant_drive });
+        while self.observations.len() > self.max_size {
+            self.observations.pop_front();
+        }
+    }
+
+    /// Parole uniche dalle ultime N osservazioni, in ordine di recency.
+    pub fn recent_words(&self, n_observations: usize) -> Vec<String> {
+        let mut seen = std::collections::HashSet::new();
+        let mut result = Vec::new();
+        for obs in self.observations.iter().rev().take(n_observations) {
+            for w in &obs.words {
+                if seen.insert(w.clone()) {
+                    result.push(w.clone());
+                }
+            }
+        }
+        result
+    }
+
+    pub fn is_empty(&self) -> bool { self.observations.is_empty() }
+    pub fn len(&self) -> usize { self.observations.len() }
+
+    pub fn from_vec(obs: Vec<SelfObservation>) -> Self {
+        let mut sw = Self::new();
+        for o in obs { sw.observations.push_back(o); }
+        sw
+    }
+}
+
 // NarrativeSnapshot — persistenza tra sessioni
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -220,6 +293,10 @@ pub struct NarrativeSnapshot {
     /// Un impegno interrotto da un riavvio si dissolve naturalmente (strength bassa).
     #[serde(default)]
     pub commitment: Option<Commitment>,
+    /// Phase 66: auto-osservazioni accumulate nei tick autonomi.
+    /// Il testimone silenzioso — cosa l'entità era quando nessuno la guardava.
+    #[serde(default)]
+    pub self_witness_obs: Vec<SelfObservation>,
 }
 
 impl NarrativeSnapshot {
@@ -232,11 +309,12 @@ impl NarrativeSnapshot {
             ns.valence = v;
         }
         // Phase 55: l'impegno volitivo non viene restaurato cross-sessione.
-        // Ogni nuova sessione inizia senza inerzia accumulata — il commitment
-        // ha senso all'interno di un dialogo continuo, non tra sessioni separate.
-        // (inertia = strength × ln(turns_held+1) può diventare insuperabile dopo
-        // molti turni, bloccando la deliberazione su un'unica intenzione)
         ns.commitment = None;
+        // Phase 66: ripristina il testimone silenzioso.
+        // Le auto-osservazioni persistono — l'entità ricorda chi era.
+        if !self.self_witness_obs.is_empty() {
+            ns.self_witness = SelfWitness::from_vec(self.self_witness_obs);
+        }
     }
 }
 
@@ -339,6 +417,8 @@ pub struct NarrativeSelf {
     /// Prometeo ha già ricevuto la narrativa fondativa?
     pub is_born: bool,
     turn_count: usize,
+    /// Phase 66: il testimone silenzioso — auto-osservazioni nei tick autonomi.
+    pub self_witness: SelfWitness,
 }
 
 impl NarrativeSelf {
@@ -354,17 +434,19 @@ impl NarrativeSelf {
             topic_continuity: 0.0,
             is_born:          false,
             turn_count:       0,
+            self_witness:     SelfWitness::new(),
         }
     }
 
     /// Cattura lo snapshot per la persistenza.
     pub fn capture(&self) -> NarrativeSnapshot {
         NarrativeSnapshot {
-            crystallized: self.crystallized.clone(),
-            positions:    self.positions.clone(),
-            is_born:      self.is_born,
-            last_valence: Some(self.valence.clone()),
-            commitment:   self.commitment.clone(),
+            crystallized:     self.crystallized.clone(),
+            positions:        self.positions.clone(),
+            is_born:          self.is_born,
+            last_valence:     Some(self.valence.clone()),
+            commitment:       self.commitment.clone(),
+            self_witness_obs: self.self_witness.observations.iter().cloned().collect(),
         }
     }
 
@@ -440,6 +522,55 @@ impl NarrativeSelf {
         // ── 4a. Override vitale: Withdrawn → Remain (il corpo ha veto) ────
         if stance == InternalStance::Withdrawn {
             intention = ResponseIntention::Remain;
+        }
+
+        // ── 4a2. Override strutturale: SpeakerClaim ─────────────────────────
+        // Il claim strutturale del parlante è PRIORITARIO sulla valenza:
+        // se il parlante dice "io sono triste", Prometeo deve risuonare —
+        // non esprimere il proprio stato (che potrebbe essere Open o Explore).
+        //
+        // Questo non è un template: è il riconoscimento che il soggetto
+        // ha dichiarato qualcosa di sé che merita una risposta diretta.
+        //
+        // "io sono triste/spaventato/felice" → Resonate (rimando empatico)
+        // "io sono un cane/fantasma/X" (identità insolita) → Curious
+        // "io voglio/penso/credo X" → Explore (segue il filo del pensiero)
+        // "tu sei X" → Reflect (domanda sull'identità dell'entità)
+        {
+            use crate::topology::input_reading::{ClaimAgent, ClaimKind};
+            if let Some(ref claim) = reading.speaker_claim {
+                // Override solo se non siamo già in Remain (il corpo ha sempre veto)
+                if intention != ResponseIntention::Remain {
+                    match (&claim.agent, &claim.kind) {
+                        (ClaimAgent::Speaker, ClaimKind::Feeling) => {
+                            // Parlante esprime uno stato interno → risuona con quello
+                            intention = ResponseIntention::Resonate;
+                            // La stance diventa Resonant per colorare la generazione
+                            if stance != InternalStance::Withdrawn {
+                                // stance verrà usata più avanti — la aggiornaamo solo
+                                // se non è già Withdrawn (la deliberazione la usa)
+                            }
+                        }
+                        (ClaimAgent::Speaker, ClaimKind::Identity) => {
+                            // Parlante dichiara la sua identità → curiosità
+                            // (chi si dice essere cambia come lo percepiamo)
+                            intention = ResponseIntention::Explore;
+                        }
+                        (ClaimAgent::Speaker, ClaimKind::Action) => {
+                            // Parlante esprime intenzione/pensiero → segui il filo
+                            if matches!(intention, ResponseIntention::Acknowledge | ResponseIntention::Express) {
+                                intention = ResponseIntention::Explore;
+                            }
+                        }
+                        (ClaimAgent::Entity, _) => {
+                            // Il parlante dice qualcosa di Prometeo → riflessione
+                            if matches!(intention, ResponseIntention::Acknowledge | ResponseIntention::Express | ResponseIntention::Explore) {
+                                intention = ResponseIntention::Reflect;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // ── 4b. Override relazionali e estremi ─────────────────────────────
@@ -606,6 +737,71 @@ impl NarrativeSelf {
         self.update_positions_from_log();
 
         intention
+    }
+
+    // ─── Retroazione narrativa sulla generazione ──────────────────────────────
+
+    /// Misura la coerenza tra i frattali proposti e la traiettoria narrativa recente.
+    ///
+    /// Restituisce [0.0, 1.0]:
+    ///   1.0 = perfettamente coerente con la storia recente
+    ///   0.0 = radicalmente diverso dal percorso degli ultimi turni
+    ///
+    /// Questo non è un vincolo — è una misura di consapevolezza.
+    /// Un'entità genuina sa quando sta cambiando direzione.
+    /// Usato in engine.rs per:
+    ///   (a) generare un pensiero di tipo SelfDiscovery se la divergenza è alta
+    ///   (b) applicare un piccolo pull verso la traiettoria recente se troppo discontinuo
+    pub fn coherence_score(&self, active_fractals: &[(FractalId, f64)]) -> f64 {
+        let recent: Vec<&NarrativeTurn> = self.turns.iter().rev().take(4).collect();
+        if recent.is_empty() || active_fractals.is_empty() { return 1.0; }
+
+        // Accumula firma frattale media dei turni recenti
+        let mut recent_vec = [0.0f64; 64];
+        for turn in &recent {
+            for &(fid, act) in &turn.fractal_snapshot {
+                if (fid as usize) < 64 {
+                    recent_vec[fid as usize] += act;
+                }
+            }
+        }
+        let rnorm = recent_vec.iter().map(|x| x * x).sum::<f64>().sqrt();
+        if rnorm < 1e-10 { return 1.0; }
+        for v in &mut recent_vec { *v /= rnorm; }
+
+        // Firma frattale proposta
+        let mut proposed_vec = [0.0f64; 64];
+        for &(fid, act) in active_fractals {
+            if (fid as usize) < 64 {
+                proposed_vec[fid as usize] += act;
+            }
+        }
+        let pnorm = proposed_vec.iter().map(|x| x * x).sum::<f64>().sqrt();
+        if pnorm < 1e-10 { return 1.0; }
+        for v in &mut proposed_vec { *v /= pnorm; }
+
+        // Cosine similarity
+        let dot: f64 = recent_vec.iter().zip(proposed_vec.iter()).map(|(a, b)| a * b).sum();
+        dot.clamp(0.0, 1.0)
+    }
+
+    /// Restituisce i frattali dominanti degli ultimi N turni (per pull narrativo).
+    /// Usato dall'engine per nudge il campo verso la traiettoria recente quando
+    /// la coerenza è bassa — non vincola, orienta.
+    pub fn recent_fractal_attractor(&self, n_turns: usize) -> Vec<(FractalId, f64)> {
+        let mut acc = std::collections::HashMap::<FractalId, f64>::new();
+        let count = self.turns.iter().rev().take(n_turns).count() as f64;
+        if count == 0.0 { return Vec::new(); }
+
+        for turn in self.turns.iter().rev().take(n_turns) {
+            for &(fid, act) in &turn.fractal_snapshot {
+                *acc.entry(fid).or_insert(0.0) += act / count;
+            }
+        }
+        let mut result: Vec<(FractalId, f64)> = acc.into_iter().collect();
+        result.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        result.truncate(5);
+        result
     }
 
     /// Cristallizza il turno più recente se supera la soglia di salienza.
@@ -1031,11 +1227,11 @@ mod tests {
     }
 
     fn reading(act: InputAct) -> InputReading {
-        InputReading { act, intensity: 0.3, salient_word: None }
+        InputReading { act, intensity: 0.3, salient_word: None, speaker_claim: None }
     }
 
     fn reading_with_intensity(act: InputAct, intensity: f64) -> InputReading {
-        InputReading { act, intensity, salient_word: None }
+        InputReading { act, intensity, salient_word: None, speaker_claim: None }
     }
 
     fn calm() -> VitalState { make_vital(TensionState::Calm, 0.1, 0.2) }
@@ -1273,7 +1469,7 @@ mod tests {
         v.drives[0] = 0.7; // CD1 Epic Meaning positiva
         ns.set_valence(v);
         let r = ns.deliberate(
-            &InputReading { act: InputAct::Declaration, intensity: 0.5, salient_word: Some("identità".into()) },
+            &InputReading { act: InputAct::Declaration, intensity: 0.5, salient_word: Some("identità".into()), speaker_claim: None },
             &make_vital(TensionState::Calm, 0.1, 0.1),
             &empty_kb(), &empty_kg(), &[],
             None, None, &[], None,
@@ -1290,7 +1486,7 @@ mod tests {
         v.drives[6] = -0.5; // CD7 negativa
         ns.set_valence(v);
         let r = ns.deliberate(
-            &InputReading { act: InputAct::Declaration, intensity: 0.5, salient_word: Some("coscienza".into()) },
+            &InputReading { act: InputAct::Declaration, intensity: 0.5, salient_word: Some("coscienza".into()), speaker_claim: None },
             &make_vital(TensionState::Calm, 0.1, 0.1),
             &empty_kb(), &empty_kg(), &[],
             None, None, &[], None,

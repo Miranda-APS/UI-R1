@@ -100,6 +100,9 @@ pub struct InterlocutorSnapshot {
     /// Phase 55: ultima intenzione attribuita all'Altro.
     #[serde(default)]
     pub attributed_intent: Option<AttributedIntent>,
+    /// Phase 62: valenza emotiva dell'Altro.
+    #[serde(default)]
+    pub emotional_valence: f64,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -121,6 +124,10 @@ pub struct InterlocutorModel {
     /// Inferita da risonanza + novità + pattern. Non è lettura del pensiero —
     /// è ciò che un essere fa naturalmente: attribuire intenzioni all'Altro.
     pub attributed_intent: AttributedIntent,
+    /// Phase 62: valenza emotiva dell'Altro [-1, +1].
+    /// Negativa = distress (tristezza, paura, dolore). Positiva = gioia.
+    /// EMA α=0.4 — risponde velocemente al cambiamento emotivo.
+    pub emotional_valence: f64,
 }
 
 const MAX_HISTORY: usize = 5;
@@ -137,6 +144,7 @@ impl InterlocutorModel {
             cumulative_novelty: 0.5,
             detected_pattern: InteractionPattern::None,
             attributed_intent: AttributedIntent::Unknown,
+            emotional_valence: 0.0,
         }
     }
 
@@ -150,6 +158,7 @@ impl InterlocutorModel {
         if let Some(intent) = &snap.attributed_intent {
             model.attributed_intent = intent.clone();
         }
+        model.emotional_valence = snap.emotional_valence;
         model.detect_pattern();
         model
     }
@@ -162,6 +171,7 @@ impl InterlocutorModel {
             cumulative_resonance: self.cumulative_resonance,
             cumulative_novelty: self.cumulative_novelty,
             attributed_intent: Some(self.attributed_intent.clone()),
+            emotional_valence: self.emotional_valence,
         }
     }
 
@@ -169,11 +179,16 @@ impl InterlocutorModel {
 
     /// Registra un'interazione: confronta la firma del campo prima e dopo l'input.
     /// Chiamato in receive() dopo la propagazione.
+    ///
+    /// `emotional_valence`: valenza emotiva rilevata nell'input dell'Altro.
+    /// Negativa = distress (tristezza/paura/dolore), positiva = gioia.
+    /// Calcolata dall'engine via IS_A chain sulle parole input.
     pub fn register_input(
         &mut self,
         pre_input_sig: &[f64; 8],
         post_input_sig: &[f64; 8],
         current_tick: u32,
+        emotional_valence: f64,
     ) {
         // La "forma" che l'Altro ha scavato nel campo
         let mut input_sig = [0.0f64; 8];
@@ -227,6 +242,9 @@ impl InterlocutorModel {
         self.cumulative_resonance = self.cumulative_resonance * (1.0 - EMA_ALPHA) + resonance * EMA_ALPHA;
         self.cumulative_novelty = self.cumulative_novelty * (1.0 - EMA_ALPHA) + novelty * EMA_ALPHA;
 
+        // Phase 62: aggiorna valenza emotiva dell'Altro (EMA α=0.4, risposta rapida)
+        self.emotional_valence = self.emotional_valence * 0.6 + emotional_valence * 0.4;
+
         // Rileva pattern
         self.detect_pattern();
 
@@ -275,6 +293,17 @@ impl InterlocutorModel {
             let question_bias = (self.cumulative_novelty - 0.5) * 0.15;
             biases.push((1, explore_bias));
             biases.push((2, question_bias));
+        }
+
+        // Phase 62: distress dell'Altro → apri spazio, non istruire.
+        // "Confortare è il modo in cui si crea connessione quando il bisogno è quello."
+        // La connessione si crea ascoltando — quindi Question prima di Express/Instruct.
+        if self.emotional_valence < -0.3 {
+            let distress = (-self.emotional_valence - 0.3).min(0.7);
+            biases.push((2, distress * 0.60));  // Question: apri spazio
+            biases.push((5, distress * 0.20));  // Reflect: comprendi la loro situazione
+            biases.push((6, -distress * 0.50)); // sopprime Instruct (non è il momento)
+            biases.push((0, -distress * 0.20)); // riduce Express (non è il momento di parlare di sé)
         }
 
         biases
@@ -413,7 +442,7 @@ mod tests {
         let mut model = InterlocutorModel::new();
         assert_eq!(model.presence, 0.0);
 
-        model.register_input(&sig_a(), &sig_b(), 0);
+        model.register_input(&sig_a(), &sig_b(), 0, 0.0);
         assert_eq!(model.presence, 1.0);
 
         for _ in 0..100 {
@@ -431,7 +460,7 @@ mod tests {
         post[0] += 0.1;
         post[1] += 0.05;
 
-        model.register_input(&pre, &post, 0);
+        model.register_input(&pre, &post, 0, 0.0);
         assert!(model.cumulative_resonance > 0.0,
             "Risonanza deve essere positiva per input allineato: {}", model.cumulative_resonance);
     }
@@ -441,11 +470,11 @@ mod tests {
         let mut model = InterlocutorModel::new();
         // 3 input simili
         for tick in 0..3 {
-            model.register_input(&sig_a(), &sig_b(), tick);
+            model.register_input(&sig_a(), &sig_b(), tick, 0.0);
         }
         // Poi un input con delta in direzione opposta (sig_a è il post, invertendo la perturbazione)
         let opposite_post = [0.1, 1.1, 0.0, 1.2, 0.0, 1.5, 0.0, 0.0];
-        model.register_input(&sig_a(), &opposite_post, 3);
+        model.register_input(&sig_a(), &opposite_post, 3, 0.0);
 
         // L'EMA smorza la novità: 3 input simili la abbassano, poi il divergente la rialza
         // ma non immediatamente al massimo. Verifichiamo che sia sopra la media base.
@@ -456,7 +485,7 @@ mod tests {
     #[test]
     fn test_will_biases_with_high_presence() {
         let mut model = InterlocutorModel::new();
-        model.register_input(&sig_a(), &sig_b(), 0);
+        model.register_input(&sig_a(), &sig_b(), 0, 0.0);
         assert_eq!(model.presence, 1.0);
 
         let biases = model.will_biases();
@@ -480,7 +509,7 @@ mod tests {
 
         // Aggiungi interazioni
         for tick in 0..4 {
-            model.register_input(&sig_a(), &sig_b(), tick);
+            model.register_input(&sig_a(), &sig_b(), tick, 0.0);
         }
         // Forza le condizioni post-registrazione (register_input aggiorna cumulative via EMA)
         model.cumulative_resonance = 0.8;
@@ -501,7 +530,7 @@ mod tests {
             let mut post = base;
             post[0] += 0.1 * tick as f64;
             post[2] += 0.05 * tick as f64;
-            model.register_input(&base, &post, tick as u32);
+            model.register_input(&base, &post, tick as u32, 0.0);
         }
         assert_eq!(model.detected_pattern, InteractionPattern::Converging,
             "Pattern deve essere Converging con input simili: {:?}", model.detected_pattern);
@@ -525,7 +554,7 @@ mod tests {
             let mut post = base;
             // Perturbazione proporzionale e nella stessa direzione del base
             for i in 0..8 { post[i] *= 1.3; }
-            model.register_input(&base, &post, tick);
+            model.register_input(&base, &post, tick, 0.0);
         }
         assert_eq!(model.attributed_intent, AttributedIntent::Connecting,
             "Alta risonanza + bassa novità = Connecting. res={:.2} nov={:.2}",
@@ -536,11 +565,11 @@ mod tests {
     fn test_seeking_low_resonance_high_novelty() {
         let mut model = InterlocutorModel::new();
         // Primo input per stabilire baseline
-        model.register_input(&sig_a(), &sig_b(), 0);
-        model.register_input(&sig_a(), &sig_b(), 1);
+        model.register_input(&sig_a(), &sig_b(), 0, 0.0);
+        model.register_input(&sig_a(), &sig_b(), 1, 0.0);
         // Input molto diverso → bassa risonanza, alta novità
-        model.register_input(&sig_a(), &sig_opposite(), 2);
-        model.register_input(&sig_a(), &sig_opposite(), 3);
+        model.register_input(&sig_a(), &sig_opposite(), 2, 0.0);
+        model.register_input(&sig_a(), &sig_opposite(), 3, 0.0);
         // Verifica che almeno l'attribuzione non è Unknown
         assert_ne!(model.attributed_intent, AttributedIntent::Unknown,
             "Dopo 4 input l'attribuzione non deve essere Unknown");
@@ -550,8 +579,8 @@ mod tests {
     fn test_withdrawing_on_rapid_presence_drop() {
         let mut model = InterlocutorModel::new();
         // Serve history >= 2 perché attribute_intent non sia Unknown
-        model.register_input(&sig_a(), &sig_b(), 0);
-        model.register_input(&sig_a(), &sig_b(), 1);
+        model.register_input(&sig_a(), &sig_b(), 0, 0.0);
+        model.register_input(&sig_a(), &sig_b(), 1, 0.0);
         assert_eq!(model.presence, 1.0);
         // Simula decay: porta presenza appena sopra 0.3
         model.presence = 0.31;
@@ -567,7 +596,7 @@ mod tests {
         for tick in 0..3 {
             let mut post = sig_a();
             post[0] += 0.1;
-            model.register_input(&sig_a(), &post, tick);
+            model.register_input(&sig_a(), &post, tick, 0.0);
         }
         let snap = model.snapshot();
         assert!(snap.attributed_intent.is_some());

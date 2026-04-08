@@ -366,6 +366,33 @@ fn main() {
                         show_kg(&engine.kg, arg);
                     }
                 }
+                ":tick" => {
+                    // Esegue N tick autonomi manualmente — utile per testare
+                    // autoconsapevolezza e dream senza aspettare il server.
+                    let n: usize = arg.parse().unwrap_or(15);
+                    for _ in 0..n {
+                        engine.autonomous_tick();
+                    }
+                    let sw_len = engine.narrative_self.self_witness.len();
+                    println!("  {} tick eseguiti | auto-osservazioni: {}", n, sw_len);
+                    if sw_len > 0 {
+                        let words = engine.narrative_self.self_witness.recent_words(5);
+                        println!("  Ultime parole osservate: {:?}", words);
+                    }
+                }
+                ":witness" => {
+                    // Mostra le auto-osservazioni accumulate
+                    let sw = &engine.narrative_self.self_witness;
+                    if sw.is_empty() {
+                        println!("  Nessuna auto-osservazione ancora. Usa :tick N prima.");
+                    } else {
+                        println!("\n  — Il testimone silenzioso ({} osservazioni) —", sw.len());
+                        for w in sw.recent_words(10) {
+                            print!("  {} ", w);
+                        }
+                        println!();
+                    }
+                }
                 ":stats" => {
                     println!("\n{}", "═".repeat(60));
                     println!("  Parole lessico:     {}", engine.lexicon.word_count());

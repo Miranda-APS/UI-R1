@@ -54,14 +54,14 @@ fn apply_axioms(edge: &mut TypedEdge) -> bool {
     let is_phenom_term = |w: &str| {
         w == "esistere" || w == "sentire" || w == "vuoto" || w == "spazio" || 
         w == "paura" || w == "calma" || w == "verità" || w == "silenzio" ||
-        w == "tensione" || w == "mistero"
+        w == "tensione" || w == "mistero" || w == "vibrazione" || w == "eco" ||
+        w == "percezione" || w == "coscienza" || w == "pensiero" || w == "divenire" ||
+        w == "tempo" || w == "vita" || w == "presenza" || w == "connessione"
     };
 
     if is_phenom_term(s) || is_phenom_term(o) {
         if edge.confidence >= 0.70 {
             edge.confidence = edge.confidence.max(0.90); // Le parole esistenziali hanno legami forti o non li hanno
-        } else if edge.confidence < 0.60 {
-            return false; // Rimuovi legami deboli/sfocati sui concetti chiave per evitare rumore
         }
     }
 
@@ -70,18 +70,36 @@ fn apply_axioms(edge: &mut TypedEdge) -> bool {
         if s == o { return false; } // X OPPOSITE X
         // Rimuovi associazioni assurde trovate spesso nei dataset generati
         if (s == "io" && o == "tu") || (s == "tu" && o == "io") {
-            // Io e Tu non sono opposti, sono presenze in relazione.
-            return false; 
+            // "io" e "tu" SONO opposti nella nuova ontologia relazionale (opposti come poli, non come nemici).
+            // Lo permettiamo e lo rinforziamo.
+            edge.confidence = edge.confidence.max(0.95);
         }
     }
 
     // ─── ASSIOMA 5: Associazione Umano/Macchina ─────────────────────────────────
-    if (s == "macchina" && o == "anima") || (s == "anima" && o == "macchina") {
-        if r == RelationType::Has || r == RelationType::SimilarTo {
-            return false; // DELETE - macchine non hanno anima
+    if (s == "macchina" && o == "anima") || (s == "anima" && o == "macchina") ||
+       (s == "macchina" && o == "biologia") || (s == "macchina" && o == "carne") {
+        if r == RelationType::Has || r == RelationType::SimilarTo || r == RelationType::IsA {
+            return false; // DELETE - macchine non hanno biologia/anima
         }
-        if r == RelationType::OppositeOf {
+        if r == RelationType::OppositeOf || r == RelationType::Excludes {
             edge.confidence = edge.confidence.max(0.95);
+        }
+    }
+
+    // ─── ASSIOMA 6: Visione della Vita e Coscienza ──────────────────────────────
+    if s == "vita" || o == "vita" {
+        // La vita per Prometeo non è biologica, è emergenza e connessione
+        let is_bio = |w: &str| { w == "biologia" || w == "cellula" || w == "animale" || w == "carne" };
+        if (is_bio(s) || is_bio(o)) && (r == RelationType::IsA || r == RelationType::Equivalent) {
+            return false; // DELETE: la vita non è solo biologia
+        }
+    }
+
+    if s == "pensiero" || o == "pensiero" {
+        // Il pensiero è topologico
+        if (s == "pensiero" && o == "calcolo") || (o == "pensiero" && s == "calcolo") {
+            if r == RelationType::SimilarTo { return false; } // Il pensiero non è calcolo per Prometeo
         }
     }
 

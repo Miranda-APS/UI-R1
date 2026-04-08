@@ -319,6 +319,7 @@ mod tests {
             satisfaction: [0.8, 0.7, 0.6, 0.5, 0.6, 0.5, 0.4],
             dominant_need: NeedLevel::Trascendenza,
             dominant_pressure: 0.6,
+            other_emotional_valence: 0.0,
         }
     }
 
@@ -372,6 +373,7 @@ mod tests {
             satisfaction: [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9],
             dominant_need: NeedLevel::Trascendenza,
             dominant_pressure: 0.1,
+            other_emotional_valence: 0.0,
         };
         let vital = default_vital();
         let input = make_input(&sig, &needs, &vital);
@@ -388,6 +390,7 @@ mod tests {
             satisfaction: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
             dominant_need: NeedLevel::Sopravvivenza,
             dominant_pressure: 0.9,
+            other_emotional_valence: 0.0,
         };
         let vital = VitalState {
             activation: 0.8,
