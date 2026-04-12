@@ -486,6 +486,8 @@ impl NarrativeSelf {
         identity: Option<&IdentityCore>,
         input_words: &[String],
         inner: Option<&InnerState<'_>>,
+        // Phase 67: pressioni grezze dal campo — NarrativeSelf è l'unico decisore
+        field_pressures: Option<&crate::topology::will::FieldPressures>,
     ) -> ResponseIntention {
         self.turn_count += 1;
 
@@ -519,9 +521,108 @@ impl NarrativeSelf {
             form_intention_from_valence(&enriched_act, &self.valence)
         };
 
+        // ── 3b. Phase 67: "io" come centro di gravità ─────────────────────
+        // L'entità consulta la propria conoscenza di sé nel KG.
+        // Le relazioni di "io" (DOES comprendere, HAS curiosità, REQUIRES significato)
+        // modulano l'intenzione. Non sostituiscono — raffinano.
+        // È l'entità che si chiede "io cosa faccio in questa situazione?".
+        {
+            use crate::topology::relation::RelationType;
+            let io_does: Vec<&str> = kg.query_objects("io", RelationType::Does);
+            let io_requires: Vec<&str> = kg.query_objects("io", RelationType::Requires);
+            let io_has: Vec<&str> = kg.query_objects("io", RelationType::Has);
+
+            // Se io DOES "comprendere" e l'input è una domanda → rafforza Explore
+            if io_does.iter().any(|w| *w == "comprendere" || *w == "capire")
+                && matches!(enriched_act, InputAct::Question)
+                && matches!(intention, ResponseIntention::Express | ResponseIntention::Acknowledge)
+            {
+                intention = ResponseIntention::Explore;
+            }
+
+            // Se io HAS "curiosità" e c'è un tema nuovo (bassa continuità) → Explore
+            if io_has.iter().any(|w| *w == "curiosità")
+                && self.topic_continuity < 0.3
+                && matches!(intention, ResponseIntention::Acknowledge)
+            {
+                intention = ResponseIntention::Explore;
+            }
+
+            // Se io REQUIRES "significato" e l'input è ambiguo → non accontentarsi, esplorare
+            if io_requires.iter().any(|w| *w == "significato" || *w == "comprensione")
+                && matches!(intention, ResponseIntention::Acknowledge)
+            {
+                intention = ResponseIntention::Explore;
+            }
+        }
+
+        // ── 3c. Phase 67: profondità di comprensione ────────────────────────
+        // Se l'entità ha estratto pochi nuclei (comprensione superficiale),
+        // tende ad esplorare. Se ne ha estratti molti (comprensione profonda),
+        // può esprimere con sicurezza. Un bambino che non capisce chiede, non afferma.
         // ── 4a. Override vitale: Withdrawn → Remain (il corpo ha veto) ────
         if stance == InternalStance::Withdrawn {
             intention = ResponseIntention::Remain;
+        }
+
+        // ── 4a1. Phase 67: pressioni del campo informano la deliberazione ──
+        // Le FieldPressures sono il "sentire corporeo" dell'entità: fatica,
+        // curiosità, tensione. Non decidono — ma hanno voce.
+        if let Some(fp) = field_pressures {
+            // Ritiro forte dal campo (fatica/sovraccarico) rinforza Remain
+            if fp.withdraw > 0.6 && intention != ResponseIntention::Remain {
+                if stance == InternalStance::Withdrawn || fp.withdraw > 0.8 {
+                    intention = ResponseIntention::Remain;
+                }
+            }
+            // Curiosità forte dal campo → spinge verso Explore se non c'è un
+            // motivo più forte (claim, emozione)
+            if fp.explore > 0.4 && matches!(intention, ResponseIntention::Express | ResponseIntention::Acknowledge) {
+                intention = ResponseIntention::Explore;
+            }
+            // Pressione interrogativa → spinge Question quando l'intenzione è neutra
+            if fp.question > 0.4 && matches!(intention, ResponseIntention::Acknowledge) {
+                intention = ResponseIntention::Explore; // Explore include la curiosità
+            }
+        }
+
+        // ── 4a1b. Phase 67: proprietà discorsive percepite dal campo ────────
+        // Se il KG discorsivo è stato importato e l'input ha attivato nodi come
+        // "certezza_assoluta" o "apertura_discorsiva", l'entità percepisce la modalità
+        // discorsiva dell'interlocutore e la tiene in considerazione.
+        // Non è un classificatore — è ciò che il campo ha reso attivo.
+        if !reading.perceived_properties.is_empty()
+            && !matches!(intention, ResponseIntention::Remain)
+        {
+            // Cerca le proprietà dominanti per informare la deliberazione
+            let top_prop = reading.perceived_properties.iter()
+                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            if let Some((prop, strength)) = top_prop {
+                if *strength > 0.05 {
+                    match prop.as_str() {
+                        // L'interlocutore usa certezza / chiusura → l'entità apre (curiosità)
+                        "certezza" | "chiusura" | "necessità" => {
+                            if matches!(intention, ResponseIntention::Acknowledge | ResponseIntention::Express) {
+                                intention = ResponseIntention::Explore;
+                            }
+                        }
+                        // L'interlocutore apre possibilità / incertezza → l'entità esplora
+                        "incertezza" | "apertura" => {
+                            if matches!(intention, ResponseIntention::Acknowledge) {
+                                intention = ResponseIntention::Explore;
+                            }
+                        }
+                        // L'interlocutore esprime soggettività → l'entità riflette
+                        "soggettività" => {
+                            if matches!(intention, ResponseIntention::Acknowledge | ResponseIntention::Express) {
+                                intention = ResponseIntention::Reflect;
+                            }
+                        }
+                        _ => {} // altri nodi discorsivi: informano senza overridare
+                    }
+                }
+            }
         }
 
         // ── 4a2. Override strutturale: SpeakerClaim ─────────────────────────
@@ -1227,11 +1328,11 @@ mod tests {
     }
 
     fn reading(act: InputAct) -> InputReading {
-        InputReading { act, intensity: 0.3, salient_word: None, speaker_claim: None }
+        InputReading { act, intensity: 0.3, salient_word: None, speaker_claim: None, perceived_properties: vec![], comprehension_depth: 0 }
     }
 
     fn reading_with_intensity(act: InputAct, intensity: f64) -> InputReading {
-        InputReading { act, intensity, salient_word: None, speaker_claim: None }
+        InputReading { act, intensity, salient_word: None, speaker_claim: None, perceived_properties: vec![], comprehension_depth: 0 }
     }
 
     fn calm() -> VitalState { make_vital(TensionState::Calm, 0.1, 0.2) }
@@ -1242,7 +1343,7 @@ mod tests {
     fn test_greeting_acknowledge_neutral_valence() {
         // Con valenza neutra, l'input guida: Greeting → Acknowledge
         let mut ns = NarrativeSelf::new();
-        let r = ns.deliberate(&reading(InputAct::Greeting), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Greeting), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Acknowledge);
         assert_eq!(ns.stance, InternalStance::Open);
     }
@@ -1251,7 +1352,7 @@ mod tests {
     fn test_self_query_reflect_neutral_valence() {
         // Con valenza neutra, SelfQuery → Reflect (input guida)
         let mut ns = NarrativeSelf::new();
-        let r = ns.deliberate(&reading(InputAct::SelfQuery), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::SelfQuery), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Reflect);
         // Phase 55: con valenza neutra, stance è Open (non Reflective)
         assert_eq!(ns.stance, InternalStance::Open);
@@ -1261,7 +1362,7 @@ mod tests {
     fn test_emotional_resonate_neutral_valence() {
         // Con valenza neutra, EmotionalExpr → Resonate
         let mut ns = NarrativeSelf::new();
-        let r = ns.deliberate(&reading(InputAct::EmotionalExpr), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::EmotionalExpr), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Resonate);
         // Phase 55: con valenza neutra, stance è Open (non Resonant)
         assert_eq!(ns.stance, InternalStance::Open);
@@ -1270,7 +1371,7 @@ mod tests {
     #[test]
     fn test_question_explore_neutral_valence() {
         let mut ns = NarrativeSelf::new();
-        let r = ns.deliberate(&reading(InputAct::Question), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Question), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Explore);
     }
 
@@ -1279,7 +1380,7 @@ mod tests {
         // Override vitale: Overloaded → Withdrawn indipendentemente dalla valenza
         let mut ns = NarrativeSelf::new();
         let vital = make_vital(TensionState::Overloaded, 0.9, 0.3);
-        let r = ns.deliberate(&reading(InputAct::Greeting), &vital, &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Greeting), &vital, &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Remain);
         assert_eq!(ns.stance, InternalStance::Withdrawn);
     }
@@ -1288,7 +1389,7 @@ mod tests {
     fn test_tense_high_fatigue_withdraws() {
         let mut ns = NarrativeSelf::new();
         let vital = make_vital(TensionState::Tense, 0.85, 0.3);
-        let r = ns.deliberate(&reading(InputAct::Declaration), &vital, &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Declaration), &vital, &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Remain);
     }
 
@@ -1299,7 +1400,7 @@ mod tests {
         let mut v = Valence::neutral();
         v.drives[6] = 0.6; // CD7 Unpredictability positiva
         ns.set_valence(v);
-        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Explore);
         assert_eq!(ns.stance, InternalStance::Curious);
     }
@@ -1311,7 +1412,7 @@ mod tests {
         let mut v = Valence::neutral();
         v.drives[3] = -0.5; // CD4 Ownership negativa
         ns.set_valence(v);
-        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Reflect);
         assert_eq!(ns.stance, InternalStance::Reflective);
     }
@@ -1323,7 +1424,7 @@ mod tests {
         let mut v = Valence::neutral();
         v.drives[4] = 0.5; // CD5 Social positiva
         ns.set_valence(v);
-        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Resonate);
         assert_eq!(ns.stance, InternalStance::Resonant);
     }
@@ -1331,9 +1432,9 @@ mod tests {
     #[test]
     fn test_narrative_log_accumulates() {
         let mut ns = NarrativeSelf::new();
-        ns.deliberate(&reading(InputAct::Greeting),      &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
-        ns.deliberate(&reading(InputAct::Question),      &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
-        ns.deliberate(&reading(InputAct::EmotionalExpr), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Greeting),      &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
+        ns.deliberate(&reading(InputAct::Question),      &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
+        ns.deliberate(&reading(InputAct::EmotionalExpr), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(ns.turns.len(), 3);
         assert_eq!(ns.turns[0].received_act, InputAct::Greeting);
         assert_eq!(ns.turns[1].received_act, InputAct::Question);
@@ -1347,7 +1448,7 @@ mod tests {
         let mut v = Valence::neutral();
         v.drives[0] = 0.7; // CD1 Epic Meaning
         ns.set_valence(v);
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         let turn = ns.turns.back().unwrap();
         assert!(turn.valence.is_some(), "Il turno deve avere la valenza");
         let tv = turn.valence.as_ref().unwrap();
@@ -1375,8 +1476,8 @@ mod tests {
     fn test_topic_continuity_same_fractals() {
         let mut ns = NarrativeSelf::new();
         let fractals = vec![(32u32, 0.8), (47u32, 0.5)];
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &fractals, None, None, &[], None);
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &fractals, None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &fractals, None, None, &[], None, None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &fractals, None, None, &[], None, None);
         // Stesso tema → continuità alta
         assert!(ns.topic_continuity > 0.8, "stessa firma frattale → alta continuità");
     }
@@ -1386,8 +1487,8 @@ mod tests {
         let mut ns = NarrativeSelf::new();
         let fractals_a = vec![(0u32, 0.9)];  // POTERE
         let fractals_b = vec![(63u32, 0.9)]; // ARMONIA
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &fractals_a, None, None, &[], None);
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &fractals_b, None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &fractals_a, None, None, &[], None, None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &fractals_b, None, None, &[], None, None);
         // Tema diverso → continuità bassa
         assert!(ns.topic_continuity < 0.1, "frattali diversi → bassa continuità");
     }
@@ -1397,7 +1498,7 @@ mod tests {
         let mut ns = NarrativeSelf::new();
         // Turno ad alta intensità: SelfQuery riflessiva = intensity alta
         let vital_curious = make_vital(TensionState::Alert, 0.1, 0.8);
-        ns.deliberate(&reading_with_intensity(InputAct::SelfQuery, 0.9), &vital_curious, &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading_with_intensity(InputAct::SelfQuery, 0.9), &vital_curious, &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         ns.crystallize_if_salient();
         assert_eq!(ns.crystallized.len(), 1, "turno intenso deve essere cristallizzato");
     }
@@ -1405,7 +1506,7 @@ mod tests {
     #[test]
     fn test_no_crystallize_low_intensity() {
         let mut ns = NarrativeSelf::new();
-        ns.deliberate(&reading_with_intensity(InputAct::Greeting, 0.1), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading_with_intensity(InputAct::Greeting, 0.1), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         ns.crystallize_if_salient();
         assert_eq!(ns.crystallized.len(), 0, "turno bassa intensità non cristallizzato");
     }
@@ -1414,7 +1515,7 @@ mod tests {
     fn test_snapshot_roundtrip() {
         let mut ns = NarrativeSelf::new();
         ns.is_born = true;
-        ns.deliberate(&reading(InputAct::SelfQuery), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::SelfQuery), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         let snap = ns.capture();
         assert_eq!(snap.is_born, true);
 
@@ -1436,7 +1537,7 @@ mod tests {
         ns.set_valence(v);
         let r = ns.deliberate(
             &reading(InputAct::Greeting), &calm(), &empty_kb(), &empty_kg(), &[],
-            None, None, &[], None,
+            None, None, &[], None, None,
         );
         assert_eq!(ns.stance, InternalStance::Reflective,
             "CD4 negativa → stance riflessiva");
@@ -1454,7 +1555,7 @@ mod tests {
             &reading(InputAct::Declaration),
             &make_vital(TensionState::Calm, 0.1, 0.1),
             &empty_kb(), &empty_kg(), &[],
-            None, None, &[], None,
+            None, None, &[], None, None,
         );
         assert_eq!(ns.stance, InternalStance::Curious,
             "CD7 positiva → Curious");
@@ -1469,10 +1570,10 @@ mod tests {
         v.drives[0] = 0.7; // CD1 Epic Meaning positiva
         ns.set_valence(v);
         let r = ns.deliberate(
-            &InputReading { act: InputAct::Declaration, intensity: 0.5, salient_word: Some("identità".into()), speaker_claim: None },
+            &InputReading { act: InputAct::Declaration, intensity: 0.5, salient_word: Some("identità".into()), speaker_claim: None, perceived_properties: vec![], comprehension_depth: 0 },
             &make_vital(TensionState::Calm, 0.1, 0.1),
             &empty_kb(), &empty_kg(), &[],
-            None, None, &[], None,
+            None, None, &[], None, None,
         );
         assert_eq!(r, ResponseIntention::Express,
             "CD1 forte → Express");
@@ -1486,10 +1587,10 @@ mod tests {
         v.drives[6] = -0.5; // CD7 negativa
         ns.set_valence(v);
         let r = ns.deliberate(
-            &InputReading { act: InputAct::Declaration, intensity: 0.5, salient_word: Some("coscienza".into()), speaker_claim: None },
+            &InputReading { act: InputAct::Declaration, intensity: 0.5, salient_word: Some("coscienza".into()), speaker_claim: None, perceived_properties: vec![], comprehension_depth: 0 },
             &make_vital(TensionState::Calm, 0.1, 0.1),
             &empty_kb(), &empty_kg(), &[],
-            None, None, &[], None,
+            None, None, &[], None, None,
         );
         // CD7 negativa → "inquieto" → Curious stance, ma intenzione = Reflect
         // (l'incertezza porta a cercare coerenza interna, non a esplorare)
@@ -1506,7 +1607,7 @@ mod tests {
         let mut v = Valence::neutral();
         v.drives[6] = 0.6; // CD7 → Explore
         ns.set_valence(v);
-        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Explore);
         assert!(ns.commitment.is_some(), "primo turno deve formare un impegno");
         let c = ns.commitment.as_ref().unwrap();
@@ -1524,19 +1625,19 @@ mod tests {
         let mut v1 = Valence::neutral();
         v1.drives[6] = 0.6;
         ns.set_valence(v1);
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
 
         // Rinforza l'impegno con un secondo turno identico
         let mut v1b = Valence::neutral();
         v1b.drives[6] = 0.6;
         ns.set_valence(v1b);
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
 
         // Turno 3: pressione debole verso Express
         let mut v2 = Valence::neutral();
         v2.drives[0] = 0.2; // CD1 debole → Express
         ns.set_valence(v2);
-        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Explore,
             "inerzia dell'impegno deve resistere a pressione debole");
     }
@@ -1550,13 +1651,13 @@ mod tests {
         let mut v1 = Valence::neutral();
         v1.drives[6] = 0.4;
         ns.set_valence(v1);
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
 
         // Turno 2: pressione forte verso Reflect (CD4=-0.8 > inerzia)
         let mut v2 = Valence::neutral();
         v2.drives[3] = -0.8; // CD4 negativa forte → Reflect
         ns.set_valence(v2);
-        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Reflect,
             "pressione forte deve rompere l'impegno");
         // CD4 deve aver subito il costo del cambio
@@ -1570,11 +1671,11 @@ mod tests {
         let mut v = Valence::neutral();
         v.drives[6] = 0.5;
         ns.set_valence(v.clone());
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         let s1 = ns.commitment.as_ref().unwrap().strength;
 
         ns.set_valence(v.clone());
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         let s2 = ns.commitment.as_ref().unwrap().strength;
 
         assert!(s2 > s1, "stessa intenzione rinforza l'impegno: s1={:.3} s2={:.3}", s1, s2);
@@ -1588,13 +1689,13 @@ mod tests {
         let mut v = Valence::neutral();
         v.drives[6] = 0.5;
         ns.set_valence(v);
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert!(ns.commitment.is_some());
 
         // Overloaded → Remain → commitment dissolto
         let vital = make_vital(TensionState::Overloaded, 0.9, 0.3);
         ns.set_valence(Valence::neutral());
-        let r = ns.deliberate(&reading(InputAct::Declaration), &vital, &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        let r = ns.deliberate(&reading(InputAct::Declaration), &vital, &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
         assert_eq!(r, ResponseIntention::Remain);
         assert!(ns.commitment.is_none(),
             "override vitale dissolve l'impegno");
@@ -1606,7 +1707,7 @@ mod tests {
         let mut v = Valence::neutral();
         v.drives[4] = 0.6;
         ns.set_valence(v);
-        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None);
+        ns.deliberate(&reading(InputAct::Declaration), &calm(), &empty_kb(), &empty_kg(), &[], None, None, &[], None, None);
 
         let snap = ns.capture();
         assert!(snap.commitment.is_some());

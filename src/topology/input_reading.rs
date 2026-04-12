@@ -79,6 +79,13 @@ pub struct InputReading {
     /// "io sono triste" → Some(SpeakerClaim { Speaker, Feeling, "triste" })
     /// "il cane abbaia" → None (nessun soggetto grammaticale rilevante)
     pub speaker_claim: Option<SpeakerClaim>,
+    /// Phase 67: proprietà discorsive percepite dal campo post-attivazione.
+    pub perceived_properties: Vec<(String, f64)>,
+    /// Phase 67: profondità della comprensione — quanti nuclei semantici
+    /// l'entità ha estratto dall'input. 0 = non ha capito nulla.
+    /// 5+ = comprensione profonda. Usato da deliberate() per decidere
+    /// se esplorare (poco capito) o esprimere (molto capito).
+    pub comprehension_depth: usize,
 }
 
 /// Legge l'atto comunicativo usando logica IS_A dal Knowledge Graph.
@@ -190,7 +197,7 @@ pub fn read_input(
         InputAct::Declaration
     };
 
-    InputReading { act, intensity, salient_word, speaker_claim }
+    InputReading { act, intensity, salient_word, speaker_claim, perceived_properties: vec![], comprehension_depth: 0 }
 }
 
 /// Rileva un claim strutturale soggetto/predicato nell'input.

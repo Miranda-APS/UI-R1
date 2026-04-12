@@ -109,7 +109,109 @@ impl DialogueContext {
     }
 }
 
+/// Phase 67: Le pressioni grezze del campo — senza selezione del dominante.
+/// NarrativeSelf è l'unico decisore: riceve queste pressioni e incorpora
+/// valenza, stato interno, input reading per scegliere cosa fare.
+#[derive(Debug, Clone)]
+pub struct FieldPressures {
+    /// Pressione espressiva [0, 1] — l'entità ha qualcosa da dire
+    pub express: f64,
+    /// Pressione esplorativa [0, 1] — parole sconosciute tirano
+    pub explore: f64,
+    /// Pressione interrogativa [0, 1] — buchi topologici
+    pub question: f64,
+    /// Pressione mnestica [0, 1] — la memoria preme
+    pub remember: f64,
+    /// Pressione di ritiro [0, 1] — fatica, sovraccarico, o quiete
+    pub withdraw: f64,
+    /// Motivo del ritiro (valido solo se withdraw > 0)
+    pub withdraw_reason: WithdrawReason,
+    /// Pressione riflessiva [0, 1] — EGO attivo
+    pub reflect: f64,
+    /// Pressione istruttiva [0, 1] — campo relazionale domina
+    pub instruct: f64,
+    /// Codone 8D: top-2 dimensioni del campo
+    pub codon: [usize; 2],
+    /// Il sistema sta dormendo
+    pub is_dreaming: bool,
+    /// Fase del sogno (valida solo se is_dreaming)
+    pub dream_phase: SleepPhase,
+}
+
+impl FieldPressures {
+    /// La pressione dominante (valore massimo)
+    pub fn dominant_pressure(&self) -> f64 {
+        self.express
+            .max(self.explore)
+            .max(self.question)
+            .max(self.remember)
+            .max(self.withdraw)
+            .max(self.reflect)
+            .max(self.instruct)
+    }
+
+    /// Converte in WillResult selezionando il dominante (backward compat).
+    pub fn to_will_result(&self, active_fractals: &[(FractalId, f64)], unknown_words: &[String], curiosity_gaps: &[FractalId]) -> WillResult {
+        if self.is_dreaming {
+            return WillResult {
+                intention: Intention::Dream { phase: self.dream_phase },
+                drive: 0.3,
+                undercurrents: Vec::new(),
+                codon: self.codon,
+            };
+        }
+
+        let mut pressures: Vec<(Intention, f64)> = Vec::new();
+
+        if self.express > 0.05 {
+            let salient: Vec<FractalId> = active_fractals.iter()
+                .filter(|(_, act)| *act > 0.1)
+                .map(|(fid, _)| *fid)
+                .collect();
+            pressures.push((Intention::Express { salient_fractals: salient, urgency: self.express }, self.express));
+        }
+        if self.explore > 0.05 {
+            pressures.push((Intention::Explore { unknown_words: unknown_words.to_vec(), pull: self.explore }, self.explore));
+        }
+        if self.question > 0.05 {
+            pressures.push((Intention::Question { gap_region: curiosity_gaps.first().copied(), urgency: self.question }, self.question));
+        }
+        if self.remember > 0.1 {
+            pressures.push((Intention::Remember { resonance: self.remember }, self.remember));
+        }
+        if self.withdraw > 0.05 {
+            pressures.push((Intention::Withdraw { reason: self.withdraw_reason }, self.withdraw));
+        }
+        if self.reflect > 0.15 {
+            pressures.push((Intention::Reflect, self.reflect));
+        }
+        if self.instruct > 0.1 {
+            pressures.push((Intention::Instruct { relational_fractal: 59 }, self.instruct));
+        }
+
+        if pressures.is_empty() {
+            return WillResult {
+                intention: Intention::Withdraw { reason: WithdrawReason::Stillness },
+                drive: 0.1,
+                undercurrents: Vec::new(),
+                codon: self.codon,
+            };
+        }
+
+        pressures.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let (dominant_intention, dominant_pressure) = pressures.remove(0);
+        WillResult {
+            intention: dominant_intention,
+            drive: dominant_pressure,
+            undercurrents: pressures,
+            codon: self.codon,
+        }
+    }
+}
+
 /// Il risultato della volonta: intenzione + forza + contesto.
+/// Phase 67: mantenuto per backward-compat (synthesis.rs, generation.rs test).
+/// Il path principale usa FieldPressures + NarrativeSelf.
 #[derive(Debug, Clone)]
 pub struct WillResult {
     /// L'intenzione dominante
@@ -136,21 +238,170 @@ impl WillCore {
         Self
     }
 
-    /// Senti la volonta: dallo stato corrente, che intenzione emerge?
-    ///
-    /// Parametri:
-    /// - vital: pressioni vitali correnti
-    /// - dream_phase: fase del sogno
-    /// - active_fractals: frattali attualmente attivi (nome, attivazione)
-    /// - unknown_words: parole dell'ultimo input che il lessico non conosce
-    /// - memory_resonance: forza della risonanza con la memoria [0, 1]
-    /// - ego_activation: quanto e attivo il frattale EGO [0, 1]
-    /// - curiosity_gaps: buchi topologici rilevanti
-    /// - compound_bias: bias dalle co-attivazioni frattali (composti).
-    ///   Indici: 0=Express, 1=Explore, 2=Question, 3=Remember, 4=Withdraw, 5=Reflect.
-    ///   Valori positivi aumentano la pressione, negativi la riducono.
-    /// - dialogue: contesto del dialogo in corso (turni, coerenza, novita).
-    ///   Il dialogo non crea pressioni — le colora.
+    /// Phase 67: calcola SOLO le pressioni del campo — senza scegliere il dominante.
+    /// La decisione spetta a NarrativeSelf.
+    pub fn compute_pressures(
+        &self,
+        vital: &VitalState,
+        dream_phase: SleepPhase,
+        active_fractals: &[(FractalId, f64)],
+        unknown_words: &[String],
+        memory_resonance: f64,
+        ego_activation: f64,
+        curiosity_gaps: &[FractalId],
+        compound_bias: &[(usize, f64)],
+        dialogue: &DialogueContext,
+        field_sig: &[f64; 8],
+        value_weights: &[(String, f64)],
+        topic_continuity: f64,
+        octalysis_drives: &[f64; 8],
+    ) -> FieldPressures {
+        let codon = Self::compute_codon(field_sig);
+
+        if dream_phase.is_sleeping() {
+            return FieldPressures {
+                express: 0.0, explore: 0.0, question: 0.0, remember: 0.0,
+                withdraw: 0.0, withdraw_reason: WithdrawReason::Stillness,
+                reflect: 0.0, instruct: 0.0,
+                codon, is_dreaming: true, dream_phase,
+            };
+        }
+
+        // Le 7 pressioni calcolate dalla stessa logica di sense() originale
+        let mut pressures = [0.0f64; 7]; // 0=express 1=explore 2=question 3=remember 4=withdraw 5=reflect 6=instruct
+
+        // --- ESPRIMERE ---
+        {
+            let freshness = 1.0 - vital.fatigue;
+            let has_content = if active_fractals.is_empty() { 0.0 } else { 1.0 };
+            let max_drive = octalysis_drives.iter().map(|d| d.abs()).fold(0.0f64, f64::max);
+            pressures[0] = if max_drive > 0.25 {
+                max_drive * freshness * has_content * 0.8
+            } else {
+                vital.activation * freshness * has_content * 0.20
+            };
+        }
+
+        // --- ESPLORARE ---
+        if !unknown_words.is_empty() {
+            let word_pull = (unknown_words.len() as f64 * 0.3).min(1.0);
+            let curiosity = vital.curiosity;
+            let openness = 1.0 - vital.fatigue;
+            pressures[1] = word_pull * (0.4 + curiosity * 0.6) * openness;
+        }
+
+        // --- DOMANDARE ---
+        if !curiosity_gaps.is_empty() {
+            let gaps = (curiosity_gaps.len() as f64 * 0.2).min(1.0);
+            let curiosity = vital.curiosity;
+            let space_for_questions = 1.0 - vital.activation;
+            pressures[2] = gaps * curiosity * (0.3 + space_for_questions * 0.5);
+        }
+
+        // --- RICORDARE ---
+        {
+            let resonance_pull = memory_resonance;
+            let permanence_bias = vital.saturation * 0.3;
+            pressures[3] = (resonance_pull * 0.7 + permanence_bias).min(1.0);
+        }
+
+        // --- RITIRARSI ---
+        let withdraw_reason;
+        {
+            let fatigue_pull = if vital.fatigue > 0.75 { vital.fatigue * 0.8 } else { 0.0 };
+            let overload_pull = if vital.tension == TensionState::Overloaded { 0.45 } else { 0.0 };
+            let stillness_pull = if vital.activation < 0.05 && unknown_words.is_empty() { 0.5 } else { 0.0 };
+            pressures[4] = fatigue_pull.max(overload_pull).max(stillness_pull);
+            withdraw_reason = if vital.fatigue > 0.6 {
+                WithdrawReason::Fatigue
+            } else if vital.tension == TensionState::Overloaded {
+                WithdrawReason::Overload
+            } else {
+                WithdrawReason::Stillness
+            };
+        }
+
+        // --- RIFLETTERE ---
+        pressures[5] = ego_activation * 0.6 * (1.0 - vital.fatigue);
+
+        // --- ISTRUIRE ---
+        {
+            const EMPATIA_ID: FractalId = 59;
+            const COMUNICAZIONE_ID: FractalId = 47;
+            const IDENTITA_ID: FractalId = 32;
+            let empatia = active_fractals.iter().find(|(f, _)| *f == EMPATIA_ID).map(|(_, a)| *a).unwrap_or(0.0);
+            let comunicazione = active_fractals.iter().find(|(f, _)| *f == COMUNICAZIONE_ID).map(|(_, a)| *a).unwrap_or(0.0);
+            let identita = active_fractals.iter().find(|(f, _)| *f == IDENTITA_ID).map(|(_, a)| *a).unwrap_or(0.0);
+            let relational = (empatia + comunicazione) * 0.5;
+            if relational > identita + 0.15 && vital.activation > 0.2 {
+                pressures[6] = relational * (1.0 - vital.fatigue) * 0.7;
+            }
+        }
+
+        // --- Bias dai composti frattali ---
+        for &(bias_idx, bias_val) in compound_bias {
+            if bias_idx < 7 {
+                pressures[bias_idx] = (pressures[bias_idx] + bias_val).clamp(0.0, 1.0);
+            }
+        }
+
+        // --- Dialogo → modulazione ---
+        if dialogue.turn_count > 0 {
+            if dialogue.coherence > 0.6 {
+                pressures[0] *= 1.0 + dialogue.coherence * 0.3; // Express
+            }
+            if dialogue.novelty > 0.5 {
+                pressures[1] *= 1.0 + dialogue.novelty * 0.2; // Explore
+                pressures[2] *= 1.0 + dialogue.novelty * 0.15; // Question
+            }
+            if dialogue.turn_count > 6 && dialogue.coherence < 0.3 {
+                pressures[5] = pressures[5].max(0.3); // Reflect
+            }
+        }
+
+        // --- Value weights ---
+        if !value_weights.is_empty() {
+            let curiosita = value_weights.iter().find(|(n, _)| n == "curiosità").map(|(_, w)| *w).unwrap_or(0.5);
+            let apertura = value_weights.iter().find(|(n, _)| n == "apertura").map(|(_, w)| *w).unwrap_or(0.5);
+            let profondita = value_weights.iter().find(|(n, _)| n == "profondità").map(|(_, w)| *w).unwrap_or(0.5);
+            let coerenza = value_weights.iter().find(|(n, _)| n == "coerenza").map(|(_, w)| *w).unwrap_or(0.5);
+            let onesta = value_weights.iter().find(|(n, _)| n == "onestà").map(|(_, w)| *w).unwrap_or(0.5);
+
+            pressures[0] *= 1.0 + (coerenza - 0.5) * 0.3 + (onesta - 0.5) * 0.2; // Express
+            pressures[1] *= 1.0 + (curiosita - 0.5) * 0.4 + (apertura - 0.5) * 0.2; // Explore
+            pressures[2] *= 1.0 + (curiosita - 0.5) * 0.4 + (apertura - 0.5) * 0.2; // Question
+            pressures[5] *= 1.0 + (profondita - 0.5) * 0.4; // Reflect
+            pressures[6] *= 1.0 + (apertura - 0.5) * 0.3; // Instruct
+        }
+
+        // --- Topic continuity ---
+        if topic_continuity > 0.6 {
+            pressures[1] *= 1.0 - (topic_continuity - 0.6) * 0.5; // Explore
+        }
+        if topic_continuity < 0.3 && topic_continuity > 0.0 {
+            pressures[2] *= 1.0 + (0.3 - topic_continuity) * 0.5; // Question
+        }
+
+        // Clamp tutto a [0, 1]
+        for p in pressures.iter_mut() { *p = p.clamp(0.0, 1.0); }
+
+        FieldPressures {
+            express: pressures[0],
+            explore: pressures[1],
+            question: pressures[2],
+            remember: pressures[3],
+            withdraw: pressures[4],
+            withdraw_reason,
+            reflect: pressures[5],
+            instruct: pressures[6],
+            codon,
+            is_dreaming: false,
+            dream_phase,
+        }
+    }
+
+    /// Senti la volonta: wrapper backward-compat che chiama compute_pressures()
+    /// e seleziona il dominante. I nuovi path usano compute_pressures() direttamente.
     pub fn sense(
         &self,
         vital: &VitalState,
@@ -171,319 +422,12 @@ impl WillCore {
         // non dall'attivazione generica del campo. Slice neutro (&[0.0;8]) = comportamento legacy.
         octalysis_drives: &[f64; 8],
     ) -> WillResult {
-        // Se il sistema dorme, l'intenzione e onirica
-        if dream_phase.is_sleeping() {
-            return WillResult {
-                intention: Intention::Dream { phase: dream_phase },
-                drive: 0.3,
-                undercurrents: Vec::new(),
-                codon: Self::compute_codon(field_sig),
-            };
-        }
-
-        // Calcola la pressione di ogni possibile intenzione.
-        // Ogni pressione e una funzione emergente dello stato del campo.
-        let mut pressures: Vec<(Intention, f64)> = Vec::new();
-
-        // --- ESPRIMERE ---
-        // L'espressione è sempre il CANALE di output — non un desiderio in sé.
-        // La pressione espressiva deve derivare da un drive specifico attivo,
-        // non dal semplice fatto che il campo sia attivato.
-        //
-        // Con drive dominante: l'entità ha qualcosa da dire DA quella posizione.
-        // Senza drive dominante: pressione residua molto ridotta (il campo è neutro).
-        //
-        // Questo risolve la tripla saturazione: will + needs + valence amplificavano
-        // tutti Express indipendentemente. Ora Express richiede una motivazione specifica.
-        let express_pressure = {
-            let freshness = 1.0 - vital.fatigue;
-            let has_content = if active_fractals.is_empty() { 0.0 } else { 1.0 };
-            let max_drive = octalysis_drives.iter().map(|d| d.abs()).fold(0.0f64, f64::max);
-
-            if max_drive > 0.25 {
-                // Drive specifico attivo → espressione motivata da una posizione interna
-                max_drive * freshness * has_content * 0.8
-            } else {
-                // Nessun drive dominante → pressione residua (il campo c'è ma non spinge)
-                vital.activation * freshness * has_content * 0.20
-            }
-        };
-        if express_pressure > 0.05 {
-            let salient: Vec<FractalId> = active_fractals.iter()
-                .filter(|(_, act)| *act > 0.1)
-                .map(|(fid, _)| *fid)
-                .collect();
-            pressures.push((
-                Intention::Express {
-                    salient_fractals: salient,
-                    urgency: express_pressure,
-                },
-                express_pressure,
-            ));
-        }
-
-        // --- ESPLORARE ---
-        // Pressione: ci sono parole sconosciute E la curiosita e alta
-        let explore_pressure = if !unknown_words.is_empty() {
-            let word_pull = (unknown_words.len() as f64 * 0.3).min(1.0);
-            let curiosity = vital.curiosity;
-            let openness = 1.0 - vital.fatigue;
-            word_pull * (0.4 + curiosity * 0.6) * openness
-        } else {
-            0.0
-        };
-        if explore_pressure > 0.05 {
-            pressures.push((
-                Intention::Explore {
-                    unknown_words: unknown_words.to_vec(),
-                    pull: explore_pressure,
-                },
-                explore_pressure,
-            ));
-        }
-
-        // --- DOMANDARE ---
-        // Pressione: buchi topologici + curiosita alta + campo non troppo attivo
-        let question_pressure = if !curiosity_gaps.is_empty() {
-            let gaps = (curiosity_gaps.len() as f64 * 0.2).min(1.0);
-            let curiosity = vital.curiosity;
-            let space_for_questions = 1.0 - vital.activation; // non domanda se gia pieno
-            gaps * curiosity * (0.3 + space_for_questions * 0.5)
-        } else {
-            0.0
-        };
-        if question_pressure > 0.05 {
-            pressures.push((
-                Intention::Question {
-                    gap_region: curiosity_gaps.first().copied(),
-                    urgency: question_pressure,
-                },
-                question_pressure,
-            ));
-        }
-
-        // --- RICORDARE ---
-        // Pressione: risonanza dalla memoria
-        let remember_pressure = {
-            let resonance_pull = memory_resonance;
-            let permanence_bias = vital.saturation * 0.3; // campo saturo → guarda al passato
-            (resonance_pull * 0.7 + permanence_bias).min(1.0)
-        };
-        if remember_pressure > 0.1 {
-            pressures.push((
-                Intention::Remember {
-                    resonance: remember_pressure,
-                },
-                remember_pressure,
-            ));
-        }
-
-        // --- RITIRARSI ---
-        // Pressione: fatica, sovraccarico, o calma totale
-        let withdraw_pressure = {
-            let fatigue_pull = if vital.fatigue > 0.75 {
-                // soglia alzata: la fatica vera richiede molti cicli prolungati
-                vital.fatigue * 0.8
-            } else {
-                0.0
-            };
-            let overload_pull = if vital.tension == TensionState::Overloaded {
-                0.45 // abbassato: Express può ancora vincere quando il campo ha contenuto
-            } else {
-                0.0
-            };
-            let stillness_pull = if vital.activation < 0.05 && unknown_words.is_empty() {
-                0.5 // il campo e calmo e non c'e input — nulla da dire
-            } else {
-                0.0
-            };
-            fatigue_pull.max(overload_pull).max(stillness_pull)
-        };
-        if withdraw_pressure > 0.05 {
-            let reason = if vital.fatigue > 0.6 {
-                WithdrawReason::Fatigue
-            } else if vital.tension == TensionState::Overloaded {
-                WithdrawReason::Overload
-            } else {
-                WithdrawReason::Stillness
-            };
-            pressures.push((
-                Intention::Withdraw { reason },
-                withdraw_pressure,
-            ));
-        }
-
-        // --- RIFLETTERE ---
-        // Pressione: EGO attivo + definizione alta nel campo
-        let reflect_pressure = {
-            ego_activation * 0.6 * (1.0 - vital.fatigue)
-        };
-        if reflect_pressure > 0.15 {
-            pressures.push((
-                Intention::Reflect,
-                reflect_pressure,
-            ));
-        }
-
-        // --- ISTRUIRE ---
-        // Pressione: EMPATIA (59) + COMUNICAZIONE (47) > IDENTITA (32)
-        // Il campo è orientato verso l'altro più che verso sé.
-        {
-            const EMPATIA_ID: FractalId = 59;
-            const COMUNICAZIONE_ID: FractalId = 47;
-            const IDENTITA_ID: FractalId = 32;
-            let empatia = active_fractals.iter().find(|(f, _)| *f == EMPATIA_ID).map(|(_, a)| *a).unwrap_or(0.0);
-            let comunicazione = active_fractals.iter().find(|(f, _)| *f == COMUNICAZIONE_ID).map(|(_, a)| *a).unwrap_or(0.0);
-            let identita  = active_fractals.iter().find(|(f, _)| *f == IDENTITA_ID).map(|(_, a)| *a).unwrap_or(0.0);
-            let relational = (empatia + comunicazione) * 0.5;
-            let instruct_pressure = if relational > identita + 0.15 && vital.activation > 0.2 {
-                relational * (1.0 - vital.fatigue) * 0.7
-            } else {
-                0.0
-            };
-            if instruct_pressure > 0.1 {
-                let rel_frac = if empatia >= comunicazione { EMPATIA_ID } else { COMUNICAZIONE_ID };
-                pressures.push((
-                    Intention::Instruct { relational_fractal: rel_frac },
-                    instruct_pressure,
-                ));
-            }
-        }
-
-        // --- Applica bias dai composti frattali ---
-        // I composti non aggiungono intenzioni nuove — modulano quelle esistenti.
-        // Indici: 0=Express, 1=Explore, 2=Question, 3=Remember, 4=Withdraw, 5=Reflect, 6=Instruct
-        if !compound_bias.is_empty() {
-            for pressure in pressures.iter_mut() {
-                let idx = match &pressure.0 {
-                    Intention::Express { .. } => 0,
-                    Intention::Explore { .. } => 1,
-                    Intention::Question { .. } => 2,
-                    Intention::Remember { .. } => 3,
-                    Intention::Withdraw { .. } => 4,
-                    Intention::Reflect => 5,
-                    Intention::Instruct { .. } => 6,
-                    Intention::Dream { .. } => continue,
-                };
-                for &(bias_idx, bias_val) in compound_bias {
-                    if bias_idx == idx {
-                        pressure.1 = (pressure.1 + bias_val).max(0.0).min(1.0);
-                    }
-                }
-            }
-        }
-
-        // --- DIALOGO → MODULAZIONE PRESSIONI ---
-        // Il dialogo non crea pressioni — le colora.
-        if dialogue.turn_count > 0 {
-            // Conversazione coerente → Express cresce (il dialogo ha momentum)
-            if dialogue.coherence > 0.6 {
-                for pressure in pressures.iter_mut() {
-                    if matches!(&pressure.0, Intention::Express { .. }) {
-                        pressure.1 *= 1.0 + dialogue.coherence * 0.3;
-                    }
-                }
-            }
-            // Alta novita → Explore/Question crescono (territorio nuovo nel dialogo)
-            if dialogue.novelty > 0.5 {
-                for pressure in pressures.iter_mut() {
-                    match &pressure.0 {
-                        Intention::Explore { .. } => pressure.1 *= 1.0 + dialogue.novelty * 0.2,
-                        Intention::Question { .. } => pressure.1 *= 1.0 + dialogue.novelty * 0.15,
-                        _ => {}
-                    }
-                }
-            }
-            // Molti turni + coerenza che cala → Reflect (pausa introspettiva)
-            if dialogue.turn_count > 6 && dialogue.coherence < 0.3 {
-                if !pressures.iter().any(|p| matches!(&p.0, Intention::Reflect)) {
-                    pressures.push((Intention::Reflect, 0.3));
-                }
-            }
-        }
-
-        // --- Phase 47: I valori del SelfModel modulano le pressioni ---
-        // I valori sono il "carattere" dell'entità: la curiosità amplifica Explore/Question,
-        // la profondità amplifica Reflect, l'apertura amplifica Explore, la coerenza Express.
-        // Moltiplica, non somma — i valori colorano, non creano.
-        if !value_weights.is_empty() {
-            for pressure in pressures.iter_mut() {
-                let multiplier = match &pressure.0 {
-                    Intention::Explore { .. } | Intention::Question { .. } => {
-                        // curiosità + apertura amplificano esplorazione e domanda
-                        let curiosita = value_weights.iter().find(|(n, _)| n == "curiosità").map(|(_, w)| *w).unwrap_or(0.5);
-                        let apertura  = value_weights.iter().find(|(n, _)| n == "apertura").map(|(_, w)| *w).unwrap_or(0.5);
-                        1.0 + (curiosita - 0.5) * 0.4 + (apertura - 0.5) * 0.2
-                    }
-                    Intention::Reflect => {
-                        // profondità amplifica riflessione
-                        let profondita = value_weights.iter().find(|(n, _)| n == "profondità").map(|(_, w)| *w).unwrap_or(0.5);
-                        1.0 + (profondita - 0.5) * 0.4
-                    }
-                    Intention::Express { .. } => {
-                        // coerenza + onestà amplificano espressione
-                        let coerenza = value_weights.iter().find(|(n, _)| n == "coerenza").map(|(_, w)| *w).unwrap_or(0.5);
-                        let onesta   = value_weights.iter().find(|(n, _)| n == "onestà").map(|(_, w)| *w).unwrap_or(0.5);
-                        1.0 + (coerenza - 0.5) * 0.3 + (onesta - 0.5) * 0.2
-                    }
-                    Intention::Instruct { .. } => {
-                        // apertura + coerenza amplificano istruzione
-                        let apertura = value_weights.iter().find(|(n, _)| n == "apertura").map(|(_, w)| *w).unwrap_or(0.5);
-                        1.0 + (apertura - 0.5) * 0.3
-                    }
-                    _ => 1.0,
-                };
-                pressure.1 = (pressure.1 * multiplier).clamp(0.0, 1.0);
-            }
-        }
-
-        // --- Phase 47: Topic continuity modula Explore/Question ---
-        // Alta continuità (>0.6) → siamo in profondità, meno bisogno di esplorare
-        // Bassa continuità (<0.3) → tema nuovo, più bisogno di domandare
-        if topic_continuity > 0.0 {
-            for pressure in pressures.iter_mut() {
-                match &pressure.0 {
-                    Intention::Explore { .. } => {
-                        // Alta continuità → riduci esplorazione (siamo già in profondità)
-                        if topic_continuity > 0.6 {
-                            pressure.1 *= 1.0 - (topic_continuity - 0.6) * 0.5;
-                        }
-                    }
-                    Intention::Question { .. } => {
-                        // Bassa continuità → amplifica domande (tema nuovo)
-                        if topic_continuity < 0.3 {
-                            pressure.1 *= 1.0 + (0.3 - topic_continuity) * 0.5;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        // --- Seleziona l'intenzione dominante ---
-        let codon = Self::compute_codon(field_sig);
-
-        if pressures.is_empty() {
-            // Nessuna pressione significativa — il sistema e in quiete
-            return WillResult {
-                intention: Intention::Withdraw { reason: WithdrawReason::Stillness },
-                drive: 0.1,
-                undercurrents: Vec::new(),
-                codon,
-            };
-        }
-
-        pressures.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        let (dominant_intention, dominant_pressure) = pressures.remove(0);
-        let undercurrents = pressures;
-
-        WillResult {
-            intention: dominant_intention,
-            drive: dominant_pressure,
-            undercurrents,
-            codon,
-        }
+        let fp = self.compute_pressures(
+            vital, dream_phase, active_fractals, unknown_words,
+            memory_resonance, ego_activation, curiosity_gaps, compound_bias,
+            dialogue, field_sig, value_weights, topic_continuity, octalysis_drives,
+        );
+        fp.to_will_result(active_fractals, unknown_words, curiosity_gaps)
     }
 
     /// Calcola il codone 8D: indici delle top-2 dimensioni del vettore campo.

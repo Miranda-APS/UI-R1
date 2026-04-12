@@ -251,26 +251,23 @@ impl<'a> InferenceEngine<'a> {
         }
 
         // CAUSES, SIMILAR_TO, OPPOSITE_OF, PART_OF, USED_FOR — con confidence per-arco
-        for (effect, conf) in self.kg.query_objects_weighted(word, RelationType::Causes) {
-            push(effect.to_string(), RelationType::Causes.field_boost_strength() * conf);
-        }
-        for (sim, conf) in self.kg.query_objects_weighted(word, RelationType::SimilarTo) {
-            push(sim.to_string(), RelationType::SimilarTo.field_boost_strength() * conf);
-        }
-        for (opp, conf) in self.kg.query_objects_weighted(word, RelationType::OppositeOf) {
-            push(opp.to_string(), RelationType::OppositeOf.field_boost_strength() * conf);
-        }
-        for (whole, conf) in self.kg.query_objects_weighted(word, RelationType::PartOf) {
-            push(whole.to_string(), RelationType::PartOf.field_boost_strength() * conf);
-        }
-        for (obj, conf) in self.kg.query_objects_weighted(word, RelationType::FeelsAs) {
-            push(obj.to_string(), RelationType::FeelsAs.field_boost_strength() * conf);
-        }
-        for (obj, conf) in self.kg.query_objects_weighted(word, RelationType::WondersAbout) {
-            push(obj.to_string(), RelationType::WondersAbout.field_boost_strength() * conf);
-        }
-        for (obj, conf) in self.kg.query_objects_weighted(word, RelationType::RemembersAs) {
-            push(obj.to_string(), RelationType::RemembersAs.field_boost_strength() * conf);
+        // Phase 67: via words attivate come ponti contestuali (0.5× forza target)
+        let via_relations = [
+            RelationType::Causes, RelationType::SimilarTo, RelationType::OppositeOf,
+            RelationType::PartOf, RelationType::FeelsAs, RelationType::WondersAbout,
+            RelationType::RemembersAs,
+        ];
+        for rel in &via_relations {
+            let base = rel.field_boost_strength();
+            for (obj, conf, via) in self.kg.query_objects_with_via(word, *rel) {
+                push(obj.to_string(), base * conf);
+                // Via: il ponte contestuale entra nel campo a forza ridotta
+                if let Some(via_word) = via {
+                    if via_word != word {
+                        push(via_word.to_string(), base * conf * 0.5);
+                    }
+                }
+            }
         }
 
         let mut result: Vec<(String, f32)> = map.into_iter().collect();

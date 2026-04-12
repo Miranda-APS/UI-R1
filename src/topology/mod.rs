@@ -116,7 +116,7 @@ pub use reasoning::{evaluate_implication, abduce, find_contradictions, reason, I
 pub use growth::{GrowthTracker, GrowthEvent};
 pub use creativity::{create, find_metaphors, assess_confidence, CreativeSession, CreativeInsight, Metaphor, FieldConfidence};
 pub use locus::{Locus, Movement, MovementKind, SubLocusView, HolographicProjection, FractalProjection, project_universe, project_from_locus};
-pub use will::{WillCore, WillResult, Intention, WithdrawReason, DialogueContext};
+pub use will::{WillCore, WillResult, FieldPressures, Intention, WithdrawReason, DialogueContext};
 pub use word_topology::{WordTopology, WordVertex, WordEdge, WordId};
 pub use grammar::{PartOfSpeech, Person, Tense, LemmaResult, conjugate, lemmatize, detect_pos_from_word};
 pub use state_translation::{TranslatedExpression, translate_state, translate_or_raw, IdentityContext};

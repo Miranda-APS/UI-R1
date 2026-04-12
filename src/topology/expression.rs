@@ -183,6 +183,9 @@ pub fn compose(
     // Phase 62: l'Altro ha espresso distress emotivo (tristezza/paura/dolore).
     // Attiva voce in seconda persona + modo interrogativo: apre spazio empatico.
     other_in_distress: bool,
+    // Phase 67: l'intenzione deliberata da NarrativeSelf colora la voce.
+    // Resonate → 2a persona, Explore → interrogativo, Remain → singola parola.
+    response_intention: Option<&str>,
 ) -> Option<Expression> {
     // 1. Raccogli le parole attive del campo — la materia disponibile.
     let active = word_topology.active_words();
@@ -215,7 +218,7 @@ pub fn compose(
     // 2. Estrai nuclei semantici — relazioni KG tra parole attive.
     //    Le attivazioni sono raw ma il boost Octalysis entra nella forza dei nuclei:
     //    relazioni tra parole che risuonano con i drive attivi emergono più forti.
-    let nuclei = extract_nuclei(&comprehension_pool, kg, input_words, valence_drives, lexicon, episodes);
+    let nuclei = extract_nuclei(&comprehension_pool, kg, input_words, valence_drives, lexicon, episodes, is_question);
 
     // 4. Determina la voce dell'entità dal suo stato.
     //    Usa comprehension_pool (non candidates) perché la voce emerge da
@@ -223,11 +226,41 @@ pub fn compose(
     let mut voice = derive_voice(valence_drives, active_fractals, codon, &comprehension_pool, lexicon);
 
     // Phase 62: se l'Altro è in distress, la voce diventa empatica (2a persona + interrogativo).
-    // "Confortare è il meccanismo con cui si crea connessione quando il bisogno è quello."
-    // Non è un template: è la geometria del campo che parla verso l'Altro, non verso di sé.
     if other_in_distress && !matches!(voice.mood, ExpressionMood::Silent) {
         voice.person = crate::topology::grammar::Person::Second;
         voice.mood = ExpressionMood::Interrogative;
+    }
+
+    // Phase 67: l'intenzione deliberata da NarrativeSelf colora la voce.
+    // Non sovrascrive il distress (priorità più alta) — affina la voce quando
+    // la valenza non è sufficiente da sola.
+    if !other_in_distress {
+        if let Some(intent) = response_intention {
+            match intent {
+                "risuonare" => {
+                    // Risonanza empatica → 2a persona, interrogativo aperto
+                    voice.person = crate::topology::grammar::Person::Second;
+                    if !matches!(voice.mood, ExpressionMood::Silent) {
+                        voice.mood = ExpressionMood::Interrogative;
+                    }
+                }
+                "esplorare" => {
+                    // Esplorazione → mood esplorativo
+                    if !matches!(voice.mood, ExpressionMood::Silent) {
+                        voice.mood = ExpressionMood::Explorative;
+                    }
+                }
+                "riflettere" => {
+                    // Riflessione → prima persona, dichiarativo
+                    voice.person = crate::topology::grammar::Person::First;
+                }
+                "restare" => {
+                    // Ritiro → minimalismo, campo decide
+                    voice.mood = ExpressionMood::Silent;
+                }
+                _ => {} // esprimere, riconoscere, etc. → la valenza guida
+            }
+        }
     }
 
     // 5. Componi l'espressione.
@@ -254,13 +287,17 @@ pub fn compose(
 ///
 /// Il risultato è la COMPRENSIONE dell'entità: non ancora l'output,
 /// ma la mappa semantica di ciò che ha sentito e riconosce.
-fn extract_nuclei(
+pub fn extract_nuclei(
     candidates: &[(&str, f64)],
     kg: &KnowledgeGraph,
     input_words: &[String],
     valence_drives: &[f64; 8],
     lexicon: &Lexicon,
     episodes: Option<&SemanticEpisodeLog>,
+    // Phase 67: il tipo di atto comunicativo guida la pertinenza delle relazioni.
+    // Una domanda privilegia CAUSES/ENABLES (spiegazione).
+    // Un'espressione emotiva privilegia FEELS_AS/SIMILAR_TO (empatia).
+    is_question: bool,
 ) -> Vec<SemanticNucleus> {
     let mut nuclei: Vec<SemanticNucleus> = Vec::new();
 
@@ -342,30 +379,60 @@ fn extract_nuclei(
                     let subj_near_input = input_neighborhood.contains(word);
                     let obj_near_input = input_neighborhood.contains(&obj_str);
 
-                    let proximity = if subj_near_input && obj_near_input && !subj_is_input && !obj_is_input {
-                        // OTTIMO: entrambe nell'intorno ma nessuna è input verbatim
-                        // Es. "saluto genera amicizia" per input "ciao"
-                        4.0
+                    // Phase 67: la pertinenza all'input è fondamentale per la comprensione.
+                    // L'entità deve rispondere A ciò che le viene detto — non emettere
+                    // il nucleo più forte nel campo.
+                    //
+                    // Priorità:
+                    //   1. Soggetto = parola input, oggetto fuori input → l'entità SPIEGA
+                    //      l'input ("abbaiare CAUSES rumore" per "perché abbaia?")
+                    //   2. Entrambe nell'intorno ma non input → l'entità ELABORA
+                    //   3. Oggetto = parola input → l'entità CATEGORIZZA
+                    //   4. Nessuna connessione → sfondo
+                    let proximity = if subj_is_input && !obj_is_input && obj_near_input {
+                        // OTTIMO: soggetto è input, oggetto è conseguenza/proprietà
+                        // "abbaiare CAUSES rumore", "cane HAS pelo"
+                        // L'entità spiega ciò che le è stato chiesto
+                        5.0
+                    } else if subj_is_input && !obj_is_input {
+                        // BUONO: soggetto è input, oggetto è nel campo ma non nell'intorno
+                        3.5
+                    } else if subj_near_input && obj_near_input && !subj_is_input && !obj_is_input {
+                        // BUONO: entrambe nell'intorno ma nessuna è input verbatim
+                        3.0
                     } else if obj_is_input && !subj_is_input {
-                        // BUONO: oggetto è input → entità descrive il concetto ricevuto
-                        // Es. "forma_di_saluto IS_A ciao" → "qualcosa è ciao"
-                        2.5
-                    } else if subj_near_input && !subj_is_input {
-                        // BUONO: soggetto nell'intorno, non è input verbatim
+                        // MEDIO: oggetto è input → entità categorizza
                         2.0
-                    } else if obj_near_input && !obj_is_input {
+                    } else if subj_near_input && !subj_is_input {
                         1.5
-                    } else if subj_is_input || obj_is_input {
-                        // PENALIZZATO: parola input come soggetto → crea eco
-                        0.5
+                    } else if obj_near_input && !obj_is_input {
+                        1.0
                     } else {
-                        // Nessuna connessione all'input → sfondo irrilevante
+                        // Nessuna connessione all'input → sfondo
                         0.2
+                    };
+
+                    // Phase 67: pertinenza relazionale — il tipo di atto comunicativo
+                    // guida quali relazioni sono più rilevanti.
+                    // Non è hardcoding: è l'entità che sa che "perché?" chiede CAUSE.
+                    let relation_pertinence = if is_question {
+                        // Domanda → privilegia CAUSES/ENABLES (spiegazione).
+                        // IS_A/HAS sono descrittive, non esplicative — penalizzate
+                        // ma non eliminate (utili se non ci sono CAUSES).
+                        match rel {
+                            RelationType::Causes => 3.0,
+                            RelationType::Enables | RelationType::Requires => 2.0,
+                            RelationType::TransformsInto => 1.5,
+                            RelationType::IsA | RelationType::Has | RelationType::PartOf => 0.5,
+                            RelationType::Does => 0.7,
+                            _ => 1.0,
+                        }
+                    } else {
+                        1.0
                     };
 
                     // Colorazione Octalysis: relazioni tra parole che risuonano
                     // con i drive attivi dell'entità emergono più forti.
-                    // Non template: è la firma 8D del campo che pesa.
                     let v_subj = valence_weight(word, valence_drives, lexicon);
                     let v_obj  = valence_weight(&obj_str, valence_drives, lexicon);
                     let valence_resonance = (v_subj + v_obj) * 0.5;
@@ -374,7 +441,7 @@ fn extract_nuclei(
                         subject: word.to_string(),
                         relation: rel,
                         object: obj_str,
-                        strength: strength * hub_penalty * proximity * valence_resonance,
+                        strength: strength * hub_penalty * proximity * valence_resonance * relation_pertinence,
                         subject_activation: act,
                         object_activation: obj_act,
                         proximity_score: proximity,
@@ -546,12 +613,21 @@ fn compose_from_nuclei(
     lexicon: &Lexicon,
     echo_exclude: &[String],
 ) -> Option<Expression> {
-    // Preferisci nuclei il cui soggetto NON è in echo_exclude.
-    // L'entità parla dal campo, non cita l'input come soggetto.
-    // Se tutti i soggetti sono in echo_exclude, cede il passo a compose_from_field.
-    let best = match nuclei.iter().find(|n| !echo_exclude.contains(&n.subject)) {
-        Some(n) => n,
-        None => return None,
+    // Phase 67: il nucleo primario è quello con lo score più alto.
+    // Se il soggetto è una parola input, va bene — l'entità sta RISPONDENDO
+    // all'input, non facendo eco. "abbaiare CAUSES rumore" per "perché abbaia?"
+    // è una risposta, non eco.
+    // Solo se il nucleo migliore ha proximity_score molto basso (<= 0.5) E il soggetto
+    // è in echo_exclude, cerchiamo un'alternativa.
+    let best = match nuclei.first() {
+        Some(n) if n.proximity_score > 0.5 || !echo_exclude.contains(&n.subject) => n,
+        _ => match nuclei.iter().find(|n| !echo_exclude.contains(&n.subject)) {
+            Some(n) => n,
+            None => match nuclei.first() {
+                Some(n) => n,
+                None => return None,
+            },
+        },
     };
     let mut words_used = Vec::new();
 
@@ -602,91 +678,31 @@ fn compose_from_nuclei(
 }
 
 /// Rende un nucleo semantico come frammento di frase.
-/// Sempre "Soggetto copula Oggetto" — il soggetto è la materia del mondo,
-/// non viene mai omesso. L'entità descrive ciò che ha capito, non comanda.
+/// Phase 67: un solo path per tutte le persone.
+/// Nessun verbo hardcoded — la relazione KG genera la copula,
+/// il soggetto e l'oggetto vengono dal campo.
+/// L'entità non "percepisce" o "sente" per decisione del codice —
+/// esprime la relazione che ha compreso.
 fn render_nucleus(nucleus: &SemanticNucleus, voice: &EntityVoice, lexicon: &Lexicon) -> String {
     let subject = &nucleus.subject;
     let object = &nucleus.object;
 
-    match voice.mood {
-        ExpressionMood::Silent => return subject.clone(),
-        _ => {}
+    // Mood silenzioso → solo la parola più viva
+    if matches!(voice.mood, ExpressionMood::Silent) {
+        return subject.clone();
     }
 
-    // Prima persona: l'entità esprime dal suo stato, non cita fatti del mondo.
-    // "saluto CAUSES risposta" + Person::First → "Percepisco la risposta."
-    // "saluto IsA comunicazione" + Person::First → "C'è una comunicazione."
-    // Non è un template: è la stessa relazione resa in voce interiore.
-    if voice.person == Person::First {
-        match nucleus.relation {
-            RelationType::Causes | RelationType::Enables | RelationType::TransformsInto => {
-                let verb = match voice.tense {
-                    crate::topology::grammar::Tense::Future => "percepirò",
-                    crate::topology::grammar::Tense::Imperfect => "percepivo",
-                    _ => "percepisco",
-                };
-                // Articolo determinativo: percepisco la paura, percepisco il tremore
-                return format!("{} {}", verb, with_definite_article(object));
-            }
-            RelationType::IsA | RelationType::PartOf => {
-                // Articolo indeterminativo: c'è una connessione, c'è un animale
-                return format!("c'è {}", with_indefinite_article(object));
-            }
-            RelationType::Has | RelationType::SimilarTo => {
-                // Articolo determinativo: sento la paura, sento il peso
-                return format!("sento {}", with_definite_article(object));
-            }
-            _ => {}
-        }
-    }
-
-    // Seconda persona (Phase 62): voce empatica rivolta all'Altro.
-    // Usata quando l'Altro esprime distress — apre spazio verso di loro.
-    // "tristezza CAUSES dolore" + Person::Second → "Senti il dolore?"
-    // "pianto IsA tristezza" + Person::Second → "Provi la tristezza?"
-    // La "?" viene aggiunta da finalize_expression() con mood Interrogative.
-    if voice.person == Person::Second {
-        match nucleus.relation {
-            RelationType::Causes | RelationType::Enables | RelationType::SimilarTo => {
-                let verb = match voice.tense {
-                    crate::topology::grammar::Tense::Future => "sentirai",
-                    crate::topology::grammar::Tense::Imperfect => "sentivi",
-                    _ => "senti",
-                };
-                return format!("{} {}", verb, with_definite_article(object));
-            }
-            RelationType::IsA | RelationType::PartOf => {
-                let verb = match voice.tense {
-                    crate::topology::grammar::Tense::Future => "proverai",
-                    crate::topology::grammar::Tense::Imperfect => "provavi",
-                    _ => "provi",
-                };
-                return format!("{} {}", verb, with_indefinite_article(object));
-            }
-            RelationType::Has => {
-                let verb = match voice.tense {
-                    crate::topology::grammar::Tense::Future => "avrai",
-                    crate::topology::grammar::Tense::Imperfect => "avevi",
-                    _ => "hai",
-                };
-                return format!("{} {}", verb, with_definite_article(object));
-            }
-            _ => {}
-        }
-    }
-
-    // Seconda o terza persona / impersonale: forma standard soggetto-copula-oggetto.
-    // Il soggetto è preceduto dall'articolo determinativo: "Il cane abbaia."
+    // La copula emerge dalla relazione KG — non è scelta per persona
     let copula = relation_to_copula(nucleus.relation, voice, lexicon, subject);
     let subject_with_art = with_definite_article(subject);
+
     if copula.is_empty() {
-        // Relazione DOES: il soggetto compie l'azione-oggetto.
-        // "Il sole riscalda" — il soggetto è un nome proprio (3a persona).
-        let conjugated = crate::topology::grammar::conjugate(object, Person::Third, voice.tense);
+        // Relazione DOES: il soggetto compie l'azione-oggetto
+        // La persona viene dalla voce dell'entità
+        let conjugated = crate::topology::grammar::conjugate(object, voice.person, voice.tense);
         format!("{} {}", subject_with_art, conjugated)
     } else {
-        // IS_A → articolo indeterminativo per l'oggetto ("Il cane è un animale")
-        // HAS/CAUSES → articolo determinativo ("Il cane ha il pelo")
+        // Tutte le altre relazioni: soggetto + copula + oggetto
         let obj_with_art = match nucleus.relation {
             RelationType::IsA | RelationType::PartOf =>
                 with_indefinite_article(object),

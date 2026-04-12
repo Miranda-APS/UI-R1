@@ -121,6 +121,15 @@ impl KnowledgeGraph {
             .unwrap_or_default()
     }
 
+    /// Come query_objects_weighted ma restituisce anche il campo `via` (ponte contestuale).
+    /// Es: query_objects_with_via("fuoco", Causes) → [("calore", 0.90, Some("combustione"))]
+    pub fn query_objects_with_via<'a>(&'a self, subject: &str, rel: RelationType) -> Vec<(&'a str, f32, Option<&'a str>)> {
+        self.outgoing.get(subject)
+            .and_then(|m| m.get(&rel))
+            .map(|v| v.iter().map(|t| (t.object.as_str(), t.confidence, t.via.as_deref())).collect())
+            .unwrap_or_default()
+    }
+
     /// Tutti i soggetti che hanno `rel` verso `object`.
     /// Es: query_subjects("animale", IsA) → ["cane", "gatto", "uccello", ...]
     pub fn query_subjects<'a>(&'a self, object: &str, rel: RelationType) -> Vec<&'a str> {

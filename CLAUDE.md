@@ -11,11 +11,12 @@
 |---------|--------|
 | Test | **476 passanti, 0 fallimenti, 2 skipped** |
 | Lessico | **25.875 parole** (stabilità 0.5–0.9) |
-| Knowledge Graph | **165.326 archi semantici, ~40.000 nodi** (IS_A + SIMILAR_TO + OPPOSITE_OF + CAUSES curati) |
+| Knowledge Graph | **64.427 archi nel JSON, ~27.000 nodi** (pulizia -3.4K OppositeOf garbage + curazione §1-§20) |
 | Simplici | **variabili** (reset 2026-04-07, crescono con conversazione) |
-| Fase corrente | **Phase 66** (vedi sotto) |
-| Versione | **6.14.0** |
-| Stato .bin | `prometeo_topology_state.bin` — Phase 65 2026-04-08 |
+| Fase corrente | **Phase 67** (Architettura della Comprensione) |
+| Versione | **6.15.0** |
+| Stato .bin | `prometeo_topology_state.bin` — KG Curation 2026-04-10, backup `.pre_p67` |
+| Knowledge Graph | **~65.000 archi** (curation in corso con curate_kg.py §0-§20+) |
 | Topologia | **Semantica pura** — archi KG-derivati, 0 archi statistici |
 | Firme 8D | **21.709 / 25.875** riderivate da KG (non statistica) — Phase 63 |
 
@@ -154,8 +155,8 @@ cp quartiere_x_prometeo.bin cartella_comunita/prometeo_topology_state.bin
 10. **Capitalizzazione in `generate_willed_inner()`**: tutti i path di ritorno devono capitalizzare (Withdraw path a riga ~2702, fallback finale a riga ~2846).
 11. **Due sistemi di attivazione**: `pf_activation` (PF1, semantica) e `word_topology` (legacy). `state_translation.rs` legge da `word_topology.active_words()`. `propagate_field_words()` DEVE sincronizzare PF1 → word_topology con `decay_all(1.0)` + copia hot_words.
 12. **Resting state**: `pf1.rs` usa `stability × 0.002`, `word_topology.rs` usa `stability × 0.003` (soglia attivazione PF1 = 0.02). Il campo è silenzioso senza input — resting state è sotto soglia.
-13. **`narrative_self.deliberate()`** ha 9 parametri (Phase 47): reading, vital, kb, kg, active_fractals, `Option<&SelfModel>`, `Option<&IdentityCore>`. Non rimuovere gli ultimi due.
-14. **`will.sense()`** ha 14 parametri (Phase 47): +`value_weights: &[(String, f64)]` e `topic_continuity: f64`. Nel tick autonomo passare `&[]` e `self.narrative_self.topic_continuity`.
+13. **`narrative_self.deliberate()`** ha 12 parametri (Phase 67): +`field_pressures: Option<&FieldPressures>` come ultimo. Nei test passare `None`. In engine.rs passare `Some(&field_pressures)` calcolato da `will.compute_pressures()`.
+14. **`will.sense()`** ha 14 parametri — ora è un wrapper per `compute_pressures()` + `to_will_result()`. Nel path principale di `receive()`, usare `compute_pressures()` direttamente. `sense()` mantenuto per backward compat (autonomous_tick, generation test).
 15. **Hub damping in `build_from_knowledge_graph()`** (Phase 48): peso arco = `type_base(rel) × confidence × hub_factor(max_degree/median)`. Nodi hub vengono penalizzati logaritmicamente. Non rimuovere — risolve il problema "verbi hub dominano".
 16. **`field_boosts()` usa confidence per-arco** (Phase 48): ogni boost = `field_boost_strength(tipo) × confidence_arco`. Usare `query_objects_weighted()` (non `query_objects()`) per i boost diretti.
 17. **`translate_state()` ha 11 parametri** (Phase 49): ultimo è `propositions: Option<&[Proposition]>`. Callers esistenti passano `None` per backward compat.
@@ -324,6 +325,32 @@ cp quartiere_x_prometeo.bin cartella_comunita/prometeo_topology_state.bin
 
 108. **`:tick N` e `:witness` in `dialogue_educator`** (Phase 66): comandi di debug. `:tick N` esegue N autonomous_tick() manualmente. `:witness` mostra le auto-osservazioni accumulate.
 
+### Phase 67 — Architettura della Comprensione
+
+109. **Via nel campo** (Phase 67): `knowledge_graph.rs` ha `query_objects_with_via()`. `inference.rs::field_boosts()` attiva via words a 0.5× forza target. `engine.rs`: OPPOSITE_OF e CAUSES seeding attivano via words. Es: `ghiaccio TRANSFORMS_INTO acqua VIA calore` → "calore" si attiva nel campo.
+
+110. **`FieldPressures` struct in `will.rs`** (Phase 67): pressioni grezze del campo senza selezione dominante. 7 campi f64 (express, explore, question, remember, withdraw, reflect, instruct) + codon + is_dreaming. `compute_pressures()` calcola, `to_will_result()` converte per backward compat. `sense()` è wrapper. NarrativeSelf è l'unico decisore.
+
+111. **`deliberate()` ha 12 parametri** (Phase 67): ultimo è `field_pressures: Option<&FieldPressures>`. Le pressioni del campo informano la deliberazione: withdraw>0.6 → Remain, explore>0.4 → Explore su input neutro. In engine.rs, `compute_pressures()` calcolato PRIMA di `deliberate()`.
+
+112. **`expression::compose()` ha 13 parametri** (Phase 67): ultimo è `response_intention: Option<&str>`. L'intenzione deliberata ("risuonare"/"esplorare"/"riflettere"/"restare") colora la voce: Resonate→2a persona interrogativa, Explore→mood esplorativo, Reflect→1a persona, Remain→mood silenzioso.
+
+113. **Resonate path rimosso da `generate_willed_inner()`** (Phase 67): il special case P4 (righe ~4045-4137) è stato eliminato. Tutte le intenzioni passano per `compose()`. "ho paura" → compose trova nucleo (paura, CAUSES, tremore) e genera "Senti il tremore, è una paura?" tramite voce 2a persona interrogativa. Un solo path di generazione.
+
+114. **`generate_willed_inner()` legge da NarrativeSelf** (Phase 67): Withdraw check usa `narrative_self.pending_intention == Remain`, codon da `last_field_pressures`. Il blocco composizione usa codon da FieldPressures. `last_will` mantenuto solo per backward compat (synthesis.rs, undercurrents).
+
+115. **`InputReading.perceived_properties`** (Phase 67): campo `Vec<(String, f64)>` aggiunto. Secondo passaggio in `engine.rs::extract_discursive_properties()` dopo attivazione campo, PRIMA di deliberate. Legge attivazioni di nodi discorsivi reali ("certezza", "incertezza", "apertura", "chiusura", "soggettività") dal PF1. `deliberate()` li usa: certezza/chiusura → Explore, incertezza/apertura → Explore, soggettività → Reflect. **Richiede che il KG abbia relazioni IS_A tipo `certamente IS_A certezza`** — vedi `data/kg/discursive_knowledge.tsv`.
+
+116. **Comprehension gate lemmatizzato** (Phase 67): il gate "Non capisco X" ora controlla 3 livelli: (1) parola nel KG, (2) parola nel lessico, (3) lemma nel KG. "penso" → nel lessico → non scatta. "farò" → lemmatizza a "fare" → nel KG → non scatta.
+
+117. **`seed_conceptual_anchors()` 6 ancore** (Phase 67): aggiunte 3 ancore KB: Syntax (INTRECCIO+VERITA), Dialogue (COMUNICAZIONE+EMPATIA), Epistemic (DIVENIRE+VERITA). Totale: Social + Emotional + Self_ + Syntax + Dialogue + Epistemic.
+
+118. **`data/kg/discursive_knowledge.tsv`** (Phase 67): ~40 triple con parole reali (no nodi artificiali con underscore). Marker discorsivi → concetti: `certamente IS_A certezza`, `forse IS_A incertezza`, `penso EXPRESSES soggettività`. Relazioni con VIA: `certezza CAUSES chiusura VIA immutabilità`. Da importare con `import-kg` o aggiungere come §21 in `curate_kg.py`.
+
+119. **`last_field_pressures` campo engine** (Phase 67): `Option<FieldPressures>` salvato dopo `compute_pressures()`. Usato da `generate_willed_inner()` per codon.
+
+120. **Graphify installato** (Phase 67): `graphify-out/graph.json` + `graph.html` generati dall'AST del codebase. 1763 nodi, 3906 archi, top hub: engine(97), narrative(59), lexicon(50). Query CLI: `graphify query "question" --budget N`.
+
 ---
 
 ## Comandi di Sviluppo Frequenti
@@ -346,6 +373,12 @@ cargo run --release --bin rebuild-semantic-topology
 
 # Diagnostica lessico
 cargo run --release --bin diag-lexicon
+
+# Curation KG (file master idempotente — edita prometeo_kg.json direttamente)
+python curate_kg.py --dry-run    # preview senza salvare
+python curate_kg.py              # applica e salva
+# Dopo la curation, fare SOLO rebuild-semantic-topology (NON import-kg, che sovrascrive)
+cargo run --release --bin rebuild-semantic-topology
 
 # Background: arricchisci confidence per-arco (richiede Ollama + Qwen3)
 python data/external/enrich_confidence.py --test 50     # test

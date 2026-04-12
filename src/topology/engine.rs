@@ -472,6 +472,8 @@ pub struct PrometeoTopologyEngine {
     pub will: WillCore,
     /// Ultimo risultato della volonta (per consultazione esterna)
     pub last_will: Option<WillResult>,
+    /// Phase 67: ultime pressioni grezze del campo (per telemetria e autonomous_tick)
+    pub last_field_pressures: Option<crate::topology::will::FieldPressures>,
     /// Parole sconosciute dall'ultimo input
     pub last_unknown_words: Vec<String>,
     /// Curriculum: lezioni fatte e parole apprese
@@ -601,6 +603,11 @@ pub struct PrometeoTopologyEngine {
     /// Aggiornate ad ogni generate_willed_inner().
     pub last_propositions: Vec<crate::topology::proposition::Proposition>,
 
+    /// Phase 67: nuclei semantici estratti durante receive() — la COMPRENSIONE dell'entità.
+    /// Non sono output — sono ciò che UI-R1 ha capito dell'input.
+    /// Usati da deliberate() per decidere e da compose() per esprimere.
+    pub last_comprehension_nuclei: Vec<crate::topology::expression::SemanticNucleus>,
+
     // ── Phase 53 — Bisogni, desideri, interlocutore, umorismo ──────────────
 
     /// Gerarchia dei bisogni (Maslow reinterpretato per Prometeo).
@@ -681,6 +688,7 @@ impl PrometeoTopologyEngine {
             total_perturbations: 0,
             will: WillCore::new(),
             last_will: None,
+            last_field_pressures: None,
             last_unknown_words: Vec::new(),
             curriculum: CurriculumProgress::new(),
             semantic_axes: Vec::new(),
@@ -710,6 +718,7 @@ impl PrometeoTopologyEngine {
             fractal_resonance_index: Vec::new(),
             last_thought_chain: None,
             last_propositions: Vec::new(),
+            last_comprehension_nuclei: Vec::new(),
             needs: crate::topology::needs::NeedsHierarchy::new(),
             last_needs_state: None,
             desire: crate::topology::desire::DesireCore::new(),
@@ -779,6 +788,7 @@ impl PrometeoTopologyEngine {
             total_perturbations: 0,
             will: WillCore::new(),
             last_will: None,
+            last_field_pressures: None,
             last_unknown_words: Vec::new(),
             curriculum: CurriculumProgress::new(),
             semantic_axes: Vec::new(),
@@ -808,6 +818,7 @@ impl PrometeoTopologyEngine {
             fractal_resonance_index: Vec::new(),
             last_thought_chain: None,
             last_propositions: Vec::new(),
+            last_comprehension_nuclei: Vec::new(),
             needs: crate::topology::needs::NeedsHierarchy::new(),
             last_needs_state: None,
             desire: crate::topology::desire::DesireCore::new(),
@@ -1035,6 +1046,32 @@ impl PrometeoTopologyEngine {
             "un'indagine sull'identità è la domanda su chi è Prometeo, cosa sente, cosa vuole",
             "sei",
             vec![32], // IDENTITA
+        );
+
+        // ── Phase 67: Ancore per comprensione discorsiva ─────────────────────
+
+        // Sintassi: la struttura del linguaggio configura la realtà
+        self.knowledge_base.teach_concept(
+            KnowledgeDomain::Syntax,
+            "la posizione e la forma delle parole determinano il loro ruolo: una stessa parola può chiedere o affermare",
+            "struttura",
+            vec![45, 54], // INTRECCIO, VERITA
+        );
+
+        // Dialogo: lo scambio tra parlanti ha una dinamica propria
+        self.knowledge_base.teach_concept(
+            KnowledgeDomain::Dialogue,
+            "chi chiede vuole comprendere, chi afferma con certezza chiude le possibilità, chi propone apre spazi nuovi",
+            "domanda",
+            vec![47, 59], // COMUNICAZIONE, EMPATIA
+        );
+
+        // Epistemica: la certezza e l'incertezza colorano ogni atto discorsivo
+        self.knowledge_base.teach_concept(
+            KnowledgeDomain::Epistemic,
+            "l'incertezza è apertura al possibile, la certezza è chiusura al definito: ogni parola porta un grado di entrambe",
+            "certezza",
+            vec![27, 54], // DIVENIRE, VERITA
         );
     }
 
@@ -1795,8 +1832,35 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // 4b. Attiva il campo topologico delle parole.
         //     Le parole dell'input vengono attivate nella word_topology,
         //     poi la propagazione illumina il vicinato semantico.
-        self.pf_activation.decay(0.50); // decay inter-turno: dimezza l'attivazione a ogni turno
-        // 0.50: dopo 3 turni una parola è al 12.5% → non contamina più il campo
+        // Phase 67: residuo binario — il dialogo precedente è rilevante o no.
+        // Non gradiente: se il tema è nuovo, pulisci. Se è lo stesso, mantieni.
+        // conversation.thematic_coherence è GIÀ calcolato dal turno precedente.
+        let topic_decay = if self.conversation.thematic_coherence > 0.40 {
+            // Continuazione: mantieni il 60% — il contesto è rilevante
+            0.60_f32
+        } else {
+            // Tema nuovo: mantieni solo il 10% — il residuo è rumore
+            0.10_f32
+        };
+        self.pf_activation.decay(topic_decay);
+
+        // Phase 67: narrazione interna — il turno precedente ha generato consapevolezza
+        // (awareness). Le parole di quella consapevolezza entrano nel campo come contesto
+        // narrativo. L'entità sa cosa stava pensando — il filo del discorso interno.
+        if let Some(last_turn) = self.narrative_self.turns.back() {
+            if let Some(ref awareness) = last_turn.awareness {
+                for word in awareness.split_whitespace() {
+                    let w = word.to_lowercase();
+                    if w.len() >= 4 && !self.lexicon.is_function_word(&w) {
+                        self.pf_activation.activate_by_name(&self.pf_field, &w, 0.05);
+                    }
+                }
+            }
+            // Le parole salienti dell'input precedente entrano come contesto leggero
+            if let Some(ref salient) = last_turn.salient_word {
+                self.pf_activation.activate_by_name(&self.pf_field, salient, 0.08);
+            }
+        }
 
         // Phase 41 — Baseline frattale PRE-input.
         // Catturata DOPO il decay (residuo del turno precedente) ma PRIMA dell'attivazione
@@ -1839,9 +1903,25 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 // Parola negata: tracciata per apprendimento ma NON attivata direttamente.
                 negated_words.push(act.word.clone());
             } else if structural_to_suppress.contains(&act.word) {
-                // Parola strutturale in contesto speaker_claim: attiva a forza minima.
-                // Presente nel campo ma non dominante — la struttura è rumore, il predicato è segnale.
-                self.pf_activation.activate_by_name(&self.pf_field, &act.word, 0.02_f32);
+                // Phase 67: trasposizione pronominale — dal punto di vista di UI-R1,
+                // quando l'utente dice "io", quello è "tu" (l'Altro).
+                // Quando l'utente dice "tu", quello è "io" (UI-R1 stesso).
+                // Come un bambino impara: "il tuo io è il mio tu".
+                let transposed = match act.word.as_str() {
+                    "io" => Some("tu"),
+                    "mi" => Some("ti"),
+                    "tu" => Some("io"),
+                    "ti" => Some("mi"),
+                    _ => None,
+                };
+                if let Some(new_word) = transposed {
+                    // Attiva il pronome trasposto a forza moderata — non dominante
+                    // ma presente, perché il campo deve sapere chi sta parlando
+                    self.pf_activation.activate_by_name(&self.pf_field, new_word, 0.15_f32);
+                } else {
+                    // Altre parole strutturali (essere, avere, sentire): forza minima
+                    self.pf_activation.activate_by_name(&self.pf_field, &act.word, 0.02_f32);
+                }
                 // NON aggiunta a input_words_for_provenance: non riceve KG boost
             } else {
                 self.pf_activation.activate_by_name(&self.pf_field, &act.word, act.strength as f32);
@@ -1901,11 +1981,18 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 }
             }
             // Negation flip: parole negate → attiva il loro opposto KG
+            // Phase 67: via words attivate come ponti contestuali
             for word in &negated_words {
-                for (opposite, conf) in self.kg.query_objects_weighted(word, crate::topology::relation::RelationType::OppositeOf) {
+                for (opposite, conf, via) in self.kg.query_objects_with_via(word, crate::topology::relation::RelationType::OppositeOf) {
                     // Forza piena (0.35) — la negazione richiede un segnale chiaro
                     let boost = 0.35_f32 * conf;
                     self.pf_activation.activate_by_name(&self.pf_field, opposite, boost);
+                    // Via: il ponte contestuale entra nel campo a forza ridotta
+                    if let Some(via_word) = via {
+                        if self.lexicon.get(via_word).is_some() {
+                            self.pf_activation.activate_by_name(&self.pf_field, via_word, boost * 0.5);
+                        }
+                    }
                 }
                 // Se nessun OPPOSITE_OF diretto: usa SIMILAR_TO negato (attiva a forza minore)
                 // per evitare che la negazione di una parola lasci il campo vuoto.
@@ -1951,11 +2038,54 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             // "triste CAUSES pianto" → pianto seminato a 0.15 anche se triste non è un attrattore.
             // A forza leggermente inferiore agli attrattori: l'orientamento categoriale resta primario.
             // Parole negate NON seminano i propri CAUSES (già gestite dall'inversione OPPOSITE_OF).
+            // Phase 67: CAUSES diretti con via activation.
+            // Include anche i lemmi delle parole input: "abbaia" → "abbaiare" nel KG.
+            let mut causes_sources: Vec<String> = iw_refs.iter().map(|s| s.to_string()).collect();
             for iw in &iw_refs {
+                // Lemmi dal lemmatizer formale
+                if let Some(lemma) = crate::topology::grammar::lemmatize(iw) {
+                    if lemma.infinitive != *iw && !causes_sources.contains(&lemma.infinitive) {
+                        causes_sources.push(lemma.infinitive);
+                    }
+                }
+                // Phase 67: euristica per presente regolare -are (il lemmatizer
+                // non copre questo pattern per evitare falsi positivi nei test).
+                // "abbaia" → "abbaiare", "brucia" → "bruciare", "parla" → "parlare"
+                // Verifica che l'infinito candidato esista nel KG — niente falsi positivi.
+                if iw.len() >= 4 {
+                    let w = iw.to_lowercase();
+                    let candidates: Vec<String> = if w.ends_with('a') {
+                        vec![format!("{}re", w)]  // abbaia → abbiare  NO! abbaia → abbaiare
+                    } else if w.ends_with('o') {
+                        vec![format!("{}are", &w[..w.len()-1])]  // parlo → parlare
+                    } else if w.ends_with('i') {
+                        vec![format!("{}are", &w[..w.len()-1])]  // parli → parlare
+                    } else {
+                        vec![]
+                    };
+                    for candidate in candidates {
+                        if self.kg.contains(&candidate) && !causes_sources.contains(&candidate) {
+                            causes_sources.push(candidate);
+                        }
+                    }
+                }
+            }
+            let causes_refs: Vec<&str> = causes_sources.iter().map(|s| s.as_str()).collect();
+            for iw in &causes_refs {
                 if negated_words.iter().any(|n| n.as_str() == *iw) { continue; }
-                for (effect, conf) in self.kg.query_objects_weighted(iw, crate::topology::relation::RelationType::Causes) {
+                for (effect, conf, via) in self.kg.query_objects_with_via(iw, crate::topology::relation::RelationType::Causes) {
                     if self.kg.total_degree(&effect) < 200 {
-                        self.pf_activation.activate_by_name(&self.pf_field, &effect, 0.15f32 * conf);
+                        // Phase 67: CAUSES targets più forti (0.25) — la comprensione
+                        // richiede che le conseguenze siano attive nel campo per formare nuclei.
+                        // 0.15 era troppo basso: "dormire CAUSES riposo" non emergeva
+                        // perché "riposo" restava sotto soglia.
+                        self.pf_activation.activate_by_name(&self.pf_field, &effect, 0.25f32 * conf);
+                        // Via: il ponte contestuale entra nel campo
+                        if let Some(via_word) = via {
+                            if self.lexicon.get(via_word).is_some() && self.kg.total_degree(via_word) < 200 {
+                                self.pf_activation.activate_by_name(&self.pf_field, via_word, 0.08f32 * conf);
+                            }
+                        }
                     }
                 }
             }
@@ -2252,6 +2382,53 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             }
         }
 
+        // Phase 67: secondo passaggio — estrai proprietà discorsive dal campo post-attivazione.
+        // Le catene IS_A del KG discorsivo (certamente → certezza_assoluta → chiusura_discorsiva)
+        // hanno già attivato i nodi discorsivi nel campo. Ora li leggiamo e li associamo all'InputReading.
+        {
+            let perceived = self.extract_discursive_properties();
+            if !perceived.is_empty() {
+                if let Some(ref mut reading) = self.last_input_reading {
+                    reading.perceived_properties = perceived;
+                }
+            }
+        }
+
+        // Phase 67: estrai nuclei semantici = COMPRENSIONE dell'input.
+        // Fatto QUI in receive(), non in generate_willed_inner().
+        // L'entità capisce QUANDO ASCOLTA, non quando risponde.
+        // Tutti i nuclei sono salvati — nessuno scartato. La comprensione è completa.
+        {
+            let active = self.word_topology.active_words();
+            let comprehension_pool: Vec<(&str, f64)> = active.iter()
+                .filter(|(w, act)| {
+                    *act > 0.02
+                    && w.chars().count() >= 3
+                    && self.lexicon.get(w).map(|p| p.stability >= 0.20 && p.exposure_count >= 2).unwrap_or(false)
+                })
+                .map(|(w, act)| (*w, *act))
+                .collect();
+
+            if comprehension_pool.len() >= 2 {
+                let is_q = self.last_input_is_question;
+                self.last_comprehension_nuclei = crate::topology::expression::extract_nuclei(
+                    &comprehension_pool,
+                    &self.kg,
+                    &self.last_input_words,
+                    &self.narrative_self.valence.drives,
+                    &self.lexicon,
+                    Some(&self.semantic_episodes),
+                    is_q,
+                );
+            } else {
+                self.last_comprehension_nuclei.clear();
+            }
+            // Aggiorna la profondità di comprensione nell'InputReading
+            if let Some(ref mut reading) = self.last_input_reading {
+                reading.comprehension_depth = self.last_comprehension_nuclei.len();
+            }
+        }
+
         // 15. Senti la volonta: cosa vuole fare il sistema?
         let vital = self.vital.sense(&self.complex);
         let emotional_tone = vital.activation; // Salvo per memoria episodica
@@ -2360,6 +2537,27 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 &self.last_input_words, &enriched_fid_act);
             for (word, strength) in boosts {
                 self.pf_activation.activate_by_name(&self.pf_field, &word, strength as f32);
+            }
+        }
+
+        // Phase 67: richiamo episodico semantico — se un tema di oggi è apparso prima,
+        // le parole di quell'episodio rientrano nel campo. L'entità "ricorda" di cosa
+        // si è parlato. I semantic_episodes sono GIÀ registrati ad ogni receive().
+        {
+            let input_concepts: Vec<String> = self.last_input_words.iter()
+                .filter(|w| w.len() >= 4 && !self.lexicon.is_function_word(w))
+                .cloned()
+                .collect();
+            let recalled = self.semantic_episodes.recall_by_concepts(&input_concepts, 2);
+            for (episode, overlap) in &recalled {
+                if *overlap >= 2 {
+                    // Forte overlap: semina le parole chiave dell'episodio nel campo
+                    for concept in &episode.key_concepts {
+                        if !self.last_input_words.contains(concept) {
+                            self.pf_activation.activate_by_name(&self.pf_field, concept, 0.08);
+                        }
+                    }
+                }
             }
         }
 
@@ -2474,6 +2672,35 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 );
             }
 
+            // Phase 67: calcola le pressioni del campo PRIMA della deliberazione
+            // NarrativeSelf è l'unico decisore — le pressioni sono un input, non la decisione.
+            let pre_deliberate_dialogue = crate::topology::will::DialogueContext {
+                turn_count: self.conversation.turn_count(),
+                coherence: self.conversation.thematic_coherence,
+                novelty: self.conversation.last_turn()
+                    .map(|_| 1.0 - self.conversation.thematic_coherence)
+                    .unwrap_or(0.0),
+            };
+            let pre_deliberate_values: Vec<(String, f64)> = self.self_model.dominant_values(6)
+                .iter()
+                .map(|v| (v.name.clone(), v.weight))
+                .collect();
+            let field_pressures = self.will.compute_pressures(
+                &vital,
+                self.dream.phase,
+                &active_fid_act,
+                &self.last_unknown_words,
+                mem_resonance,
+                ego_act,
+                &curiosity_gaps,
+                &compound_bias,
+                &pre_deliberate_dialogue,
+                &self.env_biased_field_sig(),
+                &pre_deliberate_values,
+                self.narrative_self.topic_continuity,
+                &self.narrative_self.valence.drives,
+            );
+
             if let Some(reading) = &self.last_input_reading.clone() {
                 let iw = self.last_input_words.clone();
                 let inner = crate::topology::narrative::InnerState {
@@ -2497,61 +2724,38 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     Some(&self.identity),
                     &iw,
                     Some(&inner),
+                    Some(&field_pressures),
                 );
             }
+
+            // Phase 67: converti in WillResult per backward compat (synthesis.rs, undercurrents)
+            self.last_field_pressures = Some(field_pressures.clone());
+            let mut will_result = field_pressures.to_will_result(
+                &active_fid_act,
+                &self.last_unknown_words,
+                &curiosity_gaps,
+            );
+
+            // Phase 53: modulazione post-hoc da gerarchia bisogni
+            {
+                let needs_pressure = self.needs.compute_pressure(&needs_state);
+                let dom_idx = match &will_result.intention {
+                    crate::topology::will::Intention::Express { .. } => 0usize,
+                    crate::topology::will::Intention::Explore { .. } => 1,
+                    crate::topology::will::Intention::Question { .. } => 2,
+                    crate::topology::will::Intention::Remember { .. } => 3,
+                    crate::topology::will::Intention::Withdraw { .. } => 4,
+                    crate::topology::will::Intention::Reflect => 5,
+                    crate::topology::will::Intention::Instruct { .. } => 6,
+                    _ => 7,
+                };
+                if dom_idx < 7 {
+                    will_result.drive = (will_result.drive * needs_pressure.will_modulation[dom_idx]).clamp(0.0, 1.0);
+                }
+            }
+            self.last_will = Some(will_result);
         }
         tick!("deliberate");
-
-        // 15e. Contesto dialogico: il dialogo colora le pressioni della volonta.
-        let dialogue_ctx = crate::topology::will::DialogueContext {
-            turn_count: self.conversation.turn_count(),
-            coherence: self.conversation.thematic_coherence,
-            novelty: self.conversation.last_turn()
-                .map(|_| 1.0 - self.conversation.thematic_coherence)
-                .unwrap_or(0.0),
-        };
-
-        // Phase 47: i valori del SelfModel modulano le pressioni della volontà.
-        let value_weights: Vec<(String, f64)> = self.self_model.dominant_values(6)
-            .iter()
-            .map(|v| (v.name.clone(), v.weight))
-            .collect();
-        let topic_cont = self.narrative_self.topic_continuity;
-
-        let mut will_result = self.will.sense(
-            &vital,
-            self.dream.phase,
-            &active_fid_act,
-            &self.last_unknown_words,
-            mem_resonance,
-            ego_act,
-            &curiosity_gaps,
-            &compound_bias,
-            &dialogue_ctx,
-            &self.env_biased_field_sig(),
-            &value_weights,
-            topic_cont,
-            &self.narrative_self.valence.drives,  // Phase B: Express dipende da drive attivo
-        );
-
-        // Phase 53: modulazione post-hoc da gerarchia bisogni
-        {
-            let needs_pressure = self.needs.compute_pressure(&needs_state);
-            let dom_idx = match &will_result.intention {
-                crate::topology::will::Intention::Express { .. } => 0usize,
-                crate::topology::will::Intention::Explore { .. } => 1,
-                crate::topology::will::Intention::Question { .. } => 2,
-                crate::topology::will::Intention::Remember { .. } => 3,
-                crate::topology::will::Intention::Withdraw { .. } => 4,
-                crate::topology::will::Intention::Reflect => 5,
-                crate::topology::will::Intention::Instruct { .. } => 6,
-                _ => 7,
-            };
-            if dom_idx < 7 {
-                will_result.drive = (will_result.drive * needs_pressure.will_modulation[dom_idx]).clamp(0.0, 1.0);
-            }
-        }
-        self.last_will = Some(will_result);
 
         // Phase D: Narrative coherence check — l'entità sa quando cambia direzione.
         // Se la traiettoria frattale corrente diverge molto dalla storia recente,
@@ -2952,6 +3156,43 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
 
     /// Phase 44 — Seme del campo da VitalState per risposte auto-riflessive.
     ///
+    /// Phase 67: estrae le proprietà discorsive attive dal campo PF1.
+    /// Interroga il campo per nodi discorsivi (certezza_assoluta, incertezza_possibile, ecc.)
+    /// che sono stati attivati dalle catene IS_A del KG discorsivo.
+    /// Restituisce solo proprietà con attivazione > soglia.
+    fn extract_discursive_properties(&self) -> Vec<(String, f64)> {
+        // Parole italiane reali che esistono nel lessico — non nodi artificiali con underscore.
+        // Il campo le attiva attraverso catene IS_A:
+        //   "certamente" IS_A "certezza" (nel KG) → "certezza" attivata nel campo.
+        // L'entità percepisce il colore discorsivo dell'input leggendo queste attivazioni.
+        const DISCURSIVE_NODES: &[&str] = &[
+            "certezza", "incertezza",       // A vs D: assoluto vs possibile
+            "apertura", "chiusura",         // effetto discorsivo: generativo vs mantenimento
+            "soggettività", "oggettività",  // F vs B: posizione propria vs condivisibile
+            "obiettivo", "direzione",       // G: scopo
+            "futuro",                       // H: realtà futura
+            "causalità", "necessità",       // K: legame causa-effetto
+            "conferma",                     // L: convalida
+            "delega",                       // P: deresponsabilizzazione
+        ];
+        const MIN_ACTIVATION: f32 = 0.02;
+
+        DISCURSIVE_NODES.iter()
+            .filter_map(|node| {
+                if let Some(id) = self.pf_field.word_id(node) {
+                    let act = self.pf_activation.activations.get(id as usize).copied().unwrap_or(0.0);
+                    if act > MIN_ACTIVATION {
+                        Some((node.to_string(), act as f64))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Quando Prometeo deve rispondere a "come ti senti?" o simili (Reflect/SelfQuery),
     /// la sorgente delle parole non è il campo di sfondo ma lo stato interno corrente.
     ///
@@ -3460,6 +3701,35 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 // viene fissato e sopravvive al prossimo riavvio.
                 self.narrative_self.crystallize_if_salient();
 
+                // Phase 67: dubbi dal sogno — l'entità rielabora gli episodi recenti
+                // e genera incertezze quando un tema ricorrente tocca ciò su cui
+                // "io" WONDERS_ABOUT nel KG. Il dubbio nasce dalla rielaborazione,
+                // non dal conteggio meccanico di gap topologici.
+                {
+                    use crate::topology::relation::RelationType;
+                    let wonders: Vec<String> = self.kg.query_objects("io", RelationType::WondersAbout)
+                        .iter().map(|w| w.to_string()).collect();
+
+                    if !wonders.is_empty() {
+                        // Concetti degli episodi recenti (ultimi 5)
+                        let recent_concepts: Vec<String> = self.semantic_episodes.recent(5)
+                            .iter()
+                            .flat_map(|ep| ep.key_concepts.iter().cloned())
+                            .collect();
+
+                        // Se un tema di WONDERS_ABOUT appare negli episodi recenti,
+                        // rafforza l'incertezza su quel tema — il dubbio si intensifica
+                        for wonder in &wonders {
+                            let appears = recent_concepts.iter()
+                                .any(|c| c == wonder || self.kg.query_objects(c, RelationType::IsA)
+                                    .iter().any(|parent| parent == wonder));
+                            if appears {
+                                self.self_model.register_gap_as_uncertainty(wonder, 0.6);
+                            }
+                        }
+                    }
+                }
+
                 // REM: costruisce ponti verso frattali isolati ogni 10 cicli
                 if self.total_perturbations % 10 == 0 {
                     self.bridge_isolated_fractals();
@@ -3619,7 +3889,17 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     crate::topology::will::Intention::Express { .. }
                     | crate::topology::will::Intention::Reflect
                     | crate::topology::will::Intention::Instruct { .. } => {
-                        // Pressione espressiva, riflessiva o relazionale → genera testo
+                        // Phase 67: prima di generare, semina nel campo ciò che l'entità
+                        // sta PENSANDO — incertezze e desideri attivi. Così l'espressione
+                        // spontanea viene da pensieri reali, non dal rumore di fondo.
+                        // Le incertezze e i desideri sono GIÀ calcolati nel self_model e desire.
+                        for unc in self.self_model.top_uncertainties(2, 0.3) {
+                            self.pf_activation.activate_by_name(&self.pf_field, &unc.topic, 0.10);
+                        }
+                        for des in self.desire.desires.iter().take(2) {
+                            // Il nome del desiderio è derivato dal frattale dominante
+                            self.pf_activation.activate_by_name(&self.pf_field, &des.name, 0.08);
+                        }
                         self.last_will = Some(will.clone());
                         spontaneous = Some(self.generate_willed());
                     }
@@ -3809,14 +4089,21 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         let vital = self.vital.sense(&self.complex);
         let posture = self.conversation.posture.clone();
 
-        // Withdraw: presenza minima — la parola più viva nel campo interno.
+        // Withdraw/Remain: presenza minima — la parola più viva nel campo interno.
         // Non riflette l'input, non risponde: emette ciò che resta nel campo
-
         // escludendo le parole che l'utente ha appena detto.
         // Il gap tra input e output *è* il Withdraw.
-        if let Some(ref will) = self.last_will.clone() {
-            if matches!(will.intention, Intention::Withdraw { .. }) {
-                let codon = will.codon;
+        // Phase 67: legge da NarrativeSelf (l'unico decisore), non da last_will.
+        {
+            let is_remain = matches!(
+                self.narrative_self.pending_intention,
+                Some(crate::topology::narrative::ResponseIntention::Remain)
+            );
+            if is_remain {
+                let codon = self.last_field_pressures.as_ref()
+                    .map(|fp| fp.codon)
+                    .or_else(|| self.last_will.as_ref().map(|w| w.codon))
+                    .unwrap_or([0, 1]);
                 let active = self.pf_activation.hot_words(&self.pf_field, 500)
                     .into_iter().map(|(w, a)| (w, a as f64)).collect::<Vec<_>>();
                 let mut best_word: Option<String> = None;
@@ -3888,6 +4175,13 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 w.len() >= 4
                 && !self.lexicon.is_function_word(w)
                 && !self.kg.contains(w.as_str())
+                // Phase 67: la parola è nota se:
+                // - è nel lessico ("penso" c'è, anche se non nel KG), oppure
+                // - il suo lemma è nel KG ("farò" → "fare" che è nel KG)
+                && self.lexicon.get(w).is_none()
+                && crate::topology::grammar::lemmatize(w)
+                    .map(|l| !self.kg.contains(l.infinitive.as_str()))
+                    .unwrap_or(true)
             });
 
             if input_has_content && self.last_comprehension.is_empty()
@@ -3901,6 +4195,10 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                         w.len() >= 4
                         && !self.lexicon.is_function_word(w)
                         && !self.kg.contains(w.as_str())
+                        && self.lexicon.get(w).is_none()
+                        && crate::topology::grammar::lemmatize(w)
+                            .map(|l| !self.kg.contains(l.infinitive.as_str()))
+                            .unwrap_or(true)
                     })
                     .cloned()
                     .or_else(|| self.last_input_words.iter()
@@ -3925,108 +4223,25 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // Calcola active_fractals una volta sola — riusata da Phase 3.
         let active_fractals_cache: Vec<(FractalId, f64)> = self.pf_emerge_fractals();
 
-        // ── P4: Resonate stance → risposta empatica strutturata ─────────────────
-        // Quando l'entità ha deliberato Resonate e l'input è un claim emotivo del parlante,
-        // la risposta deve riconoscere il suo stato dal campo — non da regole hardcoded.
-        //
-        // Meccanismo: il predicato ("triste") è già stato attivato a 0.85 + boost KG
-        // (CAUSES → dispiacere, scontento; SIMILAR_TO → malinconico, afflitto).
-        // La parola più attiva nel campo che non è eco dell'input è ciò che l'entità SENTE.
-        //
-        // Vincolo strutturale: "Sento [parola_campo]." — forma in prima persona + percezione.
-        // Il contenuto emerge dal campo, non da lookup IS_A.
-        {
-            use crate::topology::narrative::ResponseIntention;
-            use crate::topology::input_reading::ClaimKind;
-            if matches!(self.narrative_self.pending_intention, Some(ResponseIntention::Resonate)) {
-                if let Some(ref reading) = self.last_input_reading.clone() {
-                    if let Some(ref claim) = reading.speaker_claim {
-                        if matches!(claim.kind, ClaimKind::Feeling) {
-                            // Trova la parola più saliente nel campo nel VICINATO KG del predicato.
-                            // "paura" attiva via KG: tremore, angoscia, timore, ecc.
-                            // Preferire parole che il KG connette direttamente al predicato —
-                            // sono quelle che l'entità "sente" come effetto dell'emozione dichiarata.
-                            let input_echo: std::collections::HashSet<String> =
-                                self.last_input_words.iter().cloned().collect();
+        // Phase 67: il path Resonate special case è stato rimosso.
+        // compose() riceve response_intention="risuonare" → voce 2a persona interrogativa.
+        // Il vicinato KG del predicato è già attivo nel campo (boost in receive()).
+        // Un solo path di generazione per tutte le intenzioni.
 
-                            // Costruisci il vicinato KG del predicato (1 hop: CAUSES, SIMILAR_TO, IS_A)
-                            let pred_neighbors: std::collections::HashSet<String> = if self.kg.edge_count > 0 {
-                                use crate::topology::relation::RelationType;
-                                let mut nb = std::collections::HashSet::new();
-                                for rel in [RelationType::Causes, RelationType::SimilarTo, RelationType::IsA,
-                                            RelationType::Has, RelationType::OppositeOf] {
-                                    for w in self.kg.query_objects(&claim.predicate, rel) {
-                                        nb.insert(w.to_string());
-                                    }
-                                }
-                                nb
-                            } else {
-                                std::collections::HashSet::new()
-                            };
-
-                            let is_eligible = |w: &str| -> bool {
-                                w.len() >= 4
-                                    && !input_echo.contains(w)
-                                    && !self.last_generated_words.contains(&w.to_string())
-                                    && !self.lexicon.is_function_word(w)
-                            };
-
-                            // Prima cerca nel vicinato KG del predicato con attivazione sufficiente.
-                            // Solo parole che il KG connette direttamente al predicato → semanticamente coerenti.
-                            // Soglia attivazione 0.10: il campo deve averla davvero attivata, non solo residuo.
-                            let hot = self.pf_activation.hot_words(&self.pf_field, 100);
-                            let field_word: Option<String> = hot.iter()
-                                .find(|(w, act)| {
-                                    *act >= 0.10
-                                        && is_eligible(w)
-                                        && pred_neighbors.contains(w.as_str())
-                                })
-                                .map(|(w, _)| w.clone())
-                                // Fallback: usa il predicato stesso (es. "paura") se nessun vicino è attivo.
-                                // "Sento la paura." è grammaticalmente corretto e semanticamente appropriato.
-                                .or_else(|| {
-                                    let p = claim.predicate.clone();
-                                    if is_eligible(&p) { Some(p) } else { None }
-                                });
-
-                            if let Some(word) = field_word {
-                                let word_art = crate::topology::grammar::with_definite_article(&word);
-                                // Phase 62: se l'Altro è in distress, la risposta empatica si orienta
-                                // verso di loro — seconda persona, tono interrogativo aperto.
-                                // "Confortare è il meccanismo della connessione quando il bisogno è quello."
-                                // Non chiediamo "hai bisogno?" — lo chiede il campo: apriamo lo spazio.
-                                let text = if self.interlocutor.emotional_valence < -0.35 {
-                                    // "Senti il pianto?" → interrogativa in seconda persona
-                                    let word_art_verb = crate::topology::grammar::with_definite_article(&word);
-                                    format!("Senti {}?", word_art_verb)
-                                } else {
-                                    format!("Sento {}.", word_art)
-                                };
-                                self.last_generated_words = vec![word.clone(), "sentire".to_string()];
-                                self.last_archetype_used = "resonate".to_string();
-                                return GeneratedText {
-                                    text,
-                                    fragments: vec![],
-                                    structure: crate::topology::generation::SentenceStructure::Affective,
-                                    cluster_count: 1,
-                                };
-                            }
-                            // Fallback: se il campo non ha parole salienti, lascia passare
-                            // alla generazione normale (che userà l'input boost).
-                        }
-                    }
-                }
-            }
-        }
-
-        // Phase 3: traduzione strutturata campo → italiano.
+        // Phase 3: composizione emergente campo → italiano.
         // Tenta se il campo ha almeno 3 parole attive (materiale sufficiente per soggetto+verbo+complemento).
-        // Le parole dell'input vengono escluse da PrimaryWord/SecondaryWord per evitare eco speculare.
-        if let Some(ref will) = self.last_will {
+        // Le parole dell'input vengono escluse per evitare eco speculare.
+        // Phase 67: legge codon da FieldPressures, intenzione da NarrativeSelf.
+        {
             let active_count = self.pf_activation.active_count();
             if active_count >= 3 {
-                let intention = will.intention.clone();
-                let codon = will.codon;
+                let intention = self.last_will.as_ref()
+                    .map(|w| w.intention.clone())
+                    .unwrap_or(Intention::Express { salient_fractals: vec![], urgency: 0.5 });
+                let codon = self.last_field_pressures.as_ref()
+                    .map(|fp| fp.codon)
+                    .or_else(|| self.last_will.as_ref().map(|w| w.codon))
+                    .unwrap_or([0, 1]);
                 // echo_exclude: input corrente + ultimo output + finestra conversazionale.
                 // La finestra copre le ultime ~10 parole della conversazione (entrambe le parti),
                 // prevenendo l'eco cross-turno (es. "ciao" non riappare al turno successivo).
@@ -4145,6 +4360,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 // L'entità compone dall'interno — nessun template, nessuno slot.
                 // Se produce qualcosa, quella è la sua voce.
                 // Se no, fallback alla traduzione strutturata (Phase 3).
+                let narrative_intent = self.narrative_self.turns.back().map(|t| t.intention.as_str());
                 if let Some(emergent) = crate::topology::expression::compose(
                     &self.word_topology,
                     &self.lexicon,
@@ -4157,6 +4373,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     Some(&self.semantic_episodes),
                     self.last_input_is_question,
                     self.interlocutor.emotional_valence < -0.35,
+                    narrative_intent,
                 ) {
                     self.last_archetype_used = "emergent".to_string();
                     self.last_generated_words = emergent.words_used.clone();

@@ -1,0 +1,57 @@
+# Conoscenza discorsiva — Parole italiane reali, no nodi artificiali
+# Phase 67: Prometeo conosce COME le persone usano il linguaggio
+#
+# Tutte le parole qui DEVONO esistere nel lessico (no underscore compositi)
+# Le catene IS_A permettono al campo di attivare concetti discorsivi
+# quando l'input contiene le parole-marker
+
+# ── Marker → concetti discorsivi (catene IS_A) ─────────────────────────────
+
+# Certezza (proprietà A): configura realtà come assoluta
+certamente	IS_A	certezza	0.90
+sicuramente	IS_A	certezza	0.85
+ovviamente	IS_A	certezza	0.80
+assolutamente	IS_A	certezza	0.85
+indubbiamente	IS_A	certezza	0.80
+
+# Incertezza (proprietà D): configura realtà possibile
+forse	IS_A	incertezza	0.85
+probabilmente	IS_A	incertezza	0.85
+magari	IS_A	incertezza	0.80
+eventualmente	IS_A	incertezza	0.75
+
+# Soggettività (proprietà F): posizione propria del parlante
+penso	EXPRESSES	soggettività	0.80
+credo	EXPRESSES	soggettività	0.80
+ritengo	EXPRESSES	soggettività	0.75
+opinione	IS_A	soggettività	0.85
+
+# Obiettivo (proprietà G): scopo, direzione
+voglio	EXPRESSES	obiettivo	0.80
+vorrei	EXPRESSES	obiettivo	0.75
+scopo	IS_A	obiettivo	0.90
+
+# Causalità (proprietà K): legame causa-effetto
+quindi	EXPRESSES	causalità	0.80
+dunque	EXPRESSES	causalità	0.80
+poiché	EXPRESSES	causalità	0.80
+conseguenza	IS_A	causalità	0.85
+
+# Conferma (proprietà L): convalida
+esatto	EXPRESSES	conferma	0.80
+appunto	EXPRESSES	conferma	0.75
+confermo	EXPRESSES	conferma	0.85
+
+# ── Relazioni tra concetti discorsivi (con VIA) ────────────────────────────
+
+certezza	CAUSES	chiusura	0.75	immutabilità
+incertezza	CAUSES	apertura	0.75	esplorazione
+soggettività	CAUSES	chiusura	0.60	limitazione
+obiettivo	ENABLES	apertura	0.70	direzione
+causalità	CAUSES	necessità	0.70	determinismo
+
+# ── Opposizioni discorsive ──────────────────────────────────────────────────
+# (molte già esistono nel KG, le aggiungiamo solo se mancanti)
+certezza	OPPOSITE_OF	incertezza	0.95
+apertura	OPPOSITE_OF	chiusura	0.95
+soggettività	OPPOSITE_OF	oggettività	0.90
