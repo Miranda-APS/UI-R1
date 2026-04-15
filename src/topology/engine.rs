@@ -2411,6 +2411,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
 
             if comprehension_pool.len() >= 2 {
                 let is_q = self.last_input_is_question;
+                // None = tutti i nuclei. La comprensione non scarta nulla.
                 self.last_comprehension_nuclei = crate::topology::expression::extract_nuclei(
                     &comprehension_pool,
                     &self.kg,
@@ -2419,13 +2420,22 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     &self.lexicon,
                     Some(&self.semantic_episodes),
                     is_q,
+                    None,
                 );
             } else {
                 self.last_comprehension_nuclei.clear();
             }
             // Aggiorna la profondità di comprensione nell'InputReading
+            let n_nuclei = self.last_comprehension_nuclei.len();
+            if n_nuclei > 0 {
+                eprintln!("[COMPRENSIONE] {} nuclei estratti:", n_nuclei);
+                for (i, n) in self.last_comprehension_nuclei.iter().take(10).enumerate() {
+                    eprintln!("  {}. {} {} {} (str={:.3})", i+1, n.subject,
+                        n.relation.nome(), n.object, n.strength);
+                }
+            }
             if let Some(ref mut reading) = self.last_input_reading {
-                reading.comprehension_depth = self.last_comprehension_nuclei.len();
+                reading.comprehension_depth = n_nuclei;
             }
         }
 
@@ -2797,7 +2807,18 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // Usa i concetti dell'input e l'energia del campo come segnale.
         {
             let field_energy = vital.activation;
-            self.self_model.update_from_activation(&input_words_for_provenance, field_energy);
+            // Phase 67: i concetti comprendono sia l'input che i nuclei di comprensione.
+            // L'entità aggiorna le credenze non solo da cosa ha SENTITO ma da cosa ha CAPITO.
+            let mut comprehension_concepts = input_words_for_provenance.clone();
+            for nucleus in &self.last_comprehension_nuclei {
+                if !comprehension_concepts.contains(&nucleus.subject) {
+                    comprehension_concepts.push(nucleus.subject.clone());
+                }
+                if !comprehension_concepts.contains(&nucleus.object) {
+                    comprehension_concepts.push(nucleus.object.clone());
+                }
+            }
+            self.self_model.update_from_activation(&comprehension_concepts, field_energy);
             let stance_str = self.narrative_self.stance.as_str().to_string();
             self.self_model.update_values_from_stance(&stance_str, field_energy);
         }
@@ -2836,10 +2857,19 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     .map(|i| format!("{:?}", i))
                     .unwrap_or_default();
 
-                // Concetti chiave: top parole per attivazione
+                // Concetti chiave: parole input + soggetti/oggetti dei nuclei di comprensione.
+                // I nuclei sono ciò che l'entità ha CAPITO — devono entrare nella memoria.
                 let mut key_concepts = input_words_for_provenance.clone();
+                for nucleus in &self.last_comprehension_nuclei {
+                    if !key_concepts.contains(&nucleus.subject) {
+                        key_concepts.push(nucleus.subject.clone());
+                    }
+                    if !key_concepts.contains(&nucleus.object) {
+                        key_concepts.push(nucleus.object.clone());
+                    }
+                }
                 key_concepts.dedup();
-                key_concepts.truncate(8);
+                key_concepts.truncate(12); // più concetti ora che includiamo la comprensione
 
                 self.semantic_episodes.record(
                     key_concepts,

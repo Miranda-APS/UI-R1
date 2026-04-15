@@ -318,6 +318,12 @@ pub enum EngineCommand {
         to: String,
         reply: oneshot::Sender<BiennaleJourneyDto>,
     },
+    /// Circuito di attivazione tra due parole (BFS pesato 2-hop da entrambe)
+    GetBiennaleCircuit {
+        w1: String,
+        w2: String,
+        reply: oneshot::Sender<BiennaleCircuitDto>,
+    },
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1198,20 +1204,35 @@ pub struct RespondRequest {
 pub struct BiennaleWordPos {
     /// Parola
     pub w: String,
-    /// x = valenza (dim[1]) jittered con confine (dim[0])
+    /// x = proiezione 2D dalla firma 8D
     pub x: f32,
-    /// y = agency (dim[6]) jittered con intensità (dim[2])
+    /// y = proiezione 2D dalla firma 8D
     pub y: f32,
     /// Frattale dominante
     pub f: u32,
     /// Stabilità 0-100
     pub s: u8,
+    /// Firma 8D compatta (8 valori 0-100)
+    pub sig: Vec<u8>,
+    /// Grado (numero archi in+out nel KG)
+    pub deg: u16,
+}
+
+/// Arco KG per visualizzazione grafo Biennale.
+#[derive(Serialize, Clone, Debug)]
+pub struct BiennaleEdge {
+    pub from: String,
+    pub to: String,
+    pub rel: String,
+    /// Confidenza arco [0-100]
+    pub conf: u8,
 }
 
 /// Campo semantico completo per visualizzazione galassia Biennale.
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct BiennaleFieldDto {
     pub words: Vec<BiennaleWordPos>,
+    pub edges: Vec<BiennaleEdge>,
     pub fractal_names: Vec<(u32, String)>,
     /// ["negativo", "positivo", "passivo", "attivo"]
     pub axis_labels: [String; 4],
@@ -1268,4 +1289,44 @@ pub struct BiennaleWordQuery {
 pub struct BiennaleJourneyQuery {
     pub from: String,
     pub to: String,
+}
+
+/// Nodo attivato nel circuito a due parole.
+#[derive(Serialize, Clone, Debug)]
+pub struct BiennaleCircuitNode {
+    pub w: String,
+    pub f: u32,
+    pub s: u8,
+    /// Attivazione totale [0,1] (somma normalizzata da entrambe le sorgenti)
+    pub act: f32,
+    /// Attivazione da w1 [0,1]
+    pub a1: f32,
+    /// Attivazione da w2 [0,1]
+    pub a2: f32,
+    /// È uno dei due centri?
+    pub center: bool,
+}
+
+/// Arco attivato nel circuito.
+#[derive(Serialize, Clone, Debug)]
+pub struct BiennaleCircuitEdge {
+    pub from: String,
+    pub to: String,
+    pub rel: String,
+    pub conf: f32,
+}
+
+/// Risposta circuito a due parole.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct BiennaleCircuitDto {
+    pub w1: String,
+    pub w2: String,
+    pub nodes: Vec<BiennaleCircuitNode>,
+    pub edges: Vec<BiennaleCircuitEdge>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct BiennaleCircuitQuery {
+    pub w1: String,
+    pub w2: String,
 }

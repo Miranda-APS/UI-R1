@@ -195,8 +195,6 @@ pub fn compose(
 
     // Due pool: uno per CAPIRE (include input), uno per ESPRIMERE (esclude echo).
     // Le attivazioni qui sono RAW — non moltiplicate per la valenza.
-    // Il boost Octalysis entra nel SCORING dei nuclei e dei candidati,
-    // non nell'attivazione apparente (che è usata per decidere se tacere).
     let comprehension_pool: Vec<(&str, f64)> = active.iter()
         .filter(|(w, act)| {
             *act > 0.02
@@ -216,9 +214,12 @@ pub fn compose(
     }
 
     // 2. Estrai nuclei semantici — relazioni KG tra parole attive.
-    //    Le attivazioni sono raw ma il boost Octalysis entra nella forza dei nuclei:
-    //    relazioni tra parole che risuonano con i drive attivi emergono più forti.
-    let nuclei = extract_nuclei(&comprehension_pool, kg, input_words, valence_drives, lexicon, episodes, is_question);
+    // Usiamo comprehension_pool per l'estrazione, in modo che l'entità
+    // possa capire le relazioni che coinvolgono l'input!
+    // compose_from_nuclei si occuperà poi di non ripetere il soggetto
+    // se è in echo_exclude.
+    let nuclei = extract_nuclei(&comprehension_pool, kg, input_words, valence_drives, lexicon, episodes, is_question, Some(5));
+
 
     // 4. Determina la voce dell'entità dal suo stato.
     //    Usa comprehension_pool (non candidates) perché la voce emerge da
@@ -294,10 +295,10 @@ pub fn extract_nuclei(
     valence_drives: &[f64; 8],
     lexicon: &Lexicon,
     episodes: Option<&SemanticEpisodeLog>,
-    // Phase 67: il tipo di atto comunicativo guida la pertinenza delle relazioni.
-    // Una domanda privilegia CAUSES/ENABLES (spiegazione).
-    // Un'espressione emotiva privilegia FEELS_AS/SIMILAR_TO (empatia).
     is_question: bool,
+    // Phase 67: None = tutti i nuclei (comprensione in receive()).
+    // Some(5) = top 5 (generazione in compose()).
+    max_nuclei: Option<usize>,
 ) -> Vec<SemanticNucleus> {
     let mut nuclei: Vec<SemanticNucleus> = Vec::new();
 
@@ -470,7 +471,10 @@ pub fn extract_nuclei(
         nuclei.retain(|n| n.proximity_score >= 1.0);
     }
 
-    nuclei.truncate(5); // max 5 nuclei — i più salienti
+    if let Some(max) = max_nuclei {
+        nuclei.truncate(max);
+    }
+    // Senza max: tutti i nuclei restano. La comprensione è completa.
 
     // ─── Phase 58: risonanza episodica ────────────────────────────────────────
     // Nuclei connessi a concetti già vissuti dall'entità emergono più forti.
@@ -755,7 +759,7 @@ fn compose_from_field(
     // Questo gestisce domande sullo stato ("come stai?") anche senza riconoscere
     // le parole specifiche — l'entità risponde dal suo stato interno, non dal KG.
     let max_drive = valence_drives.iter().map(|v| v.abs()).fold(0.0f64, f64::max);
-    if max_drive > 0.15 {
+    if max_drive > 0.95 {
         if let Some(expr) = express_from_drives(valence_drives, lexicon) {
             return Some(expr);
         }

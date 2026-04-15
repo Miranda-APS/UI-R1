@@ -27,9 +27,14 @@ static BIENNALE_HOME_HTML: &str = include_str!("biennale/home.html");
 static DIALOGO_HTML: &str = include_str!("biennale/dialogo.html");
 static CURAZIONE_HTML: &str = include_str!("biennale/curazione.html");
 static UI_R1_HTML: &str = include_str!("biennale/uir1.html");
+static DIFFRAZIONE_HTML: &str = include_str!("biennale/diffrazione.html");
 
 pub async fn uir1_index() -> Html<&'static str> {
     Html(UI_R1_HTML)
+}
+
+pub async fn diffrazione_index() -> Html<&'static str> {
+    Html(DIFFRAZIONE_HTML)
 }
 
 pub async fn index() -> Html<&'static str> {
@@ -1231,4 +1236,101 @@ pub async fn get_biennale_journey(
         reply: tx,
     }).await;
     Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/biennale/circuit?w1=X&w2=Y — Circuito di attivazione
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_biennale_circuit(
+    State(state): State<AppState>,
+    Query(params): Query<BiennaleCircuitQuery>,
+) -> Json<BiennaleCircuitDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetBiennaleCircuit {
+        w1: params.w1,
+        w2: params.w2,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/diffraction?a=X&b=Y — Semantic Diffraction Score
+// Chiama diffraction_api.py e restituisce JSON per D3.js
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+pub struct DiffractionParams {
+    pub a: String,
+    pub b: String,
+    pub top: Option<u32>,
+    pub lambda_val: Option<f64>,
+}
+
+pub async fn get_diffraction(
+    Query(params): Query<DiffractionParams>,
+) -> Response {
+    use std::process::Stdio;
+
+    let top = params.top.unwrap_or(40).to_string();
+    let lambda = params.lambda_val.unwrap_or(1.5).to_string();
+
+    // Trova il path assoluto dello script rispetto all'eseguibile
+    let script = std::env::current_dir()
+        .unwrap_or_default()
+        .join("diffraction_api.py");
+
+    let output = tokio::process::Command::new("python")
+        .arg(&script)
+        .arg("--a").arg(&params.a)
+        .arg("--b").arg(&params.b)
+        .arg("--top").arg(&top)
+        .arg("--lambda_val").arg(&lambda)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await;
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let body = String::from_utf8_lossy(&out.stdout).to_string();
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+                body,
+            ).into_response()
+        }
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            // Lo script può aver scritto JSON di errore su stdout anche in caso di exit != 0
+            if stdout.trim_start().starts_with('{') {
+                (
+                    StatusCode::OK,
+                    [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+                    stdout.to_string(),
+                ).into_response()
+            } else {
+                let err = serde_json::json!({
+                    "error": format!("diffraction_api.py error: {}", stderr.trim())
+                });
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+                    err.to_string(),
+                ).into_response()
+            }
+        }
+        Err(e) => {
+            let err = serde_json::json!({
+                "error": format!("Impossibile eseguire python: {}. Assicurati che Python sia installato e diffraction_api.py sia nella directory corrente.", e)
+            });
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+                err.to_string(),
+            ).into_response()
+        }
+    }
 }

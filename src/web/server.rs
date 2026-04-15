@@ -134,6 +134,7 @@ pub async fn run(port: u16) {
         .route("/api/edge/confidence", post(api::patch_edge))
         // ── Biennale ─────────────────────────────────────────────
         .route("/biennale", get(api::biennale_index))
+        .route("/campo-vasto", get(api::biennale_index))
         .route("/dialogo", get(api::dialogo_index))
         .route("/curazione", get(api::curazione_index))
         .route("/api/cura/parole", get(api::get_word_list))
@@ -148,7 +149,10 @@ pub async fn run(port: u16) {
         .route("/api/biennale/field", get(api::get_biennale_field))
         .route("/api/biennale/word", get(api::get_biennale_word))
         .route("/api/biennale/journey", get(api::get_biennale_journey))
+        .route("/api/biennale/circuit", get(api::get_biennale_circuit))
         .route("/ui-r1", get(api::uir1_index))
+        .route("/diffrazione", get(api::diffrazione_index))
+        .route("/api/diffraction", get(api::get_diffraction))
         .route("/ws", get(ws::ws_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -429,6 +433,10 @@ fn engine_loop(
         engine.initialize_founding_narrative();
         println!("[engine] Narrativa fondativa cristallizzata — Prometeo nasce");
     }
+
+    // Cache biennale: calcolata una volta all'avvio, invalidata solo su richiesta esplicita
+    let mut biennale_cache: Option<BiennaleFieldDto> = Some(build_biennale_field(&engine));
+    println!("[biennale] cache calcolata: {} nodi, {} archi", biennale_cache.as_ref().unwrap().words.len(), biennale_cache.as_ref().unwrap().edges.len());
 
     // Loop sincrono: ricevi comandi dal canale mpsc
     while let Some(cmd) = cmd_rx.blocking_recv() {
@@ -855,6 +863,7 @@ fn engine_loop(
             }
             EngineCommand::AddWordConnect { from, relation, to, via, confidence, reply } => {
                 let ok = add_word_connect(&mut engine, &from, &relation, &to, via, confidence);
+                if ok { biennale_cache = None; }
                 let _ = reply.send(ok);
             }
             EngineCommand::DeleteWordRelation { subject, relation, object, reply } => {
@@ -864,13 +873,14 @@ fn engine_loop(
                     engine.word_topology.remove_edge_between(&subject, &object);
                     true
                 } else { false };
-                if ok { cura_save(&engine); }
+                if ok { cura_save(&engine); biennale_cache = None; }
                 let _ = reply.send(ok);
             }
             EngineCommand::DeleteWord { word, reply } => {
                 engine.kg.remove_word(&word);
                 engine.lexicon.remove_word(&word);
                 cura_save(&engine);
+                biennale_cache = None;
                 let _ = reply.send(true);
             }
             EngineCommand::RinominaWord { from, to, reply } => {
@@ -1375,8 +1385,10 @@ fn engine_loop(
 
             // ── Biennale ─────────────────────────────────────────────────────
             EngineCommand::GetBiennaleField { reply } => {
-                let dto = build_biennale_field(&engine);
-                let _ = reply.send(dto);
+                if biennale_cache.is_none() {
+                    biennale_cache = Some(build_biennale_field(&engine));
+                }
+                let _ = reply.send(biennale_cache.clone().unwrap());
             }
             EngineCommand::GetBiennaleWord { word, reply } => {
                 let dto = build_biennale_word(&engine, &word);
@@ -1384,6 +1396,10 @@ fn engine_loop(
             }
             EngineCommand::GetBiennaleJourney { from, to, reply } => {
                 let dto = build_biennale_journey(&engine, &from, &to);
+                let _ = reply.send(dto);
+            }
+            EngineCommand::GetBiennaleCircuit { w1, w2, reply } => {
+                let dto = build_biennale_circuit(&engine, &w1, &w2);
                 let _ = reply.send(dto);
             }
         }
@@ -2194,29 +2210,101 @@ fn biennale_pos(sig: &[f64; 8]) -> (f32, f32) {
 }
 
 fn build_biennale_field(engine: &PrometeoTopologyEngine) -> BiennaleFieldDto {
-    let mut words: Vec<BiennaleWordPos> = engine.lexicon.patterns_iter()
+    use std::collections::{HashMap, HashSet};
+
+    // 1. Raccoglie tutte le parole nel KG con stabilità sufficiente
+    let mut candidates: Vec<(String, u32, u8)> = engine.lexicon.patterns_iter()
         .filter_map(|(_, pattern)| {
             if pattern.stability < 0.35 { return None; }
+            if !engine.kg.contains(&pattern.word) { return None; }
             let (dominant_fid, max_aff) = pattern.fractal_affinities.iter()
                 .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
                 .map(|(&k, &v)| (k, v))
                 .unwrap_or((0, 0.0));
             if max_aff < 0.01 { return None; }
-            let sig = pattern.signature.values();
-            let (x, y) = biennale_pos(sig);
-            Some(BiennaleWordPos {
-                w: pattern.word.clone(),
-                x,
-                y,
-                f: dominant_fid,
-                s: (pattern.stability.min(1.0) * 100.0) as u8,
-            })
+            let degree = engine.kg.out_degree(&pattern.word) + engine.kg.in_degree(&pattern.word);
+            if degree < 2 { return None; }
+            Some((pattern.word.clone(), dominant_fid, (pattern.stability.min(1.0) * 100.0) as u8))
         })
         .collect();
 
-    // Percentile normalization: distribute x and y uniformly across [0.02, 0.98]
-    // so there are no empty voids. Preserves relative order (semantic meaning)
-    // but fills the canvas evenly.
+    // Selezione bilanciata per dimensione dominante (deviazione dalla media globale)
+    const MAX_NODES: usize = 3000;
+    const PER_DIM: usize = MAX_NODES / 8 + 1;
+    if candidates.len() > MAX_NODES {
+        // 1. Calcola media firma 8D su tutti i candidati
+        let mut sig_sum = [0.0f64; 8];
+        let mut sig_count = 0usize;
+        for (w, _, _) in &candidates {
+            if let Some(p) = engine.lexicon.get(w) {
+                let sig = p.signature.values();
+                for i in 0..8 { sig_sum[i] += sig[i]; }
+                sig_count += 1;
+            }
+        }
+        let sig_mean: [f64; 8] = if sig_count > 0 {
+            let mut m = [0.0; 8];
+            for i in 0..8 { m[i] = sig_sum[i] / sig_count as f64; }
+            m
+        } else { [0.5; 8] };
+
+        // 2. Classifica ogni candidato per la dimensione che devia di più dalla media
+        let mut by_dim: Vec<Vec<(String, u32, u8, usize)>> = (0..8).map(|_| Vec::new()).collect();
+        for (w, fid, s) in &candidates {
+            if let Some(p) = engine.lexicon.get(w) {
+                let sig = p.signature.values();
+                let dom = (0..8)
+                    .max_by(|&a, &b| {
+                        let da = sig[a] - sig_mean[a];
+                        let db = sig[b] - sig_mean[b];
+                        da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .unwrap_or(0);
+                let deg = engine.kg.out_degree(w) + engine.kg.in_degree(w);
+                by_dim[dom].push((w.clone(), *fid, *s, deg));
+            }
+        }
+
+        // 3. Log distribuzione
+        for i in 0..8 { eprintln!("[biennale] dim {}: {} candidati (media {:.1})", i, by_dim[i].len(), sig_mean[i] * 100.0); }
+
+        // 4. Prendi top PER_DIM per grado da ogni bucket
+        let mut selected: Vec<(String, u32, u8)> = Vec::with_capacity(MAX_NODES);
+        for bucket in &mut by_dim {
+            bucket.sort_by(|a, b| b.3.cmp(&a.3));
+            for (w, fid, s, _) in bucket.iter().take(PER_DIM) {
+                selected.push((w.clone(), *fid, *s));
+            }
+        }
+        // riempi se necessario
+        if selected.len() < MAX_NODES {
+            let sel_set: std::collections::HashSet<&str> = selected.iter().map(|(w,_,_)| w.as_str()).collect();
+            let mut rest: Vec<(String, u32, u8, usize)> = candidates.iter()
+                .filter(|(w,_,_)| !sel_set.contains(w.as_str()))
+                .map(|(w,f,s)| (w.clone(), *f, *s, engine.kg.out_degree(w) + engine.kg.in_degree(w)))
+                .collect();
+            rest.sort_by(|a, b| b.3.cmp(&a.3));
+            for (w, f, s, _) in rest.into_iter().take(MAX_NODES - selected.len()) {
+                selected.push((w, f, s));
+            }
+        }
+        selected.truncate(MAX_NODES);
+        candidates = selected;
+    }
+
+    let word_set: HashSet<&str> = candidates.iter().map(|(w, _, _)| w.as_str()).collect();
+
+    // 3. Costruisce i nodi con posizione 2D da firma 8D + firma compatta + grado
+    let mut words: Vec<BiennaleWordPos> = candidates.iter().map(|(w, fid, s)| {
+        let pattern = engine.lexicon.get(w);
+        let sig_vals = pattern.map(|p| *p.signature.values()).unwrap_or([0.5; 8]);
+        let (x, y) = biennale_pos(&sig_vals);
+        let sig: Vec<u8> = sig_vals.iter().map(|v| (v.clamp(0.0, 1.0) * 100.0) as u8).collect();
+        let deg = (engine.kg.out_degree(w) + engine.kg.in_degree(w)) as u16;
+        BiennaleWordPos { w: w.clone(), x, y, f: *fid, s: *s, sig, deg }
+    }).collect();
+
+    // Normalizzazione percentile: distribuisce x e y uniformemente su [0.02, 0.98]
     let n = words.len();
     if n > 1 {
         let mut ix: Vec<usize> = (0..n).collect();
@@ -2231,12 +2319,33 @@ fn build_biennale_field(engine: &PrometeoTopologyEngine) -> BiennaleFieldDto {
         }
     }
 
+    // 4. Raccoglie archi tra nodi presenti nel set (esclude SIMILAR_TO: troppi, poco informativi)
+    let mut edges: Vec<BiennaleEdge> = Vec::new();
+    let mut edge_set: HashSet<(String, String)> = HashSet::new();
+    for word in &word_set {
+        for (rel, target, conf) in engine.kg.all_outgoing(word) {
+            if rel == crate::topology::relation::RelationType::SimilarTo { continue; }
+            if word_set.contains(target) {
+                let key = (word.to_string(), target.to_string());
+                if edge_set.insert(key) {
+                    edges.push(BiennaleEdge {
+                        from: word.to_string(),
+                        to: target.to_string(),
+                        rel: rel.as_str().to_string(),
+                        conf: (conf.clamp(0.0, 1.0) * 100.0) as u8,
+                    });
+                }
+            }
+        }
+    }
+
     let fractal_names: Vec<(u32, String)> = engine.registry.iter()
         .map(|(&id, fractal)| (id, fractal.name.clone()))
         .collect();
 
     BiennaleFieldDto {
         words,
+        edges,
         fractal_names,
         axis_labels: [
             "negativo".to_string(),
@@ -2451,5 +2560,136 @@ fn build_biennale_journey(engine: &PrometeoTopologyEngine, from: &str, to: &str)
         from: from.to_string(),
         to: to.to_string(),
         path: path_final,
+    }
+}
+
+/// Costruisce il circuito di attivazione tra due parole.
+/// BFS pesato a 2-hop da ENTRAMBE le parole. L'attivazione di un nodo è
+/// somma normalizzata dei contributi da w1 e w2. Le parole condivise
+/// (raggiunte da entrambi) avranno attivazione massima.
+fn build_biennale_circuit(engine: &PrometeoTopologyEngine, w1: &str, w2: &str) -> BiennaleCircuitDto {
+    use std::collections::HashMap;
+    use crate::topology::relation::RelationType;
+
+    // Pesi per tipo relazione (più informative pesano di più)
+    fn rel_weight(rel: RelationType) -> f32 {
+        match rel {
+            RelationType::Causes | RelationType::IsA => 1.0,
+            RelationType::Does | RelationType::Has => 0.85,
+            RelationType::PartOf | RelationType::UsedFor => 0.8,
+            RelationType::Requires | RelationType::Enables => 0.85,
+            RelationType::OppositeOf => 0.7,
+            RelationType::SimilarTo => 0.5,
+            _ => 0.6,
+        }
+    }
+
+    // BFS pesato da una sorgente, max 2 hop. Restituisce mappa parola → attivazione [0,1]
+    let bfs_weighted = |src: &str| -> HashMap<String, f32> {
+        let mut act: HashMap<String, f32> = HashMap::new();
+        act.insert(src.to_string(), 1.0);
+        // Hop 1
+        let mut hop1: Vec<(String, f32)> = Vec::new();
+        for (rel, target, conf) in engine.kg.all_outgoing(src) {
+            let w = rel_weight(rel) * conf * 0.6;
+            if w > 0.05 {
+                let cur = act.entry(target.to_string()).or_insert(0.0);
+                if w > *cur { *cur = w; }
+                hop1.push((target.to_string(), w));
+            }
+        }
+        for (rel, subject, conf) in engine.kg.all_incoming(src) {
+            let w = rel_weight(rel) * conf * 0.6;
+            if w > 0.05 {
+                let cur = act.entry(subject.to_string()).or_insert(0.0);
+                if w > *cur { *cur = w; }
+                hop1.push((subject.to_string(), w));
+            }
+        }
+        // Hop 2 (limitato per non esplodere)
+        for (mid, mid_w) in hop1.iter() {
+            for (rel, target, conf) in engine.kg.all_outgoing(mid) {
+                if rel == RelationType::SimilarTo { continue; } // troppo rumorosa a 2-hop
+                let w = mid_w * rel_weight(rel) * conf * 0.5;
+                if w > 0.06 {
+                    let cur = act.entry(target.to_string()).or_insert(0.0);
+                    if w > *cur { *cur = w; }
+                }
+            }
+            for (rel, subject, conf) in engine.kg.all_incoming(mid) {
+                if rel == RelationType::SimilarTo { continue; }
+                let w = mid_w * rel_weight(rel) * conf * 0.5;
+                if w > 0.06 {
+                    let cur = act.entry(subject.to_string()).or_insert(0.0);
+                    if w > *cur { *cur = w; }
+                }
+            }
+        }
+        act
+    };
+
+    let act1 = bfs_weighted(w1);
+    let act2 = bfs_weighted(w2);
+
+    // Unione: solo parole con attivazione totale sopra soglia
+    let mut all_words: std::collections::HashSet<String> = std::collections::HashSet::new();
+    all_words.extend(act1.keys().cloned());
+    all_words.extend(act2.keys().cloned());
+
+    // Filtra solo parole presenti nel lessico (esclude rumore)
+    let mut nodes: Vec<BiennaleCircuitNode> = all_words.iter()
+        .filter_map(|w| {
+            let pattern = engine.lexicon.get(w)?;
+            let a1 = *act1.get(w).unwrap_or(&0.0);
+            let a2 = *act2.get(w).unwrap_or(&0.0);
+            // Convergenza: parole raggiunte da entrambi pesano di più
+            let act = (a1 + a2 + 2.0 * (a1 * a2).sqrt()).min(1.0);
+            if act < 0.08 { return None; }
+            let fid = pattern.fractal_affinities.iter()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(&k, _)| k).unwrap_or(0);
+            Some(BiennaleCircuitNode {
+                w: w.clone(),
+                f: fid,
+                s: (pattern.stability.min(1.0) * 100.0) as u8,
+                act,
+                a1,
+                a2,
+                center: w == w1 || w == w2,
+            })
+        })
+        .collect();
+
+    // Cap a 200 nodi (tieni i più attivi) — vis-network resta fluido
+    nodes.sort_by(|a, b| b.act.partial_cmp(&a.act).unwrap_or(std::cmp::Ordering::Equal));
+    nodes.truncate(200);
+
+    let node_set: std::collections::HashSet<&str> = nodes.iter().map(|n| n.w.as_str()).collect();
+
+    // Costruisce gli archi tra i nodi del circuito
+    let mut edges: Vec<BiennaleCircuitEdge> = Vec::new();
+    let mut seen: std::collections::HashSet<(String, String, String)> = std::collections::HashSet::new();
+    for n in &nodes {
+        for (rel, target, conf) in engine.kg.all_outgoing(&n.w) {
+            if rel == RelationType::SimilarTo { continue; }
+            if node_set.contains(target) {
+                let key = (n.w.clone(), target.to_string(), rel.as_str().to_string());
+                if seen.insert(key) {
+                    edges.push(BiennaleCircuitEdge {
+                        from: n.w.clone(),
+                        to: target.to_string(),
+                        rel: rel.as_str().to_string(),
+                        conf,
+                    });
+                }
+            }
+        }
+    }
+
+    BiennaleCircuitDto {
+        w1: w1.to_string(),
+        w2: w2.to_string(),
+        nodes,
+        edges,
     }
 }

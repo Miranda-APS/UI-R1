@@ -2,2405 +2,2074 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Il Campo — Prometeo</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
-
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg: #f0ebe3;
-  --bg-warm: #e8e0d4;
-  --surface: #faf7f2;
-  --border: #c8bda8;
-  --border-light: #ddd4c4;
-  --text: #2c2416;
-  --text-muted: #7a6e5a;
-  --text-soft: #9a8e7a;
-
-  --racconto: #c0603a;
-  --connessione: #3a7048;
-  --risposta: #4a6488;
-  --parola: #b89848;
-  --frattale: #8a7e70;
-  --frattale-puro: #5a4e3e;
+  --paper:   #F4F0E6;
+  --paper2:  #EAE4D4;
+  --surface: #FDFBF7;
+  --ink:     #1E1B14;
+  --ink2:    #5A5245;
+  --ink3:    #9C9082;
+  --red:     #B83225;
+  --blue:    #1E3F6F;
+  --green:   #1F4D33;
+  --ochre:   #9A6E0A;
+  --grid:    rgba(90,82,69,0.10);
 }
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
 body {
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  height: 100vh; height: 100dvh;
-  overflow: hidden;
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-/* ── HEADER ── */
-header {
-  padding: 12px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  background: var(--surface);
-}
-
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.header-left h1 {
-  font-family: 'DM Mono', monospace;
-  font-size: 16px;
-  font-weight: 500;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-}
-
-.header-left .dot { color: var(--text-soft); }
-
-.header-left .subtitle {
-  font-size: 13px;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.header-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 6px 16px;
-  font-family: 'DM Mono', monospace;
-  font-size: 12px;
-  letter-spacing: 1px;
-}
-
-.header-badge .dot-live {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--connessione);
-  animation: pulse-dot 2s infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-/* ── MAIN LAYOUT ── */
-.main-layout {
-  display: grid;
-  grid-template-columns: 1fr 420px;
-  flex: 1;
-  overflow: hidden;
-}
-
-/* ── CAMPO (canvas a sinistra) ── */
-.panel-campo {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
-  border-right: 1px solid var(--border);
-}
-
-.campo-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 20px;
-  border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
-  font-size: 11px;
-  font-family: 'DM Mono', monospace;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
-}
-
-.campo-toolbar .label { flex-shrink: 0; }
-
-.campo-toolbar .spacer { flex: 1; }
-
-.campo-toolbar button {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 4px 12px;
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  color: var(--text-muted);
-  cursor: pointer;
-  letter-spacing: 0.5px;
-}
-.campo-toolbar button:hover { border-color: var(--text-muted); color: var(--text); }
-
-.campo-toolbar .timer {
-  font-size: 12px;
-  color: var(--text-soft);
-  min-width: 40px;
-  text-align: right;
-}
-
-#campo-canvas {
-  flex: 1;
-  width: 100%;
-  cursor: crosshair;
-}
-#campo-canvas.modo-3d { cursor: grab; }
-#campo-canvas.modo-3d.dragging { cursor: grabbing; }
-
-.campo-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 20px;
-  border-top: 1px solid var(--border-light);
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--text-soft);
-}
-
-.campo-hint {
-  font-style: italic;
-}
-
-.campo-legend {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.legend-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-}
-
-/* ── PANNELLO AZIONI (destra) ── */
-.panel-azioni {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--surface);
-}
-
-/* Step indicator */
-.step-header {
-  padding: 20px 28px 0;
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 2px;
-  color: var(--text-soft);
-  text-transform: uppercase;
-}
-
-.azioni-titolo {
-  padding: 8px 28px 4px;
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.5px;
-  line-height: 1.2;
-}
-
-.azioni-sottotitolo {
-  padding: 0 28px 20px;
-  font-size: 14px;
-  color: var(--text-muted);
-  line-height: 1.5;
-  font-style: italic;
-}
-
-/* ── VISTA: SCEGLI AZIONE ── */
-#vista-scelta {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.azione-cards {
-  padding: 0 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.azione-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: var(--surface);
-}
-.azione-card:hover {
-  border-color: var(--text-muted);
-  background: var(--bg);
-}
-
-.azione-icon {
-  width: 40px; height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.azione-icon.racconto { color: var(--racconto); }
-.azione-icon.connessione { color: var(--connessione); }
-.azione-icon.risposta { color: var(--risposta); }
-
-.azione-body { flex: 1; }
-
-.azione-body h3 {
   font-size: 17px;
-  font-weight: 600;
-  margin-bottom: 3px;
-}
-
-.azione-body p {
-  font-size: 13px;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.azione-arrow {
-  font-size: 20px;
-  color: var(--text-soft);
-  flex-shrink: 0;
-}
-
-/* ── SESSIONE FEED ── */
-.sessione-wrap {
-  flex: 1;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--border);
-  margin-top: 16px;
+  height: 100vh;
 }
-
-.sessione-header {
-  padding: 10px 28px;
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: var(--text-soft);
-  text-transform: uppercase;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.sessione-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 28px;
-}
-
-.sessione-item {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border-light);
-  font-size: 13px;
-  animation: fadeIn 0.3s ease;
-}
-
-.sessione-tipo {
-  font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  flex-shrink: 0;
-  width: 90px;
-  font-weight: 500;
-}
-.sessione-tipo.racconto { color: var(--racconto); }
-.sessione-tipo.connessione { color: var(--connessione); }
-.sessione-tipo.risposta { color: var(--risposta); }
-.sessione-tipo.altri { color: var(--parola); }
-
-.sessione-testo {
-  color: var(--text);
-  line-height: 1.5;
-  flex: 1;
-}
-
-.sessione-testo .autore {
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.sessione-testo .frattali {
-  font-size: 11px;
-  color: var(--text-soft);
-  font-style: italic;
-}
-
-.sessione-vuota {
-  text-align: center;
-  color: var(--text-soft);
-  font-size: 13px;
-  font-style: italic;
-  padding: 24px;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ── VISTE AZIONE (racconta, collega, rispondi) ── */
-.vista-azione {
-  flex: 1;
-  display: none;
-  flex-direction: column;
-  overflow: hidden;
-}
-.vista-azione.attiva { display: flex; }
-
-.vista-form {
-  flex: 1;
-  padding: 0 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-}
-
-.vista-form label {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-  margin-bottom: 2px;
-  display: block;
-}
-
-.vista-form textarea,
-.vista-form input[type="text"] {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 15px;
-  padding: 12px 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.vista-form textarea {
-  min-height: 120px;
-  resize: vertical;
-  line-height: 1.6;
-}
-
-.vista-form textarea:focus,
-.vista-form input:focus { border-color: var(--text-muted); }
-
-.vista-form select {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 14px;
-  padding: 10px 12px;
-  outline: none;
-}
-
-.char-count {
-  text-align: right;
-  font-size: 11px;
-  color: var(--text-soft);
-  margin-top: -10px;
-}
-
-.btn-row {
-  display: flex;
-  gap: 10px;
-  padding: 0 28px 20px;
-  flex-shrink: 0;
-}
-
-.btn-primary {
-  flex: 1;
-  background: var(--text);
-  color: var(--surface);
-  border: none;
-  border-radius: 6px;
-  padding: 12px 20px;
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-primary:hover { opacity: 0.85; }
-.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
-.btn-primary.loading {
-  background: var(--bg-warm);
-  color: var(--text-muted);
-  cursor: wait;
-}
-
-.btn-back {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px 20px;
-  font-family: inherit;
-  font-size: 14px;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.btn-back:hover { border-color: var(--text-muted); color: var(--text); }
-
-/* Risposta dal campo */
-.campo-risposta {
-  background: var(--bg);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  padding: 14px;
-  display: none;
-}
-.campo-risposta.visibile { display: block; }
-
-.campo-risposta .risp-label {
-  font-size: 11px;
-  color: var(--text-soft);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 6px;
-  font-family: 'DM Mono', monospace;
-}
-
-.campo-risposta .risp-content {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text);
-}
-
-.risp-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.risp-tag {
-  padding: 3px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid;
-}
-
-.risp-tag.nuovo {
-  background: rgba(58, 112, 72, 0.08);
-  border-color: rgba(58, 112, 72, 0.3);
-  color: var(--connessione);
-}
-
-.risp-tag.noto {
-  background: rgba(74, 100, 136, 0.08);
-  border-color: rgba(74, 100, 136, 0.25);
-  color: var(--risposta);
-}
-
-.risp-tag.risonante {
-  background: rgba(184, 152, 72, 0.1);
-  border-color: rgba(184, 152, 72, 0.35);
-  color: var(--parola);
-}
-
-.risp-tag:hover { opacity: 0.7; }
-
-/* Connetti: strength buttons */
-.strength-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.strength-btn {
-  width: 36px; height: 36px;
-  border-radius: 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-family: 'DM Mono', monospace;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.strength-btn.active {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--surface);
-}
-
-.strength-label {
-  font-size: 12px;
-  color: var(--text-soft);
-  font-style: italic;
-  margin-left: 8px;
-}
-
-/* Rispondi: messaggio Prometeo */
-.prometeo-says {
-  background: var(--bg);
-  border-left: 3px solid var(--border);
-  padding: 14px 16px;
-  border-radius: 0 8px 8px 0;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--text);
-  font-style: italic;
-}
-
-.prometeo-says .from {
-  font-size: 11px;
-  color: var(--text-soft);
-  font-style: normal;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-family: 'DM Mono', monospace;
-  margin-bottom: 6px;
-}
-
-/* ── TOAST ── */
-#toast-area {
-  position: absolute;
-  top: 44px;
-  left: 16px;
-  right: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  pointer-events: none;
-  z-index: 10;
-}
-
-.toast {
-  background: rgba(250, 247, 242, 0.95);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  animation: slideIn 0.3s ease;
-  backdrop-filter: blur(4px);
-}
-
-.toast.tipo-racconto { border-left: 3px solid var(--racconto); }
-.toast.tipo-connessione { border-left: 3px solid var(--connessione); }
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateX(-10px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-.toast-nome { font-weight: 600; color: var(--text); }
-.toast-testo { color: var(--text-muted); }
-
-/* ── MODAL REGISTRAZIONE ── */
-#modal-reg {
+body::before {
+  content: '';
   position: fixed;
   inset: 0;
-  background: rgba(240, 235, 227, 0.97);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
+  z-index: 0;
+}
+header, .main { position: relative; z-index: 1; }
+
+/* HEADER */
+header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(6px);
-}
-#modal-reg.nascosto { display: none; }
-
-.modal-box {
+  justify-content: space-between;
+  padding: 18px 36px;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 40px 44px;
-  max-width: 480px;
-  width: 90%;
+  border-bottom: 2px solid var(--ink);
+  flex-shrink: 0;
+}
+.h-brand { display: flex; align-items: baseline; gap: 14px; }
+.h-title { font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:500; letter-spacing:.12em; }
+.h-sep { color:var(--ink3); font-weight:300; font-size:22px; }
+.h-sub { font-size:20px; font-weight:300; color:var(--ink2); font-style:italic; }
+.live-pill {
+  display:flex; align-items:center; gap:10px;
+  font-family:'IBM Plex Mono',monospace; font-size:17px; letter-spacing:.07em;
+  color:var(--green); border:1.5px solid var(--green);
+  padding:8px 18px; background:rgba(31,77,51,.05);
+}
+.live-dot { width:11px; height:11px; border-radius:50%; background:var(--green); animation:blink 2.5s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+/* LAYOUT */
+.main { flex:1; position:relative; overflow:hidden; }
+
+/* ── VIZ PANEL ── */
+.viz-panel {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  background: var(--paper);
+  overflow: hidden;
 }
 
-.modal-box h2 {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
+.viz-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 24px;
+  border-bottom:1px solid var(--ink2);
+  flex-shrink:0;
+}
+.viz-label { font-family:'IBM Plex Mono',monospace; font-size:16px; letter-spacing:.09em; color:var(--ink2); text-transform:uppercase; }
+.viz-controls { display:flex; gap:10px; align-items:center; }
+.viz-btn {
+  font-family:'IBM Plex Mono',monospace; font-size:15px; letter-spacing:.07em;
+  color:var(--ink2); border:1px solid var(--ink3);
+  background:transparent; padding:6px 14px; cursor:pointer;
+  transition:background .12s, color .12s;
+}
+.viz-btn:hover { background:var(--ink); color:white; border-color:var(--ink); }
+.viz-btn.active { background:var(--ink); color:white; border-color:var(--ink); }
+
+.canvas-wrap {
+  flex:1;
+  position:relative;
+  overflow:hidden;
+  cursor:crosshair;
 }
 
-.modal-box p {
-  font-size: 14px;
-  color: var(--text-muted);
-  line-height: 1.6;
+canvas#field {
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  display:block;
 }
 
-.modal-box label {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-  display: block;
-  margin-bottom: 6px;
+/* tooltip */
+.dot-tooltip {
+  position:absolute;
+  pointer-events:none;
+  background:var(--surface);
+  border:2px solid var(--ink);
+  padding:14px 18px;
+  box-shadow:4px 4px 0 var(--ink2);
+  max-width:400px;
+  z-index:10;
+  display:none;
 }
-
-.modal-box input,
-.modal-box textarea {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 15px;
-  padding: 12px 14px;
-  outline: none;
+.tt-type {
+  font-family:'IBM Plex Mono',monospace; font-size:15px;
+  letter-spacing:.08em; text-transform:uppercase;
+  margin-bottom:6px;
 }
+.tt-text { font-size:19px; font-weight:300; line-height:1.5; color:var(--ink); }
 
-.modal-box textarea {
-  min-height: 80px;
-  resize: vertical;
-  font-size: 14px;
-  line-height: 1.5;
+/* caption bar */
+.caption-bar {
+  border-top:1.5px solid var(--ink2);
+  padding:14px 24px;
+  min-height:80px;
+  flex-shrink:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:4px;
+  background:var(--surface);
 }
+.caption-label { font-family:'IBM Plex Mono',monospace; font-size:16px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink3); }
+.caption-text { font-size:22px; font-weight:300; color:var(--ink); line-height:1.5; font-style:italic; }
+.caption-empty { font-size:20px; color:var(--ink3); font-style:italic; }
 
-.modal-box input:focus,
-.modal-box textarea:focus { border-color: var(--text-muted); }
+/* connect mode hint */
+.connect-hint {
+  position:absolute; bottom:70px; left:50%; transform:translateX(-50%);
+  background:var(--ink); color:white;
+  font-family:'IBM Plex Mono',monospace; font-size:11px;
+  letter-spacing:.07em; padding:5px 14px;
+  pointer-events:none; opacity:0;
+  transition:opacity .2s;
+  white-space:nowrap;
+  z-index:20;
+}
+.connect-hint.visible { opacity:1; }
 
-/* ── INFO PANEL (click su punto) ── */
-#info-panel {
+/* legend */
+.viz-legend {
+  display:flex; gap:22px; padding:12px 24px;
+  border-top:1px dashed var(--ink3); flex-wrap:wrap; flex-shrink:0;
+  background:var(--paper);
+}
+.leg-item { display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:16px; color:var(--ink2); letter-spacing:.04em; }
+.leg-dot { width:14px; height:14px; border-radius:50%; }
+
+/* ── RELATION POPOVER ── */
+.relation-popover {
   position: absolute;
-  bottom: 50px;
-  left: 20px;
-  background: rgba(250, 247, 242, 0.95);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px 18px;
-  max-width: 320px;
-  font-size: 13px;
+  z-index: 40;
   display: none;
-  backdrop-filter: blur(4px);
-  z-index: 10;
+  flex-direction: column;
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink2);
+  padding: 14px 14px 10px;
+  min-width: 240px;
+  user-select: none;
 }
-#info-panel.visibile { display: block; }
-
-#info-panel .info-title {
-  font-weight: 600;
-  font-size: 15px;
-  margin-bottom: 4px;
+.relation-popover.open { display: flex; }
+.rp-title {
+  font-family:'IBM Plex Mono',monospace; font-size:15px;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--ink3);
+  margin-bottom:8px; padding:0 2px;
 }
-
-#info-panel .info-meta {
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.5;
+.rp-pair {
+  font-size:18px; font-weight:400; color:var(--ink);
+  margin-bottom:10px; padding:0 2px; line-height:1.35;
 }
+.rp-pair .rp-w { font-weight:500; }
+.rp-btn {
+  text-align:left;
+  font-family:'IBM Plex Sans',sans-serif; font-size:18px; font-weight:400;
+  color:var(--ink); background:var(--paper); border:1.5px solid var(--ink2);
+  padding:8px 14px; margin-bottom:4px; cursor:pointer;
+  transition:background .1s, color .1s, border-color .1s;
+}
+.rp-btn:hover { background:var(--ink); color:white; border-color:var(--ink); }
+.rp-clear {
+  margin-top:6px; padding-top:8px; border-top:1px dashed var(--ink3);
+  font-family:'IBM Plex Mono',monospace; font-size:14px; letter-spacing:.07em;
+  color:var(--ink3); background:none; border-left:none; border-right:none; border-bottom:none;
+  cursor:pointer; text-align:left; padding-left:2px;
+}
+.rp-clear:hover { color:var(--red); }
 
-#info-panel .info-close {
+/* ── TRANSMIT BUTTON (header) ── */
+.transmit-btn {
+  font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:500;
+  letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink); background:var(--surface);
+  border:2px solid var(--ink);
+  padding:8px 18px; cursor:pointer;
+  box-shadow:3px 3px 0 var(--ink2);
+  transition:transform .1s, box-shadow .1s;
+  margin-left:14px;
+}
+.transmit-btn:hover { transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink); }
+.transmit-btn:active { transform:translate(1px,1px); box-shadow:1px 1px 0 var(--ink); }
+.transmit-btn:disabled { opacity:.35; cursor:not-allowed; transform:none; box-shadow:none; }
+
+.h-right { display:flex; align-items:center; }
+
+/* ── FLOATING INPUT WIDGET ── */
+.input-widget {
   position: absolute;
-  top: 8px;
-  right: 12px;
-  cursor: pointer;
-  color: var(--text-soft);
-  font-size: 16px;
-  background: none;
-  border: none;
+  top: 52px; right: 12px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
-/* ── SCROLLBAR ── */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-/* ── MOBILE ── */
-@media (max-width: 768px) {
-  body { height: 100dvh; }
-
-  header { padding: 10px 16px; }
-  .header-left h1 { font-size: 14px; letter-spacing: 2px; }
-  .header-left .subtitle { display: none; }
-
-  .main-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-    position: relative;
-  }
-
-  .panel-campo,
-  .panel-azioni {
-    display: none;
-    position: absolute;
-    inset: 0;
-  }
-
-  .panel-campo.mob-attivo,
-  .panel-azioni.mob-attivo {
-    display: flex;
-  }
-
-  .panel-campo { border-right: none; }
-
-  #mobile-nav {
-    display: flex;
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    height: 56px;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    z-index: 100;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-  }
-
-  .mob-nav-btn {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    font-size: 10px;
-    color: var(--text-soft);
-    cursor: pointer;
-    border: none;
-    background: none;
-    font-family: 'DM Mono', monospace;
-    letter-spacing: 0.5px;
-  }
-  .mob-nav-btn.attivo { color: var(--text); font-weight: 500; }
-  .mob-nav-btn svg { width: 20px; height: 20px; }
-
-  .azioni-titolo { font-size: 22px; }
-  .vista-form textarea { font-size: 16px; }
-  .vista-form input[type="text"] { font-size: 16px; }
-
-  .campo-footer { padding: 6px 12px; }
-  .campo-legend { gap: 8px; font-size: 10px; }
-  .legend-dot { width: 6px; height: 6px; }
+.widget-trigger {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 18px; font-weight: 500;
+  letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--ink);
+  padding: 7px 13px; cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink2);
+  transition: transform .1s, box-shadow .1s;
+  display: flex; align-items: center; gap: 7px;
+  white-space: nowrap; user-select: none;
 }
+.widget-trigger:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
 
-@media (min-width: 769px) {
-  #mobile-nav { display: none; }
-  .panel-campo,
-  .panel-azioni { display: flex !important; }
+.input-panel {
+  width: 290px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  border-top: none;
+  box-shadow: 4px 4px 0 var(--ink2);
+  padding: 18px 18px 14px;
+  display: none;
+  flex-direction: column;
+}
+.input-panel.open { display: flex; }
+
+.step { display:none; }
+.step.active { display:flex; flex-direction:column; gap:0; }
+
+.step-counter { font-family:'IBM Plex Mono',monospace; font-size:14px; letter-spacing:.1em; color:var(--ink3); text-transform:uppercase; margin-bottom:10px; }
+.step-q { font-size:22px; font-weight:300; letter-spacing:-.01em; margin-bottom:3px; line-height:1.2; }
+.step-hint { font-size:16px; font-weight:300; font-style:italic; color:var(--ink2); margin-bottom:16px; line-height:1.5; }
+
+.action-cards { display:flex; flex-direction:column; gap:7px; }
+.action-card {
+  background:var(--paper); border:1.5px solid var(--ink);
+  padding:9px 12px; cursor:pointer;
+  display:flex; align-items:center; gap:12px;
+  transition:transform .1s, box-shadow .1s;
+  box-shadow:2px 2px 0 var(--ink2);
+}
+.action-card:hover { transform:translate(-2px,-2px); box-shadow:4px 4px 0 var(--ink); }
+.action-card:active { transform:translate(1px,1px); box-shadow:1px 1px 0 var(--ink); }
+.card-index { font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:500; min-width:18px; line-height:1; }
+.action-card.narra .card-index    { color:var(--red); }
+.action-card.connetti .card-index { color:var(--green); }
+.action-card.risuona .card-index  { color:var(--blue); }
+.card-body { display:flex; flex-direction:column; gap:1px; }
+.card-title { font-size:15px; font-weight:500; }
+.action-card.narra .card-title    { color:var(--red); }
+.action-card.connetti .card-title { color:var(--green); }
+.action-card.risuona .card-title  { color:var(--blue); }
+.card-desc { font-size:13px; font-weight:300; color:var(--ink2); line-height:1.4; }
+.card-arrow { margin-left:auto; color:var(--ink3); font-size:13px; }
+
+.back-btn { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.07em; color:var(--ink3); background:none; border:none; cursor:pointer; padding:0; margin-bottom:12px; text-decoration:underline; text-underline-offset:3px; transition:color .12s; }
+.back-btn:hover { color:var(--ink); }
+
+.write-q { font-size:17px; font-weight:300; margin-bottom:4px; display:flex; align-items:center; gap:7px; }
+.write-accent { display:inline-block; width:3px; height:15px; flex-shrink:0; }
+.write-hint { font-size:11px; font-weight:300; font-style:italic; color:var(--ink2); line-height:1.55; margin-bottom:4px; padding-left:9px; border-left:1px solid var(--ink3); }
+.example-note { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--ink3); line-height:1.6; margin-bottom:12px; padding:6px 9px; background:var(--paper2); border-left:2px solid var(--ink3); }
+
+textarea.field, input[type="text"].field {
+  width:100%; font-family:'IBM Plex Sans',sans-serif; font-size:15px; font-weight:300;
+  color:var(--ink); background:var(--paper); border:1.5px solid var(--ink);
+  padding:8px 10px; outline:none; border-radius:0; -webkit-appearance:none;
+  transition:box-shadow .12s; box-shadow:2px 2px 0 var(--ink2);
+}
+textarea.field { min-height:72px; resize:vertical; line-height:1.7;
+  background-image:repeating-linear-gradient(transparent,transparent calc(1.7em - 1px),rgba(90,82,69,.10) calc(1.7em - 1px),rgba(90,82,69,.10) 1.7em);
+  background-attachment:local; }
+textarea.field:focus, input[type="text"].field:focus { box-shadow:3px 3px 0 var(--ink); }
+textarea.field::placeholder, input[type="text"].field::placeholder { color:#C0B6A4; font-weight:300; }
+
+.char-row { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--ink3); text-align:right; letter-spacing:.05em; margin:3px 0 10px; }
+
+.connect-pair { display:grid; grid-template-columns:1fr auto 1fr; align-items:end; gap:6px; margin-bottom:9px; }
+.connect-arrow-sym { font-family:'IBM Plex Mono',monospace; font-size:15px; color:var(--ink3); padding-bottom:8px; text-align:center; }
+.field-label { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink3); margin-bottom:4px; }
+
+.prometeo-box { background:var(--paper); border:1.5px solid var(--blue); padding:9px 11px; margin-bottom:12px; box-shadow:2px 2px 0 rgba(30,63,111,.2); }
+.prometeo-label { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--blue); margin-bottom:4px; opacity:.7; }
+.prometeo-text { font-size:12px; font-weight:300; font-style:italic; color:var(--blue); line-height:1.55; }
+
+.submit-btn {
+  width:100%; font-family:'IBM Plex Sans',sans-serif; font-size:12px; font-weight:500;
+  letter-spacing:.06em; text-transform:uppercase; color:white;
+  border:1.5px solid var(--ink); padding:10px 14px; cursor:pointer;
+  box-shadow:3px 3px 0 var(--ink); border-radius:0;
+  transition:transform .1s, box-shadow .1s;
+}
+.submit-btn:hover:not(:disabled) { transform:translate(-2px,-2px); box-shadow:5px 5px 0 var(--ink); }
+.submit-btn:active:not(:disabled) { transform:translate(1px,1px); box-shadow:2px 2px 0 var(--ink); }
+.submit-btn:disabled { opacity:.38; cursor:not-allowed; transform:none; }
+
+@keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.success-wrap { display:flex; flex-direction:column; align-items:flex-start; animation:fadeUp .3s ease; }
+.postcard { width:100%; background:var(--paper); border:1.5px solid var(--ink); box-shadow:3px 3px 0 var(--ink); overflow:hidden; }
+.pc-top { display:flex; align-items:stretch; border-bottom:1px solid var(--ink2); }
+.pc-stripe { width:4px; flex-shrink:0; }
+.pc-top-inner { padding:8px 11px; flex:1; }
+.pc-to { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink3); margin-bottom:2px; }
+.pc-subject { font-size:12px; font-weight:500; color:var(--ink); }
+.pc-stamp { width:36px; border-left:1px solid var(--ink2); display:flex; align-items:center; justify-content:center; }
+.stamp-box { width:22px; height:26px; border:1px solid var(--ink2); display:flex; align-items:center; justify-content:center; font-size:10px; position:relative; }
+.stamp-box::after { content:''; position:absolute; inset:2px; border:.5px dashed var(--ink3); }
+.pc-body { padding:9px 11px; font-size:11px; font-weight:300; font-style:italic; color:var(--ink2); line-height:1.55; border-bottom:1px solid var(--paper2); }
+.pc-body strong { font-weight:400; font-style:normal; color:var(--ink); }
+.pc-foot { padding:6px 11px; display:flex; justify-content:space-between; align-items:center; }
+.pc-type { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase; }
+.pc-time { font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--ink3); }
+.again-btn { margin-top:12px; font-family:'IBM Plex Sans',sans-serif; font-size:11px; font-weight:500; letter-spacing:.06em; text-transform:uppercase; color:var(--ink); background:transparent; border:1.5px solid var(--ink); padding:7px 16px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); transition:transform .1s, box-shadow .1s; }
+.again-btn:hover { transform:translate(-2px,-2px); box-shadow:4px 4px 0 var(--ink); }
+
+.session-log { margin-top:14px; padding-top:10px; border-top:1px solid var(--ink3); }
+.log-heading { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink3); margin-bottom:7px; }
+.log-entry { display:flex; align-items:baseline; gap:7px; font-size:11px; font-weight:300; color:var(--ink2); margin-bottom:5px; line-height:1.5; animation:fadeUp .2s ease; }
+.log-type { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.07em; text-transform:uppercase; flex-shrink:0; min-width:60px; }
+
+@media(max-width:600px) {
+  .input-widget { top:8px; right:8px; }
+  .input-panel { width: calc(100vw - 24px); }
 }
 </style>
 </head>
 <body>
-
-<!-- ── MODAL REGISTRAZIONE ── -->
-<div id="modal-reg">
-  <div class="modal-box">
-    <h2>Entra nel Campo</h2>
-    <p>Ogni cosa che scrivi entra in Prometeo e cambia il modo in cui comprende il mondo. Prima di iniziare, dicci chi sei.</p>
-    <div>
-      <label for="reg-nome">Come ti chiami?</label>
-      <input type="text" id="reg-nome" placeholder="Il tuo nome" maxlength="50" autocomplete="off" />
-    </div>
-    <div>
-      <label for="reg-contesto">Cosa fai nella vita? (facoltativo)</label>
-      <textarea id="reg-contesto" placeholder="Es: Insegnante di storia, musicista, studente di architettura..." maxlength="200"></textarea>
-    </div>
-    <button class="btn-primary" id="btn-entra" onclick="entraInCampo()">Entra nel campo</button>
-  </div>
-</div>
-
-<!-- ── HEADER ── -->
 <header>
-  <div class="header-left">
-    <h1>IL CAMPO</h1>
-    <span class="dot">&middot;</span>
-    <span class="subtitle">educazione distribuita</span>
+  <div class="h-brand">
+    <span class="h-title">IL CAMPO</span>
+    <span class="h-sep">·</span>
+    <span class="h-sub">educazione distribuita</span>
   </div>
-  <div class="header-badge">
-    <span class="dot-live" id="ws-dot"></span>
-    <span id="partecipanti-count">1 nel campo</span>
+  <div class="h-right">
+    <div class="live-pill">
+      <div class="live-dot"></div>
+      <span id="countLabel">2 NEL CAMPO</span>
+    </div>
+    <button class="transmit-btn" id="transmitBtn" onclick="exportCurationTSV()" title="Esporta gli archi tipizzati come file di curazione per il campo globale">↗ trasmetti al campo globale</button>
   </div>
 </header>
 
-<!-- ── MAIN ── -->
-<div class="main-layout">
+<div class="main">
 
-  <!-- CAMPO -->
-  <div class="panel-campo mob-attivo">
-    <div class="campo-toolbar">
-      <span class="label">stato del campo</span>
-      <span class="spacer"></span>
-      <button onclick="toggleCollegaMode()" id="btn-collega">collega</button>
-      <button onclick="ridistribuisci()">ridistribuisci</button>
-      <button onclick="toggle3D()" id="btn-3d">↩ 2D</button>
-      <span class="timer" id="timer">0:00</span>
-    </div>
-    <canvas id="campo-canvas"></canvas>
-    <div id="toast-area"></div>
-    <div id="info-panel">
-      <button class="info-close" onclick="chiudiInfo()">&times;</button>
-      <div class="info-title" id="info-title"></div>
-      <div class="info-meta" id="info-meta"></div>
-    </div>
-    <div class="campo-footer">
-      <span class="campo-hint" id="campo-hint">&larr; clicca un punto per leggere il contributo</span>
-      <div class="campo-legend">
-        <div class="legend-item"><span class="legend-dot" style="background:var(--racconto)"></span> racconto</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--connessione)"></span> connessione</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--risposta)"></span> risposta</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--parola)"></span> parola</div>
+  <!-- VIZ — full screen -->
+  <div class="viz-panel">
+    <div class="viz-bar">
+      <span class="viz-label">stato del campo</span>
+      <div class="viz-controls">
+        <button class="viz-btn" onclick="resetLayout()" title="Ridistribuisci punti">↺ ridistribuisci</button>
+        <button class="viz-btn" onclick="clearField()" title="Svuota il campo">✕ svuota</button>
+        <button class="viz-btn" onclick="reseedField()" title="Ricarica il campo demo">↺ ricarica</button>
+        <span class="viz-label" id="vizTime" style="margin-left:4px">—</span>
       </div>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="field"></canvas>
+      <div class="dot-tooltip" id="tooltip">
+        <div class="tt-type" id="tt-type"></div>
+        <div class="tt-text" id="tt-text"></div>
+      </div>
+      <div class="connect-hint" id="connectHint" style="display:none"></div>
+      <div class="relation-popover" id="relationPopover">
+        <div class="rp-title">tipo di relazione</div>
+        <div class="rp-pair" id="rpPair">— — —</div>
+        <button class="rp-btn" data-rel="IS_A"        onclick="setEdgeRelation('IS_A')">è un</button>
+        <button class="rp-btn" data-rel="HAS"         onclick="setEdgeRelation('HAS')">ha</button>
+        <button class="rp-btn" data-rel="DOES"        onclick="setEdgeRelation('DOES')">fa</button>
+        <button class="rp-btn" data-rel="PART_OF"     onclick="setEdgeRelation('PART_OF')">parte di</button>
+        <button class="rp-btn" data-rel="CAUSES"      onclick="setEdgeRelation('CAUSES')">causa</button>
+        <button class="rp-btn" data-rel="SIMILAR_TO"  onclick="setEdgeRelation('SIMILAR_TO')">simile a</button>
+        <button class="rp-btn" data-rel="OPPOSITE_OF" onclick="setEdgeRelation('OPPOSITE_OF')">opposto di</button>
+        <button class="rp-btn" data-rel="USED_FOR"    onclick="setEdgeRelation('USED_FOR')">usato per</button>
+        <div class="rp-extra">
+          <div class="field-label" style="margin-top:8px">forza del legame</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="range" id="rpConfidence" min="10" max="100" value="90" style="flex:1;accent-color:var(--ink)">
+            <span id="rpConfVal" style="font-family:'IBM Plex Mono',monospace;font-size:11px;min-width:28px;color:var(--ink2)">0.9</span>
+          </div>
+          <div class="field-label" style="margin-top:6px">tramite (opzionale)</div>
+          <input type="text" class="field" id="rpVia" placeholder="parola intermedia" style="font-size:12px;padding:4px 7px;min-height:auto;box-shadow:1px 1px 0 var(--ink2)">
+        </div>
+        <button class="rp-clear" onclick="clearEdgeRelation()">— rimuovi arco</button>
+      </div>
+    </div>
+
+    <div class="caption-bar" id="captionBar">
+      <span class="caption-empty" id="captionEmpty">← clicca un punto per leggere il contributo</span>
+      <span class="caption-label" id="captionLabel" style="display:none"></span>
+      <span class="caption-text" id="captionText" style="display:none"></span>
+    </div>
+
+    <div class="viz-legend">
+      <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>racconto</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>connessione</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--blue)"></div>risposta</div>
+      <div class="leg-item"><div class="leg-dot" style="background:var(--ochre)"></div>parola</div>
     </div>
   </div>
 
-  <!-- AZIONI -->
-  <div class="panel-azioni">
+  <!-- FLOATING INPUT WIDGET -->
+  <div class="input-widget">
+    <button class="widget-trigger" onclick="toggleWidget(this)">
+      <span>+ contribuisci</span>
+    </button>
+    <div class="input-panel" id="inputPanel">
 
-    <!-- VISTA: SCEGLI AZIONE -->
-    <div id="vista-scelta">
-      <div class="step-header">01 &mdash; scegli un&rsquo;azione</div>
-      <div class="azioni-titolo">Cosa porti al campo?</div>
-      <div class="azioni-sottotitolo">Ogni cosa che scrivi entra in Prometeo e cambia ciò che sa del quartiere.</div>
-
-      <div class="azione-cards">
-        <div class="azione-card" onclick="mostraVista('racconta')">
-          <div class="azione-icon racconto">R</div>
-          <div class="azione-body">
-            <h3>Racconta</h3>
-            <p>Una storia, un ricordo, qualcosa che sai di questo posto</p>
+    <!-- STEP 1 -->
+    <div class="step active" id="step1">
+      <div class="step-counter">01 — scegli un'azione</div>
+      <p class="step-q">Cosa porti al campo?</p>
+      <p class="step-hint">Ogni cosa che scrivi entra in Prometeo e cambia ciò che sa del quartiere.</p>
+      <div class="action-cards">
+        <div class="action-card narra" onclick="goStep('narra')">
+          <span class="card-index">R</span>
+          <div class="card-body">
+            <div class="card-title">Racconta</div>
+            <div class="card-desc">Una storia, un ricordo, qualcosa che sai di questo posto</div>
           </div>
-          <div class="azione-arrow">&rarr;</div>
+          <span class="card-arrow">→</span>
         </div>
-
-        <div class="azione-card" onclick="mostraVista('collega')">
-          <div class="azione-icon connessione">C</div>
-          <div class="azione-body">
-            <h3>Collega</h3>
-            <p>Spiega come due parole o idee stanno insieme</p>
+        <div class="action-card connetti" onclick="goStep('connetti')">
+          <span class="card-index">C</span>
+          <div class="card-body">
+            <div class="card-title">Collega</div>
+            <div class="card-desc">Spiega come due parole o idee stanno insieme</div>
           </div>
-          <div class="azione-arrow">&rarr;</div>
+          <span class="card-arrow">→</span>
         </div>
-
-        <div class="azione-card" onclick="mostraVista('rispondi')">
-          <div class="azione-icon risposta">&crarr;</div>
-          <div class="azione-body">
-            <h3>Rispondi</h3>
-            <p>Leggi quello che dice Prometeo e aggiungici qualcosa</p>
+        <div class="action-card risuona" onclick="goStep('risuona')">
+          <span class="card-index">↩</span>
+          <div class="card-body">
+            <div class="card-title">Rispondi</div>
+            <div class="card-desc">Leggi quello che dice Prometeo e aggiungici qualcosa</div>
           </div>
-          <div class="azione-arrow">&rarr;</div>
-        </div>
-      </div>
-
-      <!-- SESSION FEED -->
-      <div class="sessione-wrap">
-        <div class="sessione-header">questa sessione</div>
-        <div class="sessione-list" id="sessione-list">
-          <div class="sessione-vuota">La sessione inizierà quando qualcuno condivide qualcosa.</div>
+          <span class="card-arrow">→</span>
         </div>
       </div>
     </div>
 
-    <!-- VISTA: RACCONTA -->
-    <div class="vista-azione" id="vista-racconta">
-      <div class="step-header">02 &mdash; racconta</div>
-      <div class="azioni-titolo">Racconta qualcosa</div>
-      <div class="azioni-sottotitolo">Una storia, un'esperienza, qualcosa che hai visto o sentito. Le tue parole entrano nel campo.</div>
-      <div class="vista-form">
-        <div>
-          <label>La tua voce</label>
-          <textarea id="racconta-text" placeholder="Es: I portici di via Po offrono riparo dalla pioggia e dalle giornate di sole..." maxlength="500"></textarea>
-          <div class="char-count"><span id="racconta-count">0</span>/500</div>
-        </div>
-        <div class="campo-risposta" id="racconta-risposta">
-          <div class="risp-label">Il campo ha sentito</div>
-          <div class="risp-content" id="racconta-risp-content"></div>
-          <div class="risp-tags" id="racconta-risp-tags"></div>
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn-back" onclick="tornaScelta()">Indietro</button>
-        <button class="btn-primary" id="racconta-btn" onclick="eseguiRacconta()">Condividi con il campo</button>
-      </div>
+    <!-- RACCONTA -->
+    <div class="step" id="step2-narra">
+      <button class="back-btn" onclick="backToChoose()">← cambia</button>
+      <div class="step-counter">02 — racconta</div>
+      <p class="write-q"><span class="write-accent" style="background:var(--red)"></span>Racconta qualcosa</p>
+      <p class="write-hint">Una storia, un ricordo, un'osservazione. Frasi brevi funzionano meglio.</p>
+      <div class="example-note">"Quando piove forte, i bambini si rifugiano sotto il portico della scuola."<br>"La signora del bar del corso sapeva il nome di tutti."</div>
+      <textarea class="field" id="narrateInput" maxlength="500" placeholder="scrivi qui…" oninput="updateCount('narrateInput','cnt-narra','btn-narra')"></textarea>
+      <div class="char-row"><span id="cnt-narra">0</span> / 500</div>
+      <button class="submit-btn" id="btn-narra" style="background:var(--red)" disabled onclick="doSubmit('narra')">Invia al campo →</button>
     </div>
 
-    <!-- VISTA: COLLEGA -->
-    <div class="vista-azione" id="vista-collega">
-      <div class="step-header">02 &mdash; collega</div>
-      <div class="azioni-titolo">Collega due idee</div>
-      <div class="azioni-sottotitolo">Spiega come due parole o concetti stanno insieme secondo la tua esperienza.</div>
-      <div class="vista-form">
-        <div>
-          <label>Primo concetto</label>
-          <input type="text" id="conn-from" placeholder="es: tolleranza" />
-        </div>
-        <div>
-          <label>Tipo di connessione</label>
-          <select id="conn-rel">
-            <option value="Causes" selected>causa / porta a</option>
-            <option value="IsA">è un tipo di</option>
-            <option value="PartOf">fa parte di</option>
-            <option value="UsedFor">si usa per</option>
-            <option value="SimilarTo">è simile a</option>
-            <option value="OppositeOf">è l'opposto di</option>
-            <option value="Has">ha come caratteristica</option>
-          </select>
-        </div>
-        <div>
-          <label>Secondo concetto</label>
-          <input type="text" id="conn-to" placeholder="es: qualità" />
-        </div>
-        <div>
-          <label>Quanto è forte questa connessione per te?</label>
-          <div class="strength-row">
-            <button class="strength-btn" data-val="1">1</button>
-            <button class="strength-btn" data-val="2">2</button>
-            <button class="strength-btn active" data-val="3">3</button>
-            <button class="strength-btn" data-val="4">4</button>
-            <button class="strength-btn" data-val="5">5</button>
-            <span class="strength-label" id="strength-label">media</span>
+    <!-- COLLEGA -->
+    <div class="step" id="step2-connetti">
+      <button class="back-btn" onclick="backToChoose()">← cambia</button>
+      <div class="step-counter">02 — collega</div>
+      <p class="write-q"><span class="write-accent" style="background:var(--green)"></span>Collega due cose</p>
+      <p class="write-hint">Quali due parole o idee metti insieme? Poi spiega il legame.</p>
+      <div class="connect-pair">
+        <div><div class="field-label">prima cosa</div><input type="text" class="field" id="wordA" placeholder="es. pane" oninput="checkConnect()"></div>
+        <div class="connect-arrow-sym">—</div>
+        <div><div class="field-label">seconda cosa</div><input type="text" class="field" id="wordB" placeholder="es. cura" oninput="checkConnect()"></div>
+      </div>
+      <div class="field-label" style="margin-bottom:5px">come le colleghi?</div>
+      <textarea class="field" id="connectInput" style="min-height:90px" maxlength="300" placeholder="es. il pane condiviso è un atto di cura" oninput="checkConnect()"></textarea>
+      <div class="char-row"><span id="cnt-connetti">0</span> / 300</div>
+      <button class="submit-btn" id="btn-connetti" style="background:var(--green)" disabled onclick="doSubmit('connetti')">Collega nel campo →</button>
+    </div>
+
+    <!-- RISPONDI -->
+    <div class="step" id="step2-risuona">
+      <button class="back-btn" onclick="backToChoose()">← cambia</button>
+      <div class="step-counter">02 — rispondi</div>
+      <p class="write-q"><span class="write-accent" style="background:var(--blue)"></span>Rispondi a Prometeo</p>
+      <p class="write-hint">Prometeo ha detto qualcosa. Puoi aggiungere, correggere, espandere.</p>
+      <div class="prometeo-box">
+        <div class="prometeo-label">Prometeo dice</div>
+        <div class="prometeo-text" id="prometeoQuote">sto ascoltando il campo…</div>
+      </div>
+      <textarea class="field" id="risuonaInput" maxlength="500" placeholder="la tua risposta…" oninput="updateCount('risuonaInput','cnt-risuona','btn-risuona')"></textarea>
+      <div class="char-row"><span id="cnt-risuona">0</span> / 500</div>
+      <button class="submit-btn" id="btn-risuona" style="background:var(--blue)" disabled onclick="doSubmit('risuona')">Rispondi a Prometeo →</button>
+    </div>
+
+    <!-- CONFERMA -->
+    <div class="step" id="step3">
+      <div class="success-wrap">
+        <div class="postcard">
+          <div class="pc-top">
+            <div class="pc-stripe" id="pcStripe"></div>
+            <div class="pc-top-inner">
+              <div class="pc-to">a: il campo di prometeo</div>
+              <div class="pc-subject" id="pcSubject">contributo ricevuto</div>
+            </div>
+            <div class="pc-stamp"><div class="stamp-box">✓</div></div>
+          </div>
+          <div class="pc-body" id="pcBody">—</div>
+          <div class="pc-foot">
+            <span class="pc-type" id="pcType"></span>
+            <span class="pc-time" id="pcTime"></span>
           </div>
         </div>
-        <div class="campo-risposta" id="collega-risposta">
-          <div class="risp-label">Connessione aggiunta</div>
-          <div class="risp-content" id="collega-risp-content"></div>
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn-back" onclick="tornaScelta()">Indietro</button>
-        <button class="btn-primary" id="collega-btn" onclick="eseguiCollega()">Aggiungi connessione</button>
+        <button class="again-btn" onclick="backToChoose()">contribuisci ancora</button>
       </div>
     </div>
 
-    <!-- VISTA: RISPONDI -->
-    <div class="vista-azione" id="vista-rispondi">
-      <div class="step-header">02 &mdash; rispondi</div>
-      <div class="azioni-titolo">Rispondi a Prometeo</div>
-      <div class="azioni-sottotitolo">Leggi quello che il campo ha da dire e aggiungi la tua prospettiva.</div>
-      <div class="vista-form">
-        <div class="prometeo-says" id="prometeo-says">
-          <div class="from">Prometeo dice</div>
-          <div id="prometeo-text">Caricamento...</div>
-        </div>
-        <div>
-          <label>La tua risposta</label>
-          <textarea id="rispondi-text" placeholder="Scrivi la tua risposta a quello che Prometeo ha condiviso..." maxlength="500"></textarea>
-          <div class="char-count"><span id="rispondi-count">0</span>/500</div>
-        </div>
-        <div class="campo-risposta" id="rispondi-risposta">
-          <div class="risp-label">Il campo ha sentito</div>
-          <div class="risp-content" id="rispondi-risp-content"></div>
-          <div class="risp-tags" id="rispondi-risp-tags"></div>
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn-back" onclick="tornaScelta()">Indietro</button>
-        <button class="btn-primary" id="rispondi-btn" onclick="eseguiRispondi()">Condividi con il campo</button>
-      </div>
+    <div class="session-log" id="sessionLog" style="display:none">
+      <div class="log-heading">questa sessione</div>
+      <div id="logEntries"></div>
     </div>
-
-  </div>
-</div>
-
-<!-- MOBILE NAV -->
-<nav id="mobile-nav">
-  <button class="mob-nav-btn attivo" data-panel="campo" onclick="cambiaPannello('campo')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 2"/>
-    </svg>
-    Campo
-  </button>
-  <button class="mob-nav-btn" data-panel="azioni" onclick="cambiaPannello('azioni')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-      <path d="M12 5v14M5 12h14"/>
-    </svg>
-    Contribuisci
-  </button>
-</nav>
+  </div><!-- /input-panel -->
+  </div><!-- /input-widget -->
+</div><!-- /main -->
 
 <script>
-// ═══════════════════════════════════════════════════════════════
-// STATO
-// ═══════════════════════════════════════════════════════════════
+const BASE = window.location.origin;
+const USERNAME = 'ospite';
 
-const S = {
-  userId: localStorage.getItem('campo_uid') || genId(),
-  userName: localStorage.getItem('campo_name') || '',
-  userContext: localStorage.getItem('campo_ctx') || '',
-  ws: null,
-  partecipanti: new Set(),
-  strength: 3,
-  sessionStart: Date.now(),
-  collegaMode: false,
-  collegaSrc: null,
-  modo3D: true,
-
-  // Grafo
-  fractals: [],        // 64 frattali con posizioni calcolate
-  contributi: [],      // contributi degli utenti (un punto per contributo)
-  edges: [],           // archi tra contributi
-  fractalMap: {},      // nome_lower → fractal obj
-};
-
-localStorage.setItem('campo_uid', S.userId);
-
-function genId() { return Math.random().toString(36).slice(2, 10); }
-
-// ── Variabili 3D ──
-let rot3DY = 0;
-let rot3DX = 0.28;
-let drag3D = { active: false, lastX: 0, lastY: 0 };
-
-// Stelle di sfondo statiche (generate una volta sola)
-const STARS_BG = Array.from({ length: 140 }, () => ({
-  x: Math.random(),
-  y: Math.random(),
-  r: 0.3 + Math.random() * 1.4,
-  a: 0.12 + Math.random() * 0.42,
-}));
-
-// ═══════════════════════════════════════════════════════════════
-// REGISTRAZIONE
-// ═══════════════════════════════════════════════════════════════
-
-function entraInCampo() {
-  const nome = document.getElementById('reg-nome').value.trim();
-  const ctx = document.getElementById('reg-contesto').value.trim();
-  if (!nome) {
-    document.getElementById('reg-nome').style.borderColor = 'var(--racconto)';
-    document.getElementById('reg-nome').focus();
-    return;
-  }
-  S.userName = nome;
-  S.userContext = ctx;
-  localStorage.setItem('campo_name', nome);
-  localStorage.setItem('campo_ctx', ctx);
-  document.getElementById('modal-reg').classList.add('nascosto');
-  inizializza();
+function toggleWidget(btn) {
+  const panel = document.getElementById('inputPanel');
+  const open  = panel.classList.toggle('open');
+  btn.querySelector('span').textContent = open ? '✕ chiudi' : '+ contribuisci';
 }
 
-if (S.userName) {
-  document.getElementById('modal-reg').classList.add('nascosto');
-  inizializza();
-} else {
-  document.getElementById('reg-nome').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('reg-contesto').focus();
+/* ═══════════════════════════════════════════════════════
+   FIELD DATA MODEL
+═══════════════════════════════════════════════════════ */
+const COLORS = { narra:'#B83225', connetti:'#1F4D33', risuona:'#1E3F6F', word:'#9A6E0A' };
+const LABELS = { narra:'racconto', connetti:'connessione', risuona:'risposta', word:'parola' };
+
+let dots = [];        // { id, x, y, r, type, text, label, alpha, vx, vy, selected, phase }
+let edges = [];       // { a, b, alpha }
+let nextId = 1;
+let selectedDot = null;
+let hoveredDot  = null;
+let dragDot     = null;
+let dragOffX = 0, dragOffY = 0;
+let animating = true;
+
+// multi-crown state — Map<dotId, { dot, words, progress }>
+let openCrowns = new Map();
+
+// satellite drag — source word, target word
+let dragSatellite  = null;  // { sw, sourceDot, x, y }
+let snapCrownWord  = null;  // { sw, dot } — target snap
+const SAT_SNAP = 90;
+
+const STOP = new Set([
+  'il','la','lo','le','i','gli','un','una','uno',
+  'di','del','della','dei','degli','delle','da','dal','dalla',
+  'a','ad','al','alla','ai','agli',
+  'in','nel','nella','nei','negli','nelle',
+  'su','sul','sulla','sui','sugli','sulle',
+  'per','con','tra','fra','e','o','ma','se','che',
+  'è','ha','ho','sono','era','era','ci','si','mi','ti','vi',
+  'non','più','anche','già','qui','là','come','quando',
+  'questo','questa','questi','queste','quello','quella',
+  'tutto','tutta','tutti','tutte','ogni','molto','poco',
+  // filler nelle 8 frasi UI-R1
+  'viene','dalle','loro','solo','nessuna','ciò','proprio','puo','può','sua','suo'
+]);
+
+function extractStarWords(text) {
+  if (!text) return [];
+  // preserva "UI-R1" sostituendolo con un token che sopravvive allo split
+  let t = text.replace(/UI-R1/gi, 'ZQXUIR1');
+  return t
+    .replace(/["""''«»()[\]{}]/g, ' ')
+    .split(/[\s,;:!?.\-–—]+/)
+    .map(w => w.toLowerCase().replace(/[^a-zàáèéìíòóùú0-9]/gi, ''))
+    .map(w => w === 'zqxuir1' ? 'UI-R1' : w)
+    .filter(w => w.length > 2 && !STOP.has(w))
+    .filter((w, i, arr) => arr.indexOf(w) === i)
+    .slice(0, 10);
+}
+
+/* seed UI-R1 — le 8 frasi fondative come racconti sul campo */
+function seedDots() {
+  const demos = [
+    { type:'narra', text:'UI-R1 viene educato dalle persone.',                                       label:'UI-R1' },
+    { type:'narra', text:'Il mondo di UI-R1 è composto da parole.',                                  label:'mondo' },
+    { type:'narra', text:'Il significato delle parole è definito dalle loro relazioni.',              label:'significato' },
+    { type:'narra', text:'L\'intelligenza artificiale non è solo quella generativa.',                 label:'intelligenza' },
+    { type:'narra', text:'Ogni parola è tracciabile, nessuna black box.',                            label:'parola' },
+    { type:'narra', text:'UI-R1 sogna e riorganizza ciò che ha imparato.',                           label:'sogno' },
+    { type:'narra', text:'La complessità nasce dalla ricombinazione di aspetti semplici.',            label:'complessità' },
+    { type:'narra', text:'Ogni comunità può crescere il proprio campo e curare il campo collettivo.', label:'comunità' },
+  ];
+
+  dots = []; edges = []; openCrowns.clear(); nextId = 1;
+  const W = canvas.width  || 700;
+  const H = canvas.height || 450;
+  const cx = W / 2, cy = H / 2;
+
+  // disposizione a cerchio, velocità zero
+  demos.forEach((d, i) => {
+    const angle = (Math.PI * 2 / demos.length) * i - Math.PI / 2;
+    const rad   = Math.min(W, H) * 0.35;
+    addDot(d.type, d.text,
+      (cx + Math.cos(angle) * rad) / W,
+      (cy + Math.sin(angle) * rad) / H,
+      true, d.label);
+    const dot = dots[dots.length - 1];
+    dot.vx = 0; dot.vy = 0;
   });
-  document.getElementById('reg-contesto').addEventListener('keydown', e => {
-    if (e.key === 'Enter') entraInCampo();
-  });
+
+  // nessun arco iniziale: il pubblico li costruisce dal vivo
 }
 
-// ═══════════════════════════════════════════════════════════════
-// NAVIGAZIONE VISTE
-// ═══════════════════════════════════════════════════════════════
-
-function mostraVista(nome) {
-  document.getElementById('vista-scelta').style.display = 'none';
-  document.querySelectorAll('.vista-azione').forEach(v => v.classList.remove('attiva'));
-  const target = document.getElementById('vista-' + nome);
-  if (target) target.classList.add('attiva');
-  if (nome === 'rispondi') caricaPrometeoSays();
-  if (window.innerWidth <= 768) cambiaPannello('azioni');
+function extractLabel(type, text) {
+  if (type === 'word') return text.trim().split(/\s+/)[0].slice(0, 20);
+  const tokens = text
+    .replace(/["""''«»()[\]{}\-–—]/g, ' ')
+    .split(/[\s,;:!?.]+/)
+    .map(w => w.toLowerCase().replace(/[^a-zàáèéìíòóùú]/gi, ''))
+    .filter(w => w.length > 3 && !STOP.has(w));
+  if (!tokens.length) return text.slice(0, 20);
+  // parola più significativa: lunga + prima posizione
+  const scored = tokens.map((w, i) => ({ w, score: w.length + (i === 0 ? 3 : 0) }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].w;
 }
 
-function tornaScelta() {
-  document.querySelectorAll('.vista-azione').forEach(v => v.classList.remove('attiva'));
-  document.getElementById('vista-scelta').style.display = '';
-}
-
-function cambiaPannello(nome) {
-  document.querySelector('.panel-campo').classList.toggle('mob-attivo', nome === 'campo');
-  document.querySelector('.panel-azioni').classList.toggle('mob-attivo', nome === 'azioni');
-  document.querySelectorAll('.mob-nav-btn').forEach(b =>
-    b.classList.toggle('attivo', b.dataset.panel === nome));
-  if (nome === 'campo') {
-    requestAnimationFrame(() => {
-      resizeCanvas();
-      if (S.fractals.length) {
-        layoutFractals();
-        S.contributi.forEach(c => layoutContributo(c));
-      }
-    });
+function addDot(type, text, nx, ny, quiet, customLabel) {
+  const W = canvas.width, H = canvas.height;
+  const x = (nx !== undefined) ? nx * W : (0.15 + Math.random() * 0.7) * W;
+  const y = (ny !== undefined) ? ny * H : (0.15 + Math.random() * 0.7) * H;
+  const dot = {
+    id: nextId++,
+    x, y,
+    r: type === 'word' ? 12 : 20,
+    type, text,
+    label: customLabel || extractLabel(type, text),
+    alpha: 0.0,
+    targetAlpha: type === 'word' ? 0.65 : 0.90,
+    phase: Math.random() * Math.PI * 2,
+    vx: (Math.random() - 0.5) * 0.12,
+    vy: (Math.random() - 0.5) * 0.12,
+    selected: false,
+    born: performance.now()
+  };
+  dots.push(dot);
+  if (!quiet) {
+    // flash the new dot
+    setTimeout(() => highlightDot(dot), 100);
   }
+  return dot;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CANVAS
-// ═══════════════════════════════════════════════════════════════
+function highlightDot(dot) {
+  dot.flash = 1.0;
+}
 
-const canvas = document.getElementById('campo-canvas');
-const ctx2d = canvas.getContext('2d');
-let W = 0, H = 0;
+/* ═══════════════════════════════════════════════════════
+   CANVAS SETUP
+═══════════════════════════════════════════════════════ */
+const canvas = document.getElementById('field');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('canvasWrap');
 
 function resizeCanvas() {
-  W = canvas.offsetWidth * (window.devicePixelRatio || 1);
-  H = canvas.offsetHeight * (window.devicePixelRatio || 1);
-  canvas.width = W;
-  canvas.height = H;
-  canvas.style.width = canvas.offsetWidth + 'px';
-  canvas.style.height = canvas.offsetHeight + 'px';
-  ctx2d.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
 }
 
-window.addEventListener('resize', () => {
-  resizeCanvas();
-  if (S.fractals.length) layoutFractals();
-});
-
+window.addEventListener('resize', () => { resizeCanvas(); });
 resizeCanvas();
 
-// Colori RGB per tipi
-const COL = {
-  racconto:    [192, 96, 58],
-  connessione: [58, 112, 72],
-  risposta:    [74, 100, 136],
-  parola:      [184, 152, 72],
-  risonanza:   [184, 152, 72],
-  frattale:    [138, 126, 112],
-  altri:       [170, 140, 90],
-};
+/* ═══════════════════════════════════════════════════════
+   MOUSE / TOUCH
+═══════════════════════════════════════════════════════ */
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const src  = e.touches ? e.touches[0] : e;
+  return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+}
 
-// Trigrammi
-const TRIGRAMS = [
-  { name: 'Cielo',    sym: '☰', dim: 'Agency' },
-  { name: 'Terra',    sym: '☷', dim: 'Permanenza' },
-  { name: 'Tuono',    sym: '☳', dim: 'Intensità' },
-  { name: 'Acqua',    sym: '☵', dim: 'Tempo' },
-  { name: 'Montagna', sym: '☶', dim: 'Confine' },
-  { name: 'Vento',    sym: '☴', dim: 'Complessità' },
-  { name: 'Fuoco',    sym: '☲', dim: 'Definizione' },
-  { name: 'Lago',     sym: '☱', dim: 'Valenza' },
-];
-
-// ═══════════════════════════════════════════════════════════════
-// LAYOUT 2D
-// ═══════════════════════════════════════════════════════════════
-
-function layoutFractals() {
-  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
-  const cx = cw / 2, cy = ch / 2;
-  const R = Math.min(cx, cy) * 0.75;
-
-  const purePos = [];
-  for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 2 - Math.PI / 2;
-    purePos[i] = { x: cx + Math.cos(angle) * R, y: cy + Math.sin(angle) * R };
-  }
-
-  S.fractals.forEach(f => {
-    const lower = Math.floor(f.id / 8);
-    const upper = f.id % 8;
-    f.isPure = lower === upper;
-
-    if (f.isPure) {
-      f.x = purePos[lower].x;
-      f.y = purePos[lower].y;
-      f.radius = 10;
-    } else {
-      const a1 = (lower / 8) * Math.PI * 2 - Math.PI / 2;
-      const a2 = (upper / 8) * Math.PI * 2 - Math.PI / 2;
-      let diff = a2 - a1;
-      if (diff > Math.PI) diff -= Math.PI * 2;
-      if (diff < -Math.PI) diff += Math.PI * 2;
-      const midAngle = a1 + diff * 0.5;
-      const bandIdx = upper < lower ? upper : upper - 1;
-      const rFrac = R * (0.38 + bandIdx * 0.07);
-      f.x = cx + Math.cos(midAngle) * rFrac;
-      f.y = cy + Math.sin(midAngle) * rFrac;
-      f.radius = 5;
-    }
+function dotAt(x, y) {
+  let best = null, bestD = Infinity;
+  dots.forEach(d => {
+    const dx = d.x - x, dy = d.y - y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < d.r + 10 && dist < bestD) { best = d; bestD = dist; }
   });
+  return best;
+}
 
-  // Anti-overlap leggero per i misti
-  for (let iter = 0; iter < 30; iter++) {
-    let moved = false;
-    for (let i = 0; i < S.fractals.length; i++) {
-      for (let j = i + 1; j < S.fractals.length; j++) {
-        const a = S.fractals[i], b = S.fractals[j];
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const minDist = a.radius + b.radius + 10;
-        if (dist < minDist && dist > 0.1) {
-          const push = (minDist - dist) * 0.3;
-          const nx = dx / dist, ny = dy / dist;
-          if (!a.isPure) { a.x -= nx * push; a.y -= ny * push; }
-          if (!b.isPure) { b.x += nx * push; b.y += ny * push; }
-          moved = true;
-        }
-      }
+/* hit-test: distanza punto-segmento generica */
+const EDGE_HIT = 10;
+function pointSegDist(px, py, ax, ay, bx, by) {
+  const vx = bx - ax, vy = by - ay;
+  const len2 = vx*vx + vy*vy;
+  if (len2 < 1) return Infinity;
+  let t = ((px - ax) * vx + (py - ay) * vy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const dx = px - (ax + t * vx), dy = py - (ay + t * vy);
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+/* posizione effettiva di un endpoint (tiene conto del satellite se la crown è aperta) */
+function resolveEdgeEndpoint(dotObj, word) {
+  if (!word) return { x: dotObj.x, y: dotObj.y };
+  const crown = openCrowns.get(dotObj.id);
+  if (crown) {
+    const sw = crown.words.find(w => w.word === word);
+    if (sw && sw.sx !== undefined && sw.progress > 0.3) return { x: sw.sx, y: sw.sy };
+  }
+  return { x: dotObj.x, y: dotObj.y };
+}
+
+/* hit-test sugli edges reali — usa le posizioni effettive (satellite o centro dot) */
+function edgeAt(x, y) {
+  let best = null, bestD = EDGE_HIT;
+  for (const e of edges) {
+    const da = dots.find(d => d.id === e.a);
+    const db = dots.find(d => d.id === e.b);
+    if (!da || !db) continue;
+    const pa = resolveEdgeEndpoint(da, e.wordA);
+    const pb = resolveEdgeEndpoint(db, e.wordB);
+    const dist = pointSegDist(x, y, pa.x, pa.y, pb.x, pb.y);
+    if (dist < bestD) { best = e; bestD = dist; }
+  }
+  return best;
+}
+
+/* hit-test sulle linee corona — solo test, nessun side effect */
+function crownLineHitTest(x, y) {
+  let best = null, bestD = EDGE_HIT;
+  for (const [dotId, crown] of openCrowns) {
+    const parent = dots.find(d => d.id === dotId);
+    if (!parent) continue;
+    for (const sw of crown.words) {
+      if (sw.sx === undefined || sw.progress < 0.3) continue;
+      const dist = pointSegDist(x, y, parent.x, parent.y, sw.sx, sw.sy);
+      if (dist < bestD) { best = { parent, sw }; bestD = dist; }
     }
-    if (!moved) break;
+  }
+  return best;
+}
+
+/* hit-test + crea/trova edge per la linea corona (usata solo su click) */
+function crownLineAt(x, y) {
+  const hit = crownLineHitTest(x, y);
+  if (!hit) return null;
+  // cerca un edge già esistente per questa coppia parent+word
+  let edge = edges.find(e =>
+    e.a === hit.parent.id && e.b === hit.parent.id && e.wordA === hit.sw.word);
+  if (!edge) {
+    edge = { a: hit.parent.id, b: hit.parent.id, wordA: hit.sw.word, wordB: null, alpha: 0.5 };
+    edges.push(edge);
+  }
+  return edge;
+}
+
+// shake detection
+let shakeHistory = [];   // [{x,y,t}] recent drag positions
+let shakeTriggered = false;
+
+
+function detectShake() {
+  if (shakeHistory.length < 6) return false;
+  const recent = shakeHistory.slice(-8);
+  let reversals = 0;
+  for (let i = 2; i < recent.length; i++) {
+    const dx1 = recent[i-1].x - recent[i-2].x;
+    const dx2 = recent[i].x   - recent[i-1].x;
+    const dy1 = recent[i-1].y - recent[i-2].y;
+    const dy2 = recent[i].y   - recent[i-1].y;
+    if ((dx1 * dx2 < -4) || (dy1 * dy2 < -4)) reversals++;
+  }
+  const timeSpan = recent[recent.length-1].t - recent[0].t;
+  return reversals >= 3 && timeSpan < 600;
+}
+
+function disconnectDot(dot) {
+  const before = edges.length;
+  edges = edges.filter(e => e.a !== dot.id && e.b !== dot.id);
+  if (edges.length < before) dot.flash = 1.5;
+}
+
+/* ── CROWN HELPERS ── */
+function makeCrownEntry(dot) {
+  // escludi la parola già usata come label del dot
+  const words = extractStarWords(dot.text).filter(w => w !== dot.label);
+  const count = words.length;
+  if (count === 0) return { dot, words: [], progress: 0 };
+  return {
+    dot,
+    words: words.map((w, i) => {
+      const angle = (Math.PI * 2 / count) * i - Math.PI / 2;
+      return {
+        word: w,
+        angle,
+        ox: Math.cos(angle) * 110,
+        oy: Math.sin(angle) * 110,
+        vx: 0, vy: 0,               // spring velocity
+        progress: 0,
+        sx: undefined, sy: undefined
+      };
+    }),
+    progress: 0
+  };
+}
+
+function toggleCrown(dot) {
+  if (openCrowns.has(dot.id)) {
+    openCrowns.delete(dot.id);
+  } else {
+    openCrowns.set(dot.id, makeCrownEntry(dot));
   }
 }
 
-// Calcola il centro composito pesato dei frattali attivati
-function getOrbitCenter(c) {
-  const fracts = c.fractalsActivated || [];
-  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
-  if (fracts.length === 0) {
-    return { x: cw * 0.5, y: ch * 0.5 };
-  }
-  let totalWeight = 0, cx = 0, cy = 0;
-  fracts.forEach(({ name, activation }) => {
-    const f = S.fractalMap[name?.toLowerCase()];
-    if (f && f.x > 0) {
-      const w = Math.max(0.01, activation || 0.1);
-      cx += f.x * w;
-      cy += f.y * w;
-      totalWeight += w;
-    }
-  });
-  if (totalWeight < 0.01) return { x: cw * 0.5, y: ch * 0.5 };
-  return { x: cx / totalWeight, y: cy / totalWeight };
+function ensureCrownOpen(dot) {
+  if (!openCrowns.has(dot.id)) openCrowns.set(dot.id, makeCrownEntry(dot));
 }
 
-// Layout iniziale di un contributo
-function layoutContributo(c) {
-  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
-  if (cw < 10 || ch < 10) {
-    c._needsLayout = true;
-    c.x = -100; c.y = -100;
-    c.anchorX = 0; c.anchorY = 0;
-    c.orbitDist = 0;
+/* hit-test all open crown words; returns { sw, crownDot } or null */
+function satHitTest(x, y) {
+  for (const [, crown] of openCrowns) {
+    for (const sw of crown.words) {
+      if (sw.sx === undefined) continue;
+      const dx = x - sw.sx, dy = y - sw.sy;
+      if (Math.sqrt(dx*dx + dy*dy) < 16) return { sw, crownDot: crown.dot };
+    }
+  }
+  return null;
+}
+
+/* nearest dot (excluding one) within SAT_SNAP pixels of a position */
+function nearestDotToPos(x, y, excludeDot) {
+  let best = null, bestD = Infinity;
+  dots.forEach(d => {
+    if (excludeDot && d.id === excludeDot.id) return;
+    const dx = d.x - x, dy = d.y - y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < SAT_SNAP && dist < bestD) { best = d; bestD = dist; }
+  });
+  return best;
+}
+
+/* nearest crown word in ANY open crown except the source dot, within 44px */
+function nearestCrownWordExcluding(x, y, excludeDotId) {
+  let best = null, bestD = Infinity;
+  for (const [id, crown] of openCrowns) {
+    if (id === excludeDotId) continue;
+    for (const sw of crown.words) {
+      if (sw.sx === undefined) continue;
+      const dx = x - sw.sx, dy = y - sw.sy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 44 && dist < bestD) { best = { sw, crownDot: crown.dot }; bestD = dist; }
+    }
+  }
+  return best;
+}
+
+function createEdgeWithWords(dotA, dotB, wordA, wordB) {
+  const exists = edges.find(e =>
+    (e.a === dotA.id && e.b === dotB.id) ||
+    (e.a === dotB.id && e.b === dotA.id));
+  if (!exists) edges.push({ a: dotA.id, b: dotB.id, alpha: 0, wordA, wordB });
+}
+
+/* ── EVENT HANDLERS ── */
+// Unified drag state — same for dots and crown words
+let pointerDown   = null;   // { x, y, type:'dot'|'sat', dot, sw, offX, offY }
+let isDragging    = false;
+const DRAG_THRESH = 5;
+
+// snap target for dots, snap crown word for satellites
+// reuse existing snapTarget / snapCrownWord globals
+
+function resetDrag() {
+  // close any auto-opened crowns that had no connection made
+  autoOpenedCrowns.forEach(id => openCrowns.delete(id));
+  autoOpenedCrowns.clear();
+  dragDot       = null;
+  dragSatellite = null;
+  snapTarget    = null;
+  snapCrownWord = null;
+  pointerDown   = null;
+  isDragging    = false;
+  shakeHistory  = [];
+  shakeTriggered = false;
+}
+
+function handleDown(pos) {
+  // satellite hit takes priority (smaller target — check first)
+  const hit = satHitTest(pos.x, pos.y);
+  if (hit) {
+    pointerDown    = { x: pos.x, y: pos.y, type: 'sat',
+                       sw: hit.sw, sourceDot: hit.crownDot };
+    isDragging     = false;
+    shakeHistory   = [{ x: pos.x, y: pos.y, t: Date.now() }];
+    shakeTriggered = false;
     return;
   }
-  c._needsLayout = false;
-  const center = getOrbitCenter(c);
-  c.anchorX = center.x;
-  c.anchorY = center.y;
-  // Posiziona direttamente in orbita — nessun lerp iniziale
-  c.x = center.x + Math.cos(c.orbitAngle) * c.orbitDist;
-  c.y = center.y + Math.sin(c.orbitAngle) * c.orbitDist;
+  const dot = dotAt(pos.x, pos.y);
+  if (dot) {
+    pointerDown    = { x: pos.x, y: pos.y, type: 'dot', dot };
+    isDragging     = false;
+    shakeHistory   = [{ x: pos.x, y: pos.y, t: Date.now() }];
+    shakeTriggered = false;
+    return;
+  }
+  // click su un arco (reale o linea corona) → prepara apertura popover
+  const edge = edgeAt(pos.x, pos.y) || crownLineAt(pos.x, pos.y);
+  if (edge) {
+    pointerDown = { x: pos.x, y: pos.y, type: 'edge', edge };
+    isDragging  = false;
+    return;
+  }
+  pointerDown = null;
+  closeRelationPopover();
 }
 
-function ridistribuisci() {
-  layoutFractals();
-  S.contributi.forEach(c => layoutContributo(c));
-}
+function handleMove(pos) {
+  if (!pointerDown && !dragDot && !dragSatellite) {
+    hoveredDot = dotAt(pos.x, pos.y);
+    const overSat = !hoveredDot && satHitTest(pos.x, pos.y);
+    const overLine = !hoveredDot && !overSat && (edgeAt(pos.x, pos.y) || crownLineHitTest(pos.x, pos.y));
+    canvas.style.cursor = hoveredDot || overSat ? 'grab' : overLine ? 'pointer' : 'default';
+    showTooltip(hoveredDot, pos);
+    return;
+  }
 
-// ═══════════════════════════════════════════════════════════════
-// DRAW 2D
-// ═══════════════════════════════════════════════════════════════
-
-let time = 0;
-
-function draw2D() {
-  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
-  ctx2d.clearRect(0, 0, cw, ch);
-  time++;
-
-  // Sfondo con gradiente radiale caldo
-  const grad = ctx2d.createRadialGradient(cw/2, ch/2, 0, cw/2, ch/2, cw * 0.6);
-  grad.addColorStop(0, 'rgba(200, 185, 160, 0.06)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx2d.fillStyle = grad;
-  ctx2d.fillRect(0, 0, cw, ch);
-
-  // Archi contributi → frattali (linee tratteggiate sottili)
-  S.contributi.forEach(c => {
-    if (!c.anchorX || c.x < -50) return;
-    const alpha = Math.max(0.05, c.glow * 0.22);
-    const col = COL[c.tipo] || COL.parola;
-    // Archi verso tutti i frattali attivati
-    (c.fractalsActivated || []).slice(0, 3).forEach(({ name, activation }, idx) => {
-      const f = S.fractalMap[name?.toLowerCase()];
-      if (!f || f.x <= 0) return;
-      const a = alpha * Math.max(0.3, activation || 0.5) * (1 - idx * 0.25);
-      ctx2d.beginPath();
-      ctx2d.setLineDash([3, 4]);
-      ctx2d.moveTo(c.x, c.y);
-      ctx2d.lineTo(f.x, f.y);
-      ctx2d.strokeStyle = `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${a})`;
-      ctx2d.lineWidth = 0.8;
-      ctx2d.stroke();
-      ctx2d.setLineDash([]);
-    });
-    // Se nessun frattale specifico, linea verso anchorX
-    if (!c.fractalsActivated || c.fractalsActivated.length === 0) {
-      ctx2d.beginPath();
-      ctx2d.setLineDash([3, 4]);
-      ctx2d.moveTo(c.x, c.y);
-      ctx2d.lineTo(c.anchorX, c.anchorY);
-      ctx2d.strokeStyle = `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${alpha})`;
-      ctx2d.lineWidth = 0.8;
-      ctx2d.stroke();
-      ctx2d.setLineDash([]);
-    }
-  });
-
-  // Archi utente (collegamenti manuali)
-  S.edges.forEach(e => {
-    e.age = (e.age || 0) + 1;
-    const fade = Math.max(0, 1 - e.age / 5000);
-    const alpha = e.strength * fade * 0.4;
-    if (alpha < 0.01) return;
-    ctx2d.beginPath();
-    ctx2d.setLineDash([4, 3]);
-    ctx2d.moveTo(e.from.x, e.from.y);
-    ctx2d.lineTo(e.to.x, e.to.y);
-    ctx2d.strokeStyle = `rgba(58, 112, 72, ${alpha})`;
-    ctx2d.lineWidth = 1;
-    ctx2d.stroke();
-    ctx2d.setLineDash([]);
-  });
-
-  // Frattali: cerchi fissi con etichetta
-  S.fractals.forEach(f => {
-    const glowAlpha = (f._glow || 0);
-
-    if (glowAlpha > 0.01) {
-      const g = ctx2d.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.radius * 4);
-      g.addColorStop(0, `rgba(184, 152, 72, ${glowAlpha * 0.35})`);
-      g.addColorStop(1, 'rgba(184, 152, 72, 0)');
-      ctx2d.beginPath();
-      ctx2d.arc(f.x, f.y, f.radius * 4, 0, Math.PI * 2);
-      ctx2d.fillStyle = g;
-      ctx2d.fill();
-      f._glow = glowAlpha * 0.994;
-    }
-
-    if (f.isPure) {
-      ctx2d.beginPath();
-      ctx2d.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
-      ctx2d.fillStyle = `rgba(70, 60, 45, ${0.75 + glowAlpha * 0.25})`;
-      ctx2d.fill();
-      ctx2d.strokeStyle = `rgba(50, 42, 30, 0.5)`;
-      ctx2d.lineWidth = 1;
-      ctx2d.stroke();
-      ctx2d.fillStyle = `rgba(60, 50, 35, 0.8)`;
-      ctx2d.font = '500 11px "DM Mono", monospace';
-      ctx2d.textAlign = 'center';
-      ctx2d.fillText(f.name, f.x, f.y - f.radius - 7);
+  // activate drag once threshold exceeded
+  if (pointerDown && !isDragging) {
+    // edge click non genera drag
+    if (pointerDown.type === 'edge') return;
+    const d = Math.hypot(pos.x - pointerDown.x, pos.y - pointerDown.y);
+    if (d > DRAG_THRESH) {
+      isDragging = true;
+      if (pointerDown.type === 'dot') {
+        dragDot  = pointerDown.dot;
+        dragOffX = pointerDown.x - pointerDown.dot.x;
+        dragOffY = pointerDown.y - pointerDown.dot.y;
+      } else if (pointerDown.type === 'sat') {
+        dragSatellite = { sw: pointerDown.sw, sourceDot: pointerDown.sourceDot,
+                          x: pointerDown.sw.sx, y: pointerDown.sw.sy };
+      }
+      selectedDot = null; // stop crown repulsion while dragging
     } else {
-      // Frattali misti: piccoli e discreti in 2D
-      ctx2d.beginPath();
-      ctx2d.arc(f.x, f.y, 2.5, 0, Math.PI * 2);
-      ctx2d.fillStyle = `rgba(160, 148, 130, ${0.18 + glowAlpha * 0.6})`;
-      ctx2d.fill();
+      return; // not yet dragging
     }
-  });
-
-  // Relayout contributi che erano stati creati con canvas nascosto
-  S.contributi.forEach(c => {
-    if (c._needsLayout && cw > 10) layoutContributo(c);
-  });
-
-  // Contributi: cerchi colorati con orbita multi-frattale
-  S.contributi.forEach(c => {
-    if (c.x < -50) return;
-
-    // Orbita: il centro segue il composito pesato dei frattali attivi
-    c.orbitAngle += c.orbitSpeed;
-    const center = getOrbitCenter(c);
-    c.anchorX += (center.x - c.anchorX) * 0.04;
-    c.anchorY += (center.y - c.anchorY) * 0.04;
-    c.x = c.anchorX + Math.cos(c.orbitAngle) * c.orbitDist;
-    c.y = c.anchorY + Math.sin(c.orbitAngle) * c.orbitDist;
-
-    // Decay glow
-    c.glow = Math.max(0.2, c.glow * 0.997);
-
-    const col = COL[c.tipo] || COL.parola;
-    const r = 5.5 + c.glow * 4;
-    const alpha = 0.5 + c.glow * 0.5;
-
-    // Alone caldo
-    const g = ctx2d.createRadialGradient(c.x, c.y, 0, c.x, c.y, r * 2.5);
-    g.addColorStop(0, `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${alpha * 0.25})`);
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx2d.beginPath();
-    ctx2d.arc(c.x, c.y, r * 2.5, 0, Math.PI * 2);
-    ctx2d.fillStyle = g;
-    ctx2d.fill();
-
-    // Cerchio pieno
-    ctx2d.beginPath();
-    ctx2d.arc(c.x, c.y, r, 0, Math.PI * 2);
-    ctx2d.fillStyle = `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${alpha})`;
-    ctx2d.fill();
-
-    // Label
-    if (c.glow > 0.35 && c.label) {
-      ctx2d.fillStyle = `rgba(44, 36, 22, ${Math.min(0.85, c.glow * 0.9)})`;
-      ctx2d.font = '500 12px "DM Sans", sans-serif';
-      ctx2d.textAlign = 'center';
-      const labelText = c.label.length > 20 ? c.label.slice(0, 20) + '...' : c.label;
-      ctx2d.fillText(labelText, c.x, c.y - r - 6);
-    }
-  });
-
-  // Pulisci archi vecchi
-  S.edges = S.edges.filter(e => (e.age || 0) < 5000);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// DRAW 3D — UNIVERSO
-// ═══════════════════════════════════════════════════════════════
-
-function project3d(x3d, y3d, z3d, cw, ch, R3D) {
-  // Rotazione attorno all'asse X (inclinazione)
-  const cosX = Math.cos(rot3DX), sinX = Math.sin(rot3DX);
-  const ry  =  y3d * cosX - z3d * sinX;
-  const rz0 =  y3d * sinX + z3d * cosX;
-  // Rotazione attorno all'asse Y (azimut)
-  const cosY = Math.cos(rot3DY), sinY = Math.sin(rot3DY);
-  const rx = x3d * cosY + rz0 * sinY;
-  const rz = -x3d * sinY + rz0 * cosY;
-  // Proiezione prospettica forte: FOV basso = effetto 3D drammatico
-  const fov = 1.2;
-  const scale = fov / (fov + rz + 1.4);
-  return { sx: cw / 2 + rx * scale * R3D, sy: ch / 2 - ry * scale * R3D, z: rz, scale };
-}
-
-function draw3D() {
-  const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
-  ctx2d.clearRect(0, 0, cw, ch);
-
-  // ── Sfondo cosmico profondo ──
-  ctx2d.fillStyle = '#080612';
-  ctx2d.fillRect(0, 0, cw, ch);
-
-  // Nebula centrale
-  const nebula = ctx2d.createRadialGradient(cw/2, ch/2, 0, cw/2, ch/2, Math.min(cw, ch) * 0.45);
-  nebula.addColorStop(0,   'rgba(60, 30, 90, 0.18)');
-  nebula.addColorStop(0.4, 'rgba(30, 15, 60, 0.10)');
-  nebula.addColorStop(1,   'rgba(0, 0, 0, 0)');
-  ctx2d.fillStyle = nebula;
-  ctx2d.fillRect(0, 0, cw, ch);
-
-  // Stelle di sfondo fisse
-  STARS_BG.forEach(s => {
-    ctx2d.beginPath();
-    ctx2d.arc(s.x * cw, s.y * ch, s.r, 0, Math.PI * 2);
-    ctx2d.fillStyle = `rgba(220, 215, 200, ${s.a})`;
-    ctx2d.fill();
-  });
-
-  // Auto-rotazione
-  if (!drag3D.active) rot3DY += 0.003;
-
-  const R3D = Math.min(cw, ch) * 0.44;
-
-  // ── Anelli della sfera (equatore + due paralleli) ──
-  const ringAngles = [0, Math.PI / 4, -Math.PI / 4];
-  ringAngles.forEach((tiltAngle, ri) => {
-    const steps = 80;
-    const pts = [];
-    for (let i = 0; i <= steps; i++) {
-      const theta = (i / steps) * Math.PI * 2;
-      const x3 = Math.cos(tiltAngle) * Math.cos(theta);
-      const y3 = Math.sin(tiltAngle);
-      const z3 = Math.cos(tiltAngle) * Math.sin(theta);
-      pts.push(project3d(x3, y3, z3, cw, ch, R3D));
-    }
-    ctx2d.beginPath();
-    pts.forEach((p, i) => {
-      const depth = Math.max(0, Math.min(1, (p.z + 1.4) / 2.8));
-      if (i === 0) ctx2d.moveTo(p.sx, p.sy);
-      else ctx2d.lineTo(p.sx, p.sy);
-    });
-    ctx2d.strokeStyle = `rgba(80, 60, 120, ${ri === 0 ? 0.25 : 0.12})`;
-    ctx2d.lineWidth = ri === 0 ? 0.8 : 0.4;
-    ctx2d.stroke();
-  });
-
-  // ── Proietta tutti i frattali puri per disegnare le connessioni ──
-  const pureFractals = S.fractals.filter(f => f.isPure);
-  const pureProjected = pureFractals.map(f => ({
-    f,
-    ...project3d(f.x3d, f.y3d, f.z3d, cw, ch, R3D)
-  }));
-
-  // Connessioni tra frattali puri adiacenti (anello ottagonale)
-  for (let i = 0; i < pureProjected.length; i++) {
-    const a = pureProjected[i];
-    const b = pureProjected[(i + 1) % pureProjected.length];
-    const depthA = Math.max(0, Math.min(1, (a.z + 2) / 4));
-    const depthB = Math.max(0, Math.min(1, (b.z + 2) / 4));
-    const alpha = Math.min(depthA, depthB) * 0.25;
-    if (alpha < 0.02) continue;
-    const grad = ctx2d.createLinearGradient(a.sx, a.sy, b.sx, b.sy);
-    grad.addColorStop(0, `rgba(180, 150, 80, ${depthA * 0.3})`);
-    grad.addColorStop(1, `rgba(180, 150, 80, ${depthB * 0.3})`);
-    ctx2d.beginPath();
-    ctx2d.moveTo(a.sx, a.sy);
-    ctx2d.lineTo(b.sx, b.sy);
-    ctx2d.strokeStyle = grad;
-    ctx2d.lineWidth = 0.6;
-    ctx2d.setLineDash([4, 6]);
-    ctx2d.stroke();
-    ctx2d.setLineDash([]);
   }
 
-  // Connessioni raggi dal centro ai puri
-  pureProjected.forEach(({ sx, sy, z }) => {
-    const depth = Math.max(0, Math.min(1, (z + 2) / 4));
-    const grad = ctx2d.createLinearGradient(cw/2, ch/2, sx, sy);
-    grad.addColorStop(0, `rgba(100, 70, 160, ${depth * 0.15})`);
-    grad.addColorStop(1, 'rgba(100, 70, 160, 0)');
-    ctx2d.beginPath();
-    ctx2d.moveTo(cw/2, ch/2);
-    ctx2d.lineTo(sx, sy);
-    ctx2d.strokeStyle = grad;
-    ctx2d.lineWidth = 0.5;
-    ctx2d.stroke();
-  });
+  // ── dot drag ──
+  if (dragDot) {
+    dragDot.x  = Math.max(dragDot.r, Math.min(canvas.width  - dragDot.r, pos.x - dragOffX));
+    dragDot.y  = Math.max(dragDot.r, Math.min(canvas.height - dragDot.r, pos.y - dragOffY));
+    dragDot.vx = 0; dragDot.vy = 0;
+    snapTarget = nearestOther(dragDot);
 
-  // ── Raccoglie elementi per painter's sort ──
-  const items = [];
-
-  S.fractals.forEach(f => {
-    const p = project3d(f.x3d, f.y3d, f.z3d, cw, ch, R3D);
-    items.push({ kind: 'frac', f, ...p });
-  });
-
-  S.contributi.forEach(c => {
-    c.orbitAngle += c.orbitSpeed * 0.7;
-    c.glow = Math.max(0.15, c.glow * 0.997);
-
-    let tx = 0, ty = 0, tz = 0, tw = 0;
-    (c.fractalsActivated || []).forEach(({ name, activation }) => {
-      const f = S.fractalMap[name?.toLowerCase()];
-      if (f) {
-        const w = Math.max(0.01, activation || 0.1);
-        tx += f.x3d * w; ty += f.y3d * w; tz += f.z3d * w;
-        tw += w;
+    // auto-open crown of nearest dot only, close all others
+    const CROWN_OPEN_DIST = SAT_SNAP + 30;
+    let nearest = null, nearestDist = Infinity;
+    dots.forEach(d => {
+      if (d === dragDot) return;
+      const dist = Math.hypot(d.x - dragDot.x, d.y - dragDot.y);
+      if (dist < CROWN_OPEN_DIST && dist < nearestDist) {
+        nearest = d; nearestDist = dist;
       }
     });
-    if (tw < 0.01) {
-      tx = Math.cos(c._seed * Math.PI * 2) * 0.6;
-      ty = (c._seed2 - 0.5) * 0.8;
-      tz = Math.sin(c._seed * Math.PI * 2) * 0.6;
-      tw = 1;
-    }
-    const cx3 = tx / tw, cy3 = ty / tw, cz3 = tz / tw;
-    const orbR = 0.20;
-    const ox = cx3 + orbR * Math.cos(c.orbitAngle);
-    const oy = cy3 + orbR * Math.sin(c.orbitAngle * 1.4) * 0.65;
-    const oz = cz3 + orbR * Math.sin(c.orbitAngle) * 0.8;
-
-    const p = project3d(ox, oy, oz, cw, ch, R3D);
-    items.push({ kind: 'contrib', c, ...p });
-  });
-
-  items.sort((a, b) => a.z - b.z);
-
-  // ── Disegna ──
-  items.forEach(item => {
-    if (item.kind === 'frac') {
-      const { f, sx, sy, scale, z } = item;
-      const depth = Math.max(0, Math.min(1, (z + 1.4) / 2.8));
-      const glowA = f._glow || 0;
-      if (glowA > 0.01) f._glow = glowA * 0.993;
-
-      if (f.isPure) {
-        const r = scale * 10 + glowA * 8;
-        // Alone esteso
-        const haloR = r * (4 + glowA * 4);
-        const g = ctx2d.createRadialGradient(sx, sy, 0, sx, sy, haloR);
-        g.addColorStop(0,   `rgba(240, 200, 80,  ${(0.10 + glowA * 0.5) * depth})`);
-        g.addColorStop(0.4, `rgba(180, 120, 60,  ${(0.04 + glowA * 0.2) * depth})`);
-        g.addColorStop(1,   'rgba(0,0,0,0)');
-        ctx2d.beginPath(); ctx2d.arc(sx, sy, haloR, 0, Math.PI * 2);
-        ctx2d.fillStyle = g; ctx2d.fill();
-        // Nucleo brillante
-        ctx2d.beginPath(); ctx2d.arc(sx, sy, r, 0, Math.PI * 2);
-        ctx2d.fillStyle = `rgba(255, 235, 140, ${0.4 + depth * 0.6})`;
-        ctx2d.fill();
-        // Corona
-        ctx2d.beginPath(); ctx2d.arc(sx, sy, r * 1.5, 0, Math.PI * 2);
-        ctx2d.strokeStyle = `rgba(255, 220, 100, ${depth * 0.35})`;
-        ctx2d.lineWidth = 1;
-        ctx2d.stroke();
-        // Nome e simbolo
-        if (depth > 0.15) {
-          const trigIdx = Math.floor(f.id / 8);
-          const trig = TRIGRAMS[trigIdx] || {};
-          const a = Math.min(0.95, depth * 1.2);
-          ctx2d.textAlign = 'center';
-          ctx2d.fillStyle = `rgba(230, 210, 150, ${a})`;
-          ctx2d.font = `${Math.max(8, Math.round(scale * 11))}px "DM Mono", monospace`;
-          ctx2d.fillText(f.name, sx, sy - r - 6);
-          ctx2d.font = `${Math.max(10, Math.round(scale * 15))}px sans-serif`;
-          ctx2d.fillStyle = `rgba(200, 180, 100, ${depth * 0.85})`;
-          ctx2d.fillText(trig.sym || '', sx, sy + r + 14);
-        }
-      } else {
-        // Misti: stelle piccole con scintilla
-        const r = Math.max(1, scale * 2.5 + glowA * 2);
-        if (glowA > 0.05) {
-          const g = ctx2d.createRadialGradient(sx, sy, 0, sx, sy, r * 5);
-          g.addColorStop(0, `rgba(184, 152, 72, ${glowA * 0.5})`);
-          g.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx2d.beginPath(); ctx2d.arc(sx, sy, r * 5, 0, Math.PI * 2);
-          ctx2d.fillStyle = g; ctx2d.fill();
-        }
-        ctx2d.beginPath(); ctx2d.arc(sx, sy, r, 0, Math.PI * 2);
-        ctx2d.fillStyle = `rgba(170, 155, 115, ${0.15 + depth * 0.5 + glowA * 0.4})`;
-        ctx2d.fill();
+    // close any auto-opened crown that is no longer the nearest
+    autoOpenedCrowns.forEach(id => {
+      if (!nearest || id !== nearest.id) {
+        openCrowns.delete(id);
+        autoOpenedCrowns.delete(id);
       }
-    } else if (item.kind === 'contrib') {
-      const { c, sx, sy, scale, z } = item;
-      const depth = Math.max(0, Math.min(1, (z + 1.4) / 2.8));
-      const col = COL[c.tipo] || COL.parola;
-      const age = Math.min(1, (Date.now() - (c.birthTime || Date.now())) / 1500);
-      const r = scale * (7 + c.glow * 6) * (0.3 + age * 0.7);
-      const baseAlpha = (0.4 + depth * 0.6) * (0.5 + c.glow * 0.5);
-
-      // Alone grande
-      const haloR = r * 4.5;
-      const g = ctx2d.createRadialGradient(sx, sy, 0, sx, sy, haloR);
-      g.addColorStop(0,   `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${baseAlpha * 0.5})`);
-      g.addColorStop(0.5, `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${baseAlpha * 0.15})`);
-      g.addColorStop(1,   'rgba(0,0,0,0)');
-      ctx2d.beginPath(); ctx2d.arc(sx, sy, haloR, 0, Math.PI * 2);
-      ctx2d.fillStyle = g; ctx2d.fill();
-
-      // Nucleo
-      ctx2d.beginPath(); ctx2d.arc(sx, sy, r, 0, Math.PI * 2);
-      ctx2d.fillStyle = `rgba(${col[0]}, ${col[1]}, ${col[2]}, ${baseAlpha})`;
-      ctx2d.fill();
-      // Bordo bianco
-      ctx2d.strokeStyle = `rgba(255,255,255,${depth * 0.3})`;
-      ctx2d.lineWidth = 0.7;
-      ctx2d.stroke();
-
-      if (c.glow > 0.45 && c.label && depth > 0.25) {
-        const lbl = c.label.length > 20 ? c.label.slice(0, 20) + '…' : c.label;
-        ctx2d.fillStyle = `rgba(230, 215, 180, ${Math.min(0.9, c.glow * depth)})`;
-        ctx2d.font = '12px "DM Sans", sans-serif';
-        ctx2d.textAlign = 'center';
-        ctx2d.fillText(lbl, sx, sy - r - 7);
-      }
+    });
+    // open the nearest if not already open
+    if (nearest && !openCrowns.has(nearest.id)) {
+      openCrowns.set(nearest.id, makeCrownEntry(nearest));
+      autoOpenedCrowns.add(nearest.id);
     }
-  });
+    shakeHistory.push({ x: pos.x, y: pos.y, t: Date.now() });
+    if (shakeHistory.length > 12) shakeHistory.shift();
+    if (!shakeTriggered && detectShake()) {
+      shakeTriggered = true;
+      disconnectDot(dragDot);
+      shakeHistory = [];
+    }
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
 
-  // HUD
-  ctx2d.fillStyle = 'rgba(150, 130, 100, 0.3)';
-  ctx2d.font = '10px "DM Mono", monospace';
-  ctx2d.textAlign = 'left';
-  ctx2d.fillText(`UNIVERSO 3D  ·  64 frattali  ·  ${S.contributi.length} voci nel campo`, 16, ch - 14);
-  ctx2d.textAlign = 'right';
-  ctx2d.fillText('trascina per ruotare', cw - 16, ch - 14);
+  // ── satellite drag ──
+  if (dragSatellite) {
+    const parent = dragSatellite.sourceDot;
+    dragSatellite.x = pos.x;
+    dragSatellite.y = pos.y;
+    dragSatellite.sw.ox = pos.x - parent.x;
+    dragSatellite.sw.oy = pos.y - parent.y;
+    dragSatellite.sw.vx = 0;
+    dragSatellite.sw.vy = 0;
+    snapCrownWord = nearestCrownWordExcluding(pos.x, pos.y, parent.id);
+    if (!snapCrownWord) {
+      const nd = nearestDotToPos(pos.x, pos.y, parent);
+      snapCrownWord = nd ? { sw: null, crownDot: nd, isDotCenter: true } : null;
+    }
+
+    // auto-open nearest dot crown during satellite drag
+    const CROWN_OPEN_DIST = SAT_SNAP + 30;
+    let nearest = null, nearestDist = Infinity;
+    dots.forEach(d => {
+      if (d === parent) return;
+      const dist = Math.hypot(d.x - pos.x, d.y - pos.y);
+      if (dist < CROWN_OPEN_DIST && dist < nearestDist) {
+        nearest = d; nearestDist = dist;
+      }
+    });
+    autoOpenedCrowns.forEach(id => {
+      if (!nearest || id !== nearest.id) {
+        openCrowns.delete(id);
+        autoOpenedCrowns.delete(id);
+      }
+    });
+    if (nearest && !openCrowns.has(nearest.id)) {
+      openCrowns.set(nearest.id, makeCrownEntry(nearest));
+      autoOpenedCrowns.add(nearest.id);
+    }
+    shakeHistory.push({ x: pos.x, y: pos.y, t: Date.now() });
+    if (shakeHistory.length > 12) shakeHistory.shift();
+    if (!shakeTriggered && detectShake()) {
+      shakeTriggered = true;
+      const sid = parent.id, word = dragSatellite.sw.word;
+      edges = edges.filter(e => !((e.a===sid&&e.wordA===word)||(e.b===sid&&e.wordB===word)));
+      dragSatellite.sw.flash = 1.0;
+      shakeHistory = [];
+    }
+    canvas.style.cursor = 'grabbing';
+  }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// LOOP PRINCIPALE
-// ═══════════════════════════════════════════════════════════════
+function handleUp(pos) {
+  if (dragDot) {
+    if (snapTarget && !shakeTriggered) {
+      createEdgeWithWords(dragDot, snapTarget, null, null);
+      // keep the crown we opened for this connection
+      autoOpenedCrowns.delete(snapTarget.id);
+    }
+    resetDrag();
+    return;
+  }
+  if (dragSatellite) {
+    if (snapCrownWord && !shakeTriggered) {
+      snapCrownWord.isDotCenter
+        ? createEdgeWithWords(dragSatellite.sourceDot, snapCrownWord.crownDot, dragSatellite.sw.word, null)
+        : createEdgeWithWords(dragSatellite.sourceDot, snapCrownWord.crownDot, dragSatellite.sw.word, snapCrownWord.sw.word);
+    }
+    resetDrag();
+    return;
+  }
+  // click (no drag) — toggle crown o apri popover relazione
+  if (pointerDown && !isDragging && pos && Math.hypot(pos.x - pointerDown.x, pos.y - pointerDown.y) <= DRAG_THRESH) {
+    if (pointerDown.type === 'dot') {
+      closeRelationPopover();
+      toggleCrown(pointerDown.dot);
+      selectedDot = pointerDown.dot;
+      showCaption(pointerDown.dot);
+    } else if (pointerDown.type === 'edge') {
+      openRelationPopover(pointerDown.edge, pos);
+    }
+  }
+  resetDrag();
+}
 
+canvas.addEventListener('mousedown', e => { e.preventDefault(); handleDown(getCanvasPos(e)); });
+canvas.addEventListener('mousemove', e => { handleMove(getCanvasPos(e)); });
+canvas.addEventListener('mouseup',   e => { handleUp(getCanvasPos(e)); });
+canvas.addEventListener('mouseleave', () => {
+  hoveredDot = null;
+  document.getElementById('tooltip').style.display = 'none';
+  canvas.style.cursor = 'default';
+  // commit any pending drag
+  if (dragDot && snapTarget && !shakeTriggered) createEdgeWithWords(dragDot, snapTarget, null, null);
+  if (dragSatellite && snapCrownWord && !shakeTriggered) {
+    snapCrownWord.isDotCenter
+      ? createEdgeWithWords(dragSatellite.sourceDot, snapCrownWord.crownDot, dragSatellite.sw.word, null)
+      : createEdgeWithWords(dragSatellite.sourceDot, snapCrownWord.crownDot, dragSatellite.sw.word, snapCrownWord.sw.word);
+  }
+  resetDrag();
+});
+
+canvas.addEventListener('touchstart', e => { e.preventDefault(); handleDown(getCanvasPos(e)); }, { passive: false });
+canvas.addEventListener('touchmove',  e => { e.preventDefault(); handleMove(getCanvasPos(e)); }, { passive: false });
+canvas.addEventListener('touchend',   e => { handleUp(getCanvasPos(e.changedTouches ? { touches: e.changedTouches } : e)); }, { passive: false });
+
+
+
+/* ═══════════════════════════════════════════════════════
+   SELECTION DISPLAY
+═══════════════════════════════════════════════════════ */
+const SNAP_DIST = 65;
+let snapTarget = null;
+let autoOpenedCrowns = new Set(); // dot ids auto-opened during drag
+
+function nearestOther(dot) {
+  let best = null, bestD = Infinity;
+  dots.forEach(d => {
+    if (d.id === dot.id) return;
+    const dx = d.x - dot.x, dy = d.y - dot.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < SNAP_DIST && dist < bestD) { best = d; bestD = dist; }
+  });
+  return best;
+}
+
+function showCaption(dot) {
+  document.getElementById('captionEmpty').style.display  = 'none';
+  document.getElementById('captionLabel').style.display  = '';
+  document.getElementById('captionText').style.display   = '';
+  document.getElementById('captionLabel').textContent    = LABELS[dot.type] || dot.type;
+  document.getElementById('captionLabel').style.color    = COLORS[dot.type];
+  document.getElementById('captionText').textContent     = dot.text || '—';
+}
+
+function deselectAll() {
+  selectedDot = null;
+  document.getElementById('captionEmpty').style.display = '';
+  document.getElementById('captionLabel').style.display = 'none';
+  document.getElementById('captionText').style.display  = 'none';
+}
+
+function showTooltip(dot, pos) {
+  const tt = document.getElementById('tooltip');
+  if (!dot) { tt.style.display = 'none'; return; }
+  document.getElementById('tt-type').textContent  = LABELS[dot.type] || dot.type;
+  document.getElementById('tt-type').style.color  = COLORS[dot.type];
+  document.getElementById('tt-text').textContent  = dot.text.length > 80 ? dot.text.slice(0,80)+'…' : dot.text;
+  let tx = pos.x + 14, ty = pos.y - 10;
+  if (tx + 230 > canvas.width)  tx = pos.x - 230;
+  if (ty + 80  > canvas.height) ty = pos.y - 80;
+  tt.style.left = tx+'px'; tt.style.top = ty+'px'; tt.style.display = 'block';
+}
+
+/* ═══════════════════════════════════════════════════════
+   DRAW LOOP
+═══════════════════════════════════════════════════════ */
 function draw() {
-  if (S.modo3D) {
-    draw3D();
-  } else {
-    draw2D();
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const now = performance.now();
+
+  /* ── force-directed physics ── */
+  dots.forEach(d => {
+    d.phase += 0.007;
+    if (d.alpha < d.targetAlpha) d.alpha = Math.min(d.targetAlpha, d.alpha + 0.025);
+    if (d.flash > 0) d.flash = Math.max(0, d.flash - 0.03);
+  });
+
+  if (animating && dots.length > 1) {
+    const isDragging = dragDot !== null || dragSatellite !== null;
+
+    const fx = new Float32Array(dots.length);
+    const fy = new Float32Array(dots.length);
+
+    // repulsion — only push away if overlapping
+    for (let i = 0; i < dots.length; i++) {
+      for (let j = i + 1; j < dots.length; j++) {
+        const dx = dots[i].x - dots[j].x;
+        const dy = dots[i].y - dots[j].y;
+        const dist = Math.sqrt(dx*dx + dy*dy) || 0.1;
+        const minD = dots[i].r + dots[j].r + 130;
+        if (dist < minD) {
+          const f = (minD - dist) * 0.06;
+          const nx = dx / dist, ny = dy / dist;
+          fx[i] += nx * f;  fy[i] += ny * f;
+          fx[j] -= nx * f;  fy[j] -= ny * f;
+        }
+      }
+    }
+
+    if (!isDragging) {
+      // gravity — only if far from center
+      dots.forEach((d, i) => {
+        const dx = W/2 - d.x, dy = H/2 - d.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > 40) {
+          fx[i] += dx * 0.001;
+          fy[i] += dy * 0.001;
+        }
+      });
+
+      // edge attraction — only if stretched beyond dead zone
+      edges.forEach(edge => {
+        const ai = dots.findIndex(d => d.id === edge.a);
+        const bi = dots.findIndex(d => d.id === edge.b);
+        if (ai < 0 || bi < 0) return;
+        const dx = dots[bi].x - dots[ai].x;
+        const dy = dots[bi].y - dots[ai].y;
+        const dist = Math.sqrt(dx*dx + dy*dy) || 0.1;
+        const stretch = dist - 180;
+        if (Math.abs(stretch) < 20) return; // wide dead zone
+        const f = stretch * 0.002;
+        const nx = dx / dist, ny = dy / dist;
+        fx[ai] += nx * f;  fy[ai] += ny * f;
+        fx[bi] -= nx * f;  fy[bi] -= ny * f;
+      });
+
+      // crown repulsion (click-opened only)
+      for (const [id, crown] of openCrowns) {
+        if (autoOpenedCrowns.has(id)) continue;
+        const parentIdx = dots.findIndex(d => d.id === id);
+        crown.words.forEach(sw => {
+          if (sw.sx === undefined || sw.progress < 0.7) return;
+          dots.forEach((d, i) => {
+            if (i === parentIdx) return;
+            const dx = d.x - sw.sx;
+            const dy = d.y - sw.sy;
+            const dist = Math.sqrt(dx*dx + dy*dy) || 0.1;
+            if (dist > 140) return;
+            const f = (140 - dist) * 0.03;
+            fx[i] += (dx / dist) * f;
+            fy[i] += (dy / dist) * f;
+          });
+        });
+      }
+    }
+
+    // integrate
+    const DAMP  = isDragging ? 0.35 : 0.78;
+    const VMAX  = isDragging ? 0.5  : 0.8;
+    const VSTOP = 0.06;
+
+    dots.forEach((d, i) => {
+      if (d === dragDot) return;
+      d.vx = (d.vx + fx[i]) * DAMP;
+      d.vy = (d.vy + fy[i]) * DAMP;
+      const speed = Math.sqrt(d.vx*d.vx + d.vy*d.vy);
+      if (speed < VSTOP) { d.vx = 0; d.vy = 0; return; }
+      if (speed > VMAX) { d.vx = d.vx/speed*VMAX; d.vy = d.vy/speed*VMAX; }
+      d.x += d.vx; d.y += d.vy;
+      const pad = d.r + 10;
+      if (d.x < pad)     { d.x = pad;     d.vx =  Math.abs(d.vx) * 0.3; }
+      if (d.x > W - pad) { d.x = W - pad; d.vx = -Math.abs(d.vx) * 0.3; }
+      if (d.y < pad)     { d.y = pad;     d.vy =  Math.abs(d.vy) * 0.3; }
+      if (d.y > H - pad) { d.y = H - pad; d.vy = -Math.abs(d.vy) * 0.3; }
+    });
   }
+
+  // build live dot lookup — rebuilt every frame
+  const dotById = new Map();
+  dots.forEach(d => dotById.set(d.id, d));
+
+  // animate all open crowns with spring physics
+  const SPRING_K    = 0.18;   // stiffness
+  const SPRING_DAMP = 0.72;   // damping (< 1 = bounce, closer to 1 = overdamped)
+
+  for (const [id, crown] of openCrowns) {
+    const liveDot = dotById.get(id);
+    if (!liveDot) { openCrowns.delete(id); continue; }
+    crown.dot = liveDot;
+    crown.progress = Math.min(1, crown.progress + 0.055);
+
+    crown.words.forEach((sw, i) => {
+      sw.progress = Math.min(1, crown.progress * 1.3 - i * 0.06);
+      if (sw.progress < 0) sw.progress = 0;
+
+      if (dragSatellite?.sw === sw) {
+        // being dragged — set position directly from cursor, no spring lag
+        sw.sx = dragSatellite.x;
+        sw.sy = dragSatellite.y;
+        sw.vx = 0; sw.vy = 0;
+        return;
+      }
+
+      // target absolute position = parent + offset scaled by entry ease
+      const ease = 1 - Math.pow(1 - Math.max(0, sw.progress), 3);
+      const targetX = liveDot.x + sw.ox * ease;
+      const targetY = liveDot.y + sw.oy * ease;
+
+      // initialise sx/sy on first frame
+      if (sw.sx === undefined) { sw.sx = targetX; sw.sy = targetY; }
+
+      // spring force toward target
+      const fx = (targetX - sw.sx) * SPRING_K;
+      const fy = (targetY - sw.sy) * SPRING_K;
+
+      sw.vx = (sw.vx + fx) * SPRING_DAMP;
+      sw.vy = (sw.vy + fy) * SPRING_DAMP;
+      sw.sx += sw.vx;
+      sw.sy += sw.vy;
+      // clamp entro i bordi del canvas
+      sw.sx = Math.max(30, Math.min(W - 30, sw.sx));
+      sw.sy = Math.max(14, Math.min(H - 14, sw.sy));
+    });
+  }
+
+  /* focus state — computed once, used by edges and dots */
+  const hasFocus = selectedDot !== null;
+
+  /* draw edges — always from live dot positions */
+  edges.forEach(edge => {
+    const da = dotById.get(edge.a);
+    const db = dotById.get(edge.b);
+    if (!da || !db) return;
+    if (edge.alpha < 0.7) edge.alpha = Math.min(0.7, edge.alpha + 0.02);
+
+    // always start from live dot centers
+    let ax = da.x, ay = da.y, bx = db.x, by = db.y;
+    let labelA = null, labelB = null;
+
+    // offset to word satellite if crown is open and word has progressed
+    if (edge.wordA) {
+      const cA = openCrowns.get(da.id);
+      const sw = cA?.words.find(w => w.word === edge.wordA);
+      if (sw && sw.progress > 0.4 && sw.sx !== undefined) {
+        ax = sw.sx; ay = sw.sy; labelA = sw.word;
+      }
+    }
+    if (edge.wordB) {
+      const cB = openCrowns.get(db.id);
+      const sw = cB?.words.find(w => w.word === edge.wordB);
+      if (sw && sw.progress > 0.4 && sw.sx !== undefined) {
+        bx = sw.sx; by = sw.sy; labelB = sw.word;
+      }
+    }
+
+    ctx.save();
+    const edgeInFocus = !hasFocus || (selectedDot && (da.id === selectedDot.id || db.id === selectedDot.id));
+    ctx.globalAlpha = edge.alpha * (edgeInFocus ? 1 : 0.15);
+    const mx = (ax + bx) / 2;
+    const my = (ay + by) / 2;
+
+    // ── stile arco per tipo di relazione ──
+    const rel = edge.relation;
+    if (!rel) {
+      // non tipizzato: tratteggio grigio sottile
+      ctx.strokeStyle = '#9C9082'; ctx.lineWidth = 1.2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (rel === 'IS_A') {
+      // è un: linea continua netta — struttura tassonomica
+      ctx.strokeStyle = '#1E1B14'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+    } else if (rel === 'CAUSES') {
+      // causa: linea spessa con freccia — causalità forte
+      ctx.strokeStyle = '#B83225'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+      // freccia a bx,by
+      const arrowLen = 12, arrowW = 6;
+      const dx = bx - mx, dy = by - my;
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      const ux = dx/len, uy = dy/len;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx - ux*arrowLen + uy*arrowW, by - uy*arrowLen - ux*arrowW);
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx - ux*arrowLen - uy*arrowW, by - uy*arrowLen + ux*arrowW);
+      ctx.stroke();
+    } else if (rel === 'OPPOSITE_OF') {
+      // opposto: tratti perpendicolari (≠) lungo la linea
+      ctx.strokeStyle = '#5A5245'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+      const totalLen = Math.hypot(bx-ax, by-ay);
+      const ticks = Math.max(3, Math.floor(totalLen / 28));
+      for (let i = 1; i <= ticks; i++) {
+        const t = i / (ticks + 1);
+        const px = ax*(1-t)*(1-t) + 2*mx*t*(1-t) + bx*t*t;
+        const py = ay*(1-t)*(1-t) + 2*my*t*(1-t) + by*t*t;
+        // tangente approssimata
+        const dt = 0.01;
+        const t1 = Math.min(1, t + dt);
+        const px1 = ax*(1-t1)*(1-t1) + 2*mx*t1*(1-t1) + bx*t1*t1;
+        const py1 = ay*(1-t1)*(1-t1) + 2*my*t1*(1-t1) + by*t1*t1;
+        const tdx = px1 - px, tdy = py1 - py;
+        const tlen = Math.sqrt(tdx*tdx + tdy*tdy) || 1;
+        // perpendicolare
+        const nx = -tdy/tlen * 7, ny = tdx/tlen * 7;
+        ctx.beginPath(); ctx.moveTo(px - nx, py - ny); ctx.lineTo(px + nx, py + ny); ctx.stroke();
+      }
+    } else if (rel === 'SIMILAR_TO') {
+      // simile: doppia linea parallela — affinità
+      ctx.strokeStyle = '#1E3F6F'; ctx.lineWidth = 1;
+      const dx = bx-ax, dy = by-ay, len = Math.sqrt(dx*dx+dy*dy)||1;
+      const nx = -dy/len * 3, ny = dx/len * 3;
+      ctx.beginPath(); ctx.moveTo(ax+nx, ay+ny); ctx.quadraticCurveTo(mx+nx, my+ny, bx+nx, by+ny); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ax-nx, ay-ny); ctx.quadraticCurveTo(mx-nx, my-ny, bx-nx, by-ny); ctx.stroke();
+    } else if (rel === 'HAS') {
+      // ha: trattini corti — possesso
+      ctx.strokeStyle = '#1F4D33'; ctx.lineWidth = 1.8;
+      ctx.setLineDash([7, 4]);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (rel === 'DOES') {
+      // fa: linea continua con freccia — azione
+      ctx.strokeStyle = '#9A6E0A'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+      const arrowLen = 10, arrowW = 5;
+      const dx = bx - mx, dy = by - my, len = Math.sqrt(dx*dx + dy*dy) || 1;
+      const ux = dx/len, uy = dy/len;
+      ctx.beginPath();
+      ctx.moveTo(bx, by); ctx.lineTo(bx - ux*arrowLen + uy*arrowW, by - uy*arrowLen - ux*arrowW);
+      ctx.moveTo(bx, by); ctx.lineTo(bx - ux*arrowLen - uy*arrowW, by - uy*arrowLen + ux*arrowW);
+      ctx.stroke();
+    } else if (rel === 'PART_OF') {
+      // parte di: puntini — frammentazione
+      ctx.strokeStyle = '#5A5245'; ctx.lineWidth = 2;
+      ctx.setLineDash([2, 6]);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (rel === 'USED_FOR') {
+      // usato per: tratto lungo + punto — funzionale
+      ctx.strokeStyle = '#1E1B14'; ctx.lineWidth = 1.5;
+      ctx.setLineDash([12, 4, 3, 4]);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      // fallback
+      ctx.strokeStyle = '#5A5245'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by); ctx.stroke();
+    }
+
+    // midpoint marker
+    ctx.globalAlpha = edge.alpha * 0.9;
+    ctx.fillStyle   = edge.relation ? '#1E1B14' : '#9C9082';
+    ctx.beginPath();
+    ctx.arc(mx, my, edge.relation ? 3 : 2.5, 0, Math.PI*2);
+    ctx.fill();
+
+    // relation label al centro dell'arco
+    if (edge.relation && REL_LABELS[edge.relation]) {
+      const rl = REL_LABELS[edge.relation];
+      ctx.font = "500 14px 'IBM Plex Mono', monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      const tw = ctx.measureText(rl).width;
+      ctx.globalAlpha = edgeInFocus ? 0.95 : 0.4;
+      ctx.fillStyle = '#F4F0E6';
+      ctx.fillRect(mx - tw/2 - 5, my - 18, tw + 10, 16);
+      ctx.strokeStyle = '#9C9082'; ctx.lineWidth = 0.5;
+      ctx.strokeRect(mx - tw/2 - 5, my - 18, tw + 10, 16);
+      ctx.fillStyle = '#1E1B14';
+      ctx.fillText(rl, mx, my - 4);
+    }
+
+    // word labels at endpoints when snapped to words
+    if (labelA || labelB) {
+      ctx.font = "400 15px 'IBM Plex Mono', monospace";
+      ctx.textBaseline = 'bottom';
+      if (labelA) {
+        ctx.globalAlpha = edge.alpha * 0.7;
+        ctx.fillStyle = COLORS[da.type];
+        ctx.textAlign = ax < mx ? 'right' : 'left';
+        ctx.fillText(labelA, ax + (ax < mx ? -5 : 5), ay - 3);
+      }
+      if (labelB) {
+        ctx.globalAlpha = edge.alpha * 0.7;
+        ctx.fillStyle = COLORS[db.type];
+        ctx.textAlign = bx < mx ? 'right' : 'left';
+        ctx.fillText(labelB, bx + (bx < mx ? -5 : 5), by - 3);
+      }
+    }
+
+    ctx.restore();
+  });
+
+  /* snap preview line — shown while dragging near another dot */
+  if (dragDot && snapTarget) {
+    const progress = 1 - (Math.hypot(dragDot.x - snapTarget.x, dragDot.y - snapTarget.y) / SNAP_DIST);
+    ctx.save();
+    ctx.globalAlpha = 0.25 + progress * 0.55;
+    ctx.strokeStyle = '#1E1B14';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(dragDot.x, dragDot.y);
+    ctx.lineTo(snapTarget.x, snapTarget.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // snap target highlight ring
+    ctx.globalAlpha = 0.20 + progress * 0.40;
+    ctx.strokeStyle = COLORS[snapTarget.type];
+    ctx.lineWidth   = 2;
+    ctx.beginPath();
+    ctx.arc(snapTarget.x, snapTarget.y, snapTarget.r + 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* draw dots — skip dragDot, drawn separately last */
+  dots.forEach(d => {
+    if (d === dragDot) return;
+    const isSelected = d === selectedDot;
+    const isHovered  = d === hoveredDot;
+    const col = COLORS[d.type];
+    const pulse = 1 + 0.08 * Math.sin(d.phase);
+    const flashBoost = d.flash ? d.flash * 0.5 : 0;
+    const r = d.r * (isSelected ? 1.45 : pulse);
+
+    // dim non-selected dots when a dot is focused
+    const dimFactor = hasFocus && !isSelected ? 0.22 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, d.alpha + flashBoost) * dimFactor;
+
+    // selection ring
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // hover ring
+    if (isHovered && !isSelected) {
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = 1;
+      ctx.globalAlpha = 0.35;
+      ctx.stroke();
+      ctx.globalAlpha = Math.min(1, d.alpha + flashBoost);
+    }
+
+    // fill
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.fill();
+
+    // outline
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 1.2;
+    ctx.globalAlpha = Math.min(1, d.alpha + flashBoost) * 0.6;
+    ctx.stroke();
+
+    // inner dot for larger types
+    if (d.r >= 12) {
+      ctx.globalAlpha = Math.min(1, d.alpha + flashBoost) * 0.3;
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // crown indicator dots — shown when crown is closed
+    const crown = openCrowns.get(d.id);
+    const wordCount = extractStarWords(d.text).length;
+    if (wordCount > 0 && !crown) {
+      const indicR   = r + 10;
+      const dotR     = 3;
+      const baseAlpha = Math.min(1, d.alpha + flashBoost) * 0.55;
+      ctx.globalAlpha = baseAlpha;
+      ctx.fillStyle   = col;
+      for (let i = 0; i < wordCount; i++) {
+        const angle = (Math.PI * 2 / wordCount) * i - Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(
+          d.x + Math.cos(angle) * indicR,
+          d.y + Math.sin(angle) * indicR,
+          dotR, 0, Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+
+    // always-visible label below the dot
+    if (d.label) {
+      const labelAlpha = Math.min(1, d.alpha + flashBoost);
+      const fontSize   = isSelected ? 20 : 18;
+      ctx.font         = (isSelected ? '500 ' : '400 ') + fontSize + "px 'IBM Plex Sans', sans-serif";
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'top';
+      const ly = d.y + r + 8;
+      const tw = ctx.measureText(d.label).width;
+      const pw = tw + 14, ph = fontSize + 10;
+      // clamp orizzontale per non uscire dal canvas
+      const lx = Math.max(pw / 2 + 4, Math.min(W - pw / 2 - 4, d.x));
+      // pill background
+      ctx.globalAlpha = labelAlpha * (isSelected ? 0.90 : 0.75);
+      ctx.fillStyle   = '#F4F0E6';
+      ctx.fillRect(lx - pw / 2, ly - 1, pw, ph);
+      // text
+      ctx.globalAlpha = labelAlpha * (isSelected ? 1.0 : 0.85);
+      ctx.fillStyle   = isSelected ? col : '#3A3528';
+      ctx.fillText(d.label, lx, ly + 1);
+    }
+
+    ctx.restore();
+  });
+
+  /* draw dragDot on top — always fully visible while dragging */
+  if (dragDot) {
+    const d   = dragDot;
+    const col = COLORS[d.type];
+    const r   = d.r * 1.3;
+    ctx.save();
+    ctx.globalAlpha = 1;
+    // drag ring
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r + 7, 0, Math.PI * 2);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]);
+    // fill
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = col; ctx.fill();
+    // outline
+    ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.6; ctx.stroke();
+    // inner highlight
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    // label
+    if (d.label) {
+      ctx.globalAlpha = 1;
+      ctx.font = "500 13px 'IBM Plex Mono', monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      const tw = ctx.measureText(d.label).width;
+      const lx = d.x, ly = d.y + r + 4;
+      ctx.fillStyle = '#F4F0E6';
+      ctx.fillRect(lx - tw/2 - 3, ly - 1, tw + 6, 13);
+      ctx.fillStyle = col;
+      ctx.fillText(d.label, lx, ly + 1);
+    }
+    ctx.restore();
+  }
+
+  /* ── helper: draw a star corona ── */
+  function drawCrown(crown, orbitR) {
+    const col = COLORS[crown.dot.type];
+    crown.words.forEach(sw => {
+      if (sw.progress <= 0) return;
+
+      const isBeingDragged = dragSatellite?.sw === sw;
+      const isSnapped      = snapCrownWord?.sw === sw;
+
+      if (isBeingDragged) return;
+
+      ctx.save();
+      const flashBoost = sw.flash ? sw.flash * 0.4 : 0;
+      if (sw.flash > 0) sw.flash = Math.max(0, sw.flash - 0.04);
+      ctx.globalAlpha = Math.min(1, sw.progress * 0.9 + flashBoost);
+
+      // spoke from parent center to word
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = isSnapped ? 1.5 : 0.8;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(crown.dot.x, crown.dot.y);
+      ctx.lineTo(sw.sx, sw.sy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // dot
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(sw.sx, sw.sy, isSnapped ? 8 : 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (isSnapped) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth   = 1.5;
+        ctx.globalAlpha = sw.progress * 0.45;
+        ctx.beginPath();
+        ctx.arc(sw.sx, sw.sy, 10, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // label — direction from parent to word
+      const dx = sw.ox, dy = sw.oy;
+      const onLeft  = dx < -8;
+      const onRight = dx >  8;
+      ctx.font         = (isSnapped ? '600' : '500') + " 16px 'IBM Plex Mono', monospace";
+      ctx.textBaseline = 'middle';
+      ctx.textAlign    = onLeft ? 'right' : onRight ? 'left' : 'center';
+      const lox = onLeft ? -8 : onRight ? 8 : 0;
+      const loy = (!onLeft && !onRight) ? (dy > 0 ? 11 : -11) : 0;
+      const tw  = ctx.measureText(sw.word).width;
+      const bw  = tw + 6, bh = 14;
+      const bx  = sw.sx + lox - (onLeft ? bw : onRight ? 0 : bw/2) - 1;
+      const by  = sw.sy + loy - 7;
+      ctx.globalAlpha = Math.min(1, sw.progress * 0.85 + flashBoost);
+      ctx.fillStyle   = '#F4F0E6';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.globalAlpha = Math.min(1, sw.progress + flashBoost);
+      ctx.fillStyle   = col;
+      ctx.fillText(sw.word, sw.sx + lox, sw.sy + loy);
+
+      ctx.restore();
+    });
+  }
+
+  /* draw all open crowns */
+  for (const [, crown] of openCrowns) {
+    drawCrown(crown, 110);
+  }
+
+  /* dragged satellite — follows cursor, snaps to crown word */
+  if (dragSatellite) {
+    const { sw, sourceDot } = dragSatellite;
+    const col  = COLORS[sourceDot.type];
+    const tipX = sw.sx ?? dragSatellite.x;
+    const tipY = sw.sy ?? dragSatellite.y;
+
+    ctx.save();
+    // thread from parent to current word position
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = snapCrownWord ? 1.5 : 1;
+    ctx.setLineDash(snapCrownWord ? [] : [3, 4]);
+    ctx.globalAlpha = snapCrownWord ? 0.75 : 0.5;
+    ctx.beginPath();
+    ctx.moveTo(sourceDot.x, sourceDot.y);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // snap target ring
+    if (snapCrownWord) {
+      const tx = snapCrownWord.isDotCenter ? snapCrownWord.crownDot.x : snapCrownWord.sw.sx;
+      const ty = snapCrownWord.isDotCenter ? snapCrownWord.crownDot.y : snapCrownWord.sw.sy;
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = COLORS[snapCrownWord.crownDot.type];
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.arc(tx, ty, 10, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      // dot at current word position when free-floating
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle   = col;
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 5, 0, Math.PI * 2);
+      ctx.fill();
+      // label
+      ctx.font = "600 13px 'IBM Plex Mono', monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const tw = ctx.measureText(sw.word).width;
+      ctx.globalAlpha = 0.88;
+      ctx.fillStyle   = '#F4F0E6';
+      ctx.fillRect(tipX - tw/2 - 4, tipY - 18, tw + 8, 14);
+      ctx.fillStyle = col;
+      ctx.fillText(sw.word, tipX, tipY - 11);
+    }
+    ctx.restore();
+  }
+
   requestAnimationFrame(draw);
 }
 
-draw();
-
-// ── Toggle 3D ──
-function toggle3D() {
-  S.modo3D = !S.modo3D;
-  const btn = document.getElementById('btn-3d');
-  btn.textContent = S.modo3D ? '↩ 2D' : '✦ 3D';
-  btn.style.background = S.modo3D ? 'var(--text)' : '';
-  btn.style.color = S.modo3D ? 'var(--surface)' : '';
-  canvas.classList.toggle('modo-3d', S.modo3D);
-  document.getElementById('campo-hint').textContent = S.modo3D
-    ? 'Trascina per ruotare l\'universo'
-    : '← clicca un punto per leggere il contributo';
+function clearField() {
+  dots = []; edges = []; openCrowns.clear();
+  autoOpenedCrowns.clear();
+  selectedDot = null; hoveredDot = null;
+  dragDot = null; dragSatellite = null;
+  snapTarget = null; snapCrownWord = null;
+  nextId = 1;
 }
 
-// Stato iniziale: 3D attivo di default
-window.addEventListener('load', () => {
-  const btn = document.getElementById('btn-3d');
-  if (btn) {
-    btn.style.background = 'var(--text)';
-    btn.style.color = 'var(--surface)';
-  }
-  canvas.classList.add('modo-3d');
-  document.getElementById('campo-hint').textContent = 'Trascina per ruotare l\'universo';
-});
+function reseedField() {
+  resetDrag();
+  openCrowns.clear();
+  autoOpenedCrowns.clear();
+  selectedDot = null;
+  resizeCanvas();
+  seedDots();
+}
 
-// ── Drag 3D (mouse) ──
-canvas.addEventListener('mousedown', e => {
-  if (!S.modo3D) return;
-  drag3D.active = true;
-  drag3D.lastX = e.clientX;
-  drag3D.lastY = e.clientY;
-  canvas.classList.add('dragging');
-});
-
-window.addEventListener('mousemove', e => {
-  if (!S.modo3D || !drag3D.active) return;
-  const dx = e.clientX - drag3D.lastX;
-  const dy = e.clientY - drag3D.lastY;
-  rot3DY += dx * 0.006;
-  rot3DX += dy * 0.006;
-  rot3DX = Math.max(-1.3, Math.min(1.3, rot3DX));
-  drag3D.lastX = e.clientX;
-  drag3D.lastY = e.clientY;
-});
-
-window.addEventListener('mouseup', () => {
-  drag3D.active = false;
-  canvas.classList.remove('dragging');
-});
-
-// ── Drag 3D (touch) ──
-canvas.addEventListener('touchstart', e => {
-  if (!S.modo3D) return;
-  drag3D.active = true;
-  drag3D.lastX = e.touches[0].clientX;
-  drag3D.lastY = e.touches[0].clientY;
-}, { passive: true });
-
-canvas.addEventListener('touchmove', e => {
-  if (!S.modo3D || !drag3D.active) return;
-  const dx = e.touches[0].clientX - drag3D.lastX;
-  const dy = e.touches[0].clientY - drag3D.lastY;
-  rot3DY += dx * 0.006;
-  rot3DX += dy * 0.006;
-  rot3DX = Math.max(-1.3, Math.min(1.3, rot3DX));
-  drag3D.lastX = e.touches[0].clientX;
-  drag3D.lastY = e.touches[0].clientY;
-}, { passive: true });
-
-canvas.addEventListener('touchend', () => { drag3D.active = false; });
-
-// ── Click su canvas (solo modalità 2D) ──
-canvas.addEventListener('click', function(e) {
-  if (S.modo3D) return;
-
-  const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-
-  let closest = null, minDist = 20;
-  S.contributi.forEach(c => {
-    const d = Math.sqrt((c.x - mx) ** 2 + (c.y - my) ** 2);
-    if (d < minDist) { closest = c; minDist = d; }
+function resetLayout() {
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2, rad = Math.min(W,H) * 0.38;
+  dots.forEach((d, i) => {
+    const angle = (Math.PI * 2 / dots.length) * i - Math.PI / 2;
+    d.x = cx + Math.cos(angle) * rad;
+    d.y = cy + Math.sin(angle) * rad;
+    d.vx = 0; d.vy = 0;
   });
+}
 
-  if (closest) {
-    if (S.collegaMode) {
-      handleCollegaClick(closest);
-    } else {
-      mostraInfo(closest);
-    }
-    return;
-  }
+/* ═══════════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════════ */
+function showStep(id) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+}
 
-  let closestF = null; minDist = 15;
-  S.fractals.forEach(f => {
-    const d = Math.sqrt((f.x - mx) ** 2 + (f.y - my) ** 2);
-    if (d < minDist) { closestF = f; minDist = d; }
+function goStep(type) {
+  if (type === 'risuona') fetchState();
+  showStep('step2-' + type);
+}
+
+function backToChoose() {
+  ['narrateInput','risuonaInput','connectInput','wordA','wordB'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
   });
-
-  if (closestF) {
-    mostraInfoFrattale(closestF);
-    return;
-  }
-
-  chiudiInfo();
-});
-
-function mostraInfo(c) {
-  const panel = document.getElementById('info-panel');
-  document.getElementById('info-title').textContent = c.label || c.tipo;
-  let meta = '';
-  if (c.userName) meta += `da ${c.userName}`;
-  const fractNames = (c.fractalsActivated || []).map(f => f.name).filter(Boolean);
-  if (fractNames.length > 0) meta += (meta ? ' · ' : '') + `frattali: ${fractNames.slice(0, 3).join(', ')}`;
-  if (c.text) meta += (meta ? '\n' : '') + c.text;
-  document.getElementById('info-meta').textContent = meta;
-  panel.classList.add('visibile');
+  updateCount('narrateInput','cnt-narra','btn-narra');
+  updateCount('risuonaInput','cnt-risuona','btn-risuona');
+  document.getElementById('cnt-connetti').textContent = '0';
+  document.getElementById('btn-connetti').disabled = true;
+  showStep('step1');
 }
 
-function mostraInfoFrattale(f) {
-  const panel = document.getElementById('info-panel');
-  const lower = Math.floor(f.id / 8);
-  const upper = f.id % 8;
-  document.getElementById('info-title').textContent = f.name;
-  const lowerT = TRIGRAMS[lower];
-  const upperT = TRIGRAMS[upper];
-  let meta = `${lowerT.sym} ${lowerT.name} (${lowerT.dim})`;
-  if (lower !== upper) meta += ` × ${upperT.sym} ${upperT.name} (${upperT.dim})`;
-  meta += `\n${f.word_count || 0} parole nel lessico`;
-  if (f.isPure) meta += '\nEsagramma puro — attrattore principale';
-  document.getElementById('info-meta').textContent = meta;
-  panel.classList.add('visibile');
+function updateCount(inputId, cntId, btnId) {
+  const el = document.getElementById(inputId);
+  document.getElementById(cntId).textContent = el.value.length;
+  document.getElementById(btnId).disabled = el.value.trim().length < 4;
 }
 
-function chiudiInfo() {
-  document.getElementById('info-panel').classList.remove('visibile');
+function checkConnect() {
+  const a = document.getElementById('wordA').value.trim();
+  const b = document.getElementById('wordB').value.trim();
+  const t = document.getElementById('connectInput').value;
+  document.getElementById('cnt-connetti').textContent = t.length;
+  document.getElementById('btn-connetti').disabled = !(a && b && t.trim().length > 3);
 }
 
-// ── Collega mode ──
-function toggleCollegaMode() {
-  S.collegaMode = !S.collegaMode;
-  S.collegaSrc = null;
-  const btn = document.getElementById('btn-collega');
-  btn.style.background = S.collegaMode ? 'var(--text)' : '';
-  btn.style.color = S.collegaMode ? 'var(--surface)' : '';
-  document.getElementById('campo-hint').textContent = S.collegaMode
-    ? 'Clicca due punti per collegarli'
-    : '← clicca un punto per leggere il contributo';
-  canvas.style.cursor = S.collegaMode ? 'pointer' : (S.modo3D ? 'grab' : 'crosshair');
-}
+/* ═══════════════════════════════════════════════════════
+   SUBMIT
+═══════════════════════════════════════════════════════ */
+async function doSubmit(type) {
+  let text = '', preview = '', label = '', color = '';
 
-function handleCollegaClick(c) {
-  if (!S.collegaSrc) {
-    S.collegaSrc = c;
-    c.glow = 1.0;
+  if (type === 'narra') {
+    text = document.getElementById('narrateInput').value.trim();
+    preview = text.slice(0,80) + (text.length>80?'…':'');
+    label = 'racconto'; color = COLORS.narra;
+  } else if (type === 'connetti') {
+    const a = document.getElementById('wordA').value.trim();
+    const b = document.getElementById('wordB').value.trim();
+    const r = document.getElementById('connectInput').value.trim();
+    text    = r + ' (' + a + ' — ' + b + ')';
+    preview = a + ' — ' + b;
+    label = 'connessione'; color = COLORS.connetti;
+    fetch(BASE+'/api/word_connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({word_a:a,word_b:b,relation:r,username:USERNAME})}).catch(()=>{});
   } else {
-    S.edges.push({ from: S.collegaSrc, to: c, strength: 0.8, age: 0 });
-    if (S.collegaSrc.label && c.label) {
-      fetch('/api/community/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          subject: S.collegaSrc.label, relation: 'SimilarTo', object: c.label,
-          strength: 3, user_id: S.userId, user_name: S.userName, user_context: S.userContext
-        })
-      }).catch(() => {});
-    }
-    S.collegaSrc = null;
-    toggleCollegaMode();
+    text = document.getElementById('risuonaInput').value.trim();
+    preview = text.slice(0,80) + (text.length>80?'…':'');
+    label = 'risposta'; color = COLORS.risuona;
   }
-}
 
-// ═══════════════════════════════════════════════════════════════
-// TIMER
-// ═══════════════════════════════════════════════════════════════
-
-setInterval(() => {
-  const elapsed = Math.floor((Date.now() - S.sessionStart) / 1000);
-  const m = Math.floor(elapsed / 60);
-  const s = elapsed % 60;
-  document.getElementById('timer').textContent = `${m}:${s.toString().padStart(2, '0')}`;
-}, 1000);
-
-// ═══════════════════════════════════════════════════════════════
-// TEXTAREA COUNTERS
-// ═══════════════════════════════════════════════════════════════
-
-['racconta', 'rispondi'].forEach(id => {
-  const el = document.getElementById(id + '-text');
-  if (el) el.addEventListener('input', function() {
-    document.getElementById(id + '-count').textContent = this.value.length;
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
-// STRENGTH BUTTONS
-// ═══════════════════════════════════════════════════════════════
-
-const strengthLabels = ['', 'molto debole', 'debole', 'media', 'forte', 'molto forte'];
-document.querySelectorAll('.strength-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.strength-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    S.strength = parseInt(btn.dataset.val);
-    document.getElementById('strength-label').textContent = strengthLabels[S.strength];
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
-// RELAZIONE LABELS
-// ═══════════════════════════════════════════════════════════════
-
-const relLabels = {
-  IsA: 'è un tipo di', PartOf: 'fa parte di', Causes: 'porta a',
-  UsedFor: 'si usa per', SimilarTo: 'è simile a',
-  OppositeOf: "è l'opposto di", Has: 'ha come caratteristica',
-};
-
-// ═══════════════════════════════════════════════════════════════
-// AZIONI
-// ═══════════════════════════════════════════════════════════════
-
-// ── RACCONTA ──
-
-async function eseguiRacconta() {
-  const text = document.getElementById('racconta-text').value.trim();
-  if (!text) return;
-
-  const btn = document.getElementById('racconta-btn');
-  btn.disabled = true;
-  btn.classList.add('loading');
-  btn.textContent = 'In elaborazione...';
+  const btn = document.getElementById('btn-'+type);
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'invio…';
 
   try {
-    const r = await fetch('/api/community/teach', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text, user_id: S.userId, user_name: S.userName, user_context: S.userContext,
-      }),
-    });
-    const data = await r.json();
-    processTeachResult(data, text, 'racconto');
-
-    const risp = document.getElementById('racconta-risposta');
-    risp.classList.add('visibile');
-    const content = document.getElementById('racconta-risp-content');
-    const tags = document.getElementById('racconta-risp-tags');
-
-    let narrazione = '';
-    if (data.fractals_touched?.length > 0) {
-      narrazione = 'Ha toccato: ' + data.fractals_touched.map(([n]) => n).join(', ') + '.';
-    }
-    if (data.connections_found?.length > 0) {
-      const descs = data.connections_found.slice(0, 3).map(([s, rel, o]) =>
-        `${s} ${relLabels[rel] || rel} ${o}`);
-      narrazione += (narrazione ? ' ' : '') + descs.join('; ') + '.';
-    }
-    if (!narrazione) {
-      narrazione = data.field_energy_delta > 0.01
-        ? `Il campo si è animato (+${(data.field_energy_delta * 100).toFixed(0)}% energia)`
-        : 'Le tue parole sono entrate nel campo.';
-    }
-    content.textContent = narrazione;
-
-    tags.innerHTML = '';
-    (data.words_new || []).slice(0, 8).forEach(w => {
-      const t = document.createElement('span');
-      t.className = 'risp-tag nuovo';
-      t.textContent = w;
-      t.title = 'Parola nuova per Prometeo';
-      t.onclick = () => { document.getElementById('conn-from').value = w; mostraVista('collega'); };
-      tags.appendChild(t);
-    });
-    (data.words_known || []).slice(0, 6).forEach(w => {
-      const t = document.createElement('span');
-      t.className = 'risp-tag noto';
-      t.textContent = w;
-      t.onclick = () => { document.getElementById('conn-from').value = w; mostraVista('collega'); };
-      tags.appendChild(t);
-    });
-    if (data.resonating_words?.length > 0) {
-      (data.resonating_words || []).slice(0, 6).forEach(w => {
-        const t = document.createElement('span');
-        t.className = 'risp-tag risonante';
-        t.textContent = w;
-        t.title = 'Risonanza dal campo';
-        tags.appendChild(t);
-      });
-    }
-
-    aggiungiSessione('racconto', text, data.fractals_touched);
-    document.getElementById('racconta-text').value = '';
-    document.getElementById('racconta-count').textContent = '0';
-
-    if (window.innerWidth <= 768) setTimeout(() => cambiaPannello('campo'), 1200);
-
-  } catch(e) { console.error(e); }
-
-  btn.disabled = false;
-  btn.classList.remove('loading');
-  btn.textContent = 'Condividi con il campo';
-}
-
-// ── COLLEGA ──
-
-async function eseguiCollega() {
-  const from = document.getElementById('conn-from').value.trim().toLowerCase();
-  const rel = document.getElementById('conn-rel').value;
-  const to = document.getElementById('conn-to').value.trim().toLowerCase();
-  if (!from || !to) return;
-
-  const btn = document.getElementById('collega-btn');
-  btn.disabled = true;
-  btn.classList.add('loading');
-  btn.textContent = 'In elaborazione...';
-
-  try {
-    await fetch('/api/community/connect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        subject: from, relation: rel, object: to, strength: S.strength,
-        user_id: S.userId, user_name: S.userName, user_context: S.userContext,
-      }),
-    });
-
-    const risp = document.getElementById('collega-risposta');
-    risp.classList.add('visibile');
-    document.getElementById('collega-risp-content').textContent =
-      `${from} → ${relLabels[rel] || rel} → ${to} (peso: ${S.strength}/5)`;
-
-    // Un unico punto che rappresenta la connessione tra i due concetti
-    addContributo(`${from} ↔ ${to}`, 'connessione', [], S.userName, `${from} ${relLabels[rel] || rel} ${to}`);
-
-    aggiungiSessione('connessione', `${from} → ${relLabels[rel] || rel} → ${to}`);
-
-    document.getElementById('conn-from').value = '';
-    document.getElementById('conn-to').value = '';
-
-    if (window.innerWidth <= 768) setTimeout(() => cambiaPannello('campo'), 1200);
-
-  } catch(e) { console.error(e); }
-
-  btn.disabled = false;
-  btn.classList.remove('loading');
-  btn.textContent = 'Aggiungi connessione';
-}
-
-// ── RISPONDI ──
-
-async function caricaPrometeoSays() {
-  try {
-    const r = await fetch('/api/community/field');
-    const data = await r.json();
-    const words = (data.top_words || []).slice(0, 12);
-    const sessionWords = (data.session_words || []).slice(0, 8);
-
-    let text = '';
-    if (sessionWords.length > 0) {
-      text = `Il campo parla di: ${sessionWords.join(', ')}.`;
-      if (words.length > 0) {
-        const extra = words.filter(w => !sessionWords.includes(w)).slice(0, 6);
-        if (extra.length > 0) text += ` Risuonano anche: ${extra.join(', ')}.`;
-      }
-    } else if (words.length > 0) {
-      text = `Le parole più vive nel campo sono: ${words.join(', ')}.`;
-    } else {
-      text = 'Il campo è ancora silenzioso. Aspetta che qualcuno condivida qualcosa.';
-    }
-
-    document.getElementById('prometeo-text').textContent = text;
+    await fetch(BASE+'/api/community/teach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,username:USERNAME})});
+    // ADD DOT TO FIELD
+    const dot = addDot(type, text);
+    setTimeout(() => {
+      ensureCrownOpen(dot);
+      selectedDot = dot;
+      showCaption(dot);
+    }, 300);
+    showSuccess(preview, label, color);
+    addLog(label, preview, color);
   } catch(e) {
-    document.getElementById('prometeo-text').textContent = 'Il campo è in ascolto...';
+    btn.textContent = 'errore — riprova';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
   }
 }
 
-async function eseguiRispondi() {
-  const text = document.getElementById('rispondi-text').value.trim();
-  if (!text) return;
+function showSuccess(preview, label, color) {
+  const now = new Date();
+  const t   = now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('pcStripe').style.background = color;
+  document.getElementById('pcType').style.color        = color;
+  document.getElementById('pcSubject').textContent     = label + ' ricevuto';
+  document.getElementById('pcBody').innerHTML          = '"<strong>'+preview+'</strong>"<br>è entrato nel campo.';
+  document.getElementById('pcType').textContent        = label;
+  document.getElementById('pcTime').textContent        = t;
+  showStep('step3');
+}
 
-  const btn = document.getElementById('rispondi-btn');
-  btn.disabled = true;
-  btn.classList.add('loading');
-  btn.textContent = 'In elaborazione...';
+function addLog(label, text, color) {
+  const log = document.getElementById('sessionLog');
+  log.style.display = 'block';
+  const e = document.createElement('div');
+  e.className = 'log-entry';
+  e.innerHTML = `<span class="log-type" style="color:${color}">${label}</span><span>${text}</span>`;
+  document.getElementById('logEntries').prepend(e);
+}
 
+/* ═══════════════════════════════════════════════════════
+   API
+═══════════════════════════════════════════════════════ */
+async function fetchState() {
   try {
-    const r = await fetch('/api/community/teach', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text, user_id: S.userId, user_name: S.userName, user_context: S.userContext,
-      }),
-    });
-    const data = await r.json();
-    processTeachResult(data, text, 'risposta');
-
-    const risp = document.getElementById('rispondi-risposta');
-    risp.classList.add('visibile');
-    const content = document.getElementById('rispondi-risp-content');
-    const tags = document.getElementById('rispondi-risp-tags');
-
-    let narrazione = data.fractals_touched?.length > 0
-      ? 'Ha toccato: ' + data.fractals_touched.map(([n]) => n).join(', ') + '.'
-      : 'Le tue parole sono entrate nel campo.';
-    content.textContent = narrazione;
-
-    tags.innerHTML = '';
-    [...(data.words_new || []), ...(data.words_known || [])].slice(0, 8).forEach(w => {
-      const t = document.createElement('span');
-      t.className = 'risp-tag noto';
-      t.textContent = w;
-      tags.appendChild(t);
-    });
-
-    aggiungiSessione('risposta', text, data.fractals_touched);
-    document.getElementById('rispondi-text').value = '';
-    document.getElementById('rispondi-count').textContent = '0';
-
-    caricaPrometeoSays();
-
-    if (window.innerWidth <= 768) setTimeout(() => cambiaPannello('campo'), 1200);
-
-  } catch(e) { console.error(e); }
-
-  btn.disabled = false;
-  btn.classList.remove('loading');
-  btn.textContent = 'Condividi con il campo';
+    const res = await fetch(BASE+'/api/state');
+    const d   = await res.json();
+    const q   = d?.report?.last_output || d?.locus?.name || null;
+    if (q) document.getElementById('prometeoQuote').textContent = q;
+  } catch(_){}
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CONTRIBUTI → CANVAS
-// ═══════════════════════════════════════════════════════════════
+function updateTime() {
+  const now = new Date();
+  document.getElementById('vizTime').textContent =
+    now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+}
+updateTime();
+setInterval(updateTime, 60000);
 
-// fractalsActivated = [{name: string, activation: number}]
-function addContributo(label, tipo, fractalsActivated, userName, text) {
-  fractalsActivated = fractalsActivated || [];
-  const existing = S.contributi.find(c => c.label === label && c.tipo === tipo);
-  if (existing) {
-    existing.glow = 1.0;
-    if (fractalsActivated.length > 0) existing.fractalsActivated = fractalsActivated;
-    return existing;
-  }
+function connectWS() {
+  try {
+    const proto = location.protocol==='https:'?'wss':'ws';
+    const ws = new WebSocket(proto+'://'+location.hostname+':'+(location.port||'3002')+'/ws');
+    ws.onmessage = e => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.participants != null) {
+          const n = msg.participants;
+          document.getElementById('countLabel').textContent =
+            n+(n===1?' PERSONA NEL CAMPO':' NEL CAMPO');
+        }
+        // contributo esterno: aggiungi punto al campo
+        if (msg.new_contribution) {
+          const c = msg.new_contribution;
+          addDot(c.type||'word', c.text||c.type||'contributo');
+        }
+      } catch(_){}
+    };
+    ws.onclose = () => setTimeout(connectWS, 4000);
+  } catch(_){}
+}
+connectWS();
 
-  const c = {
-    label, tipo, fractalsActivated, userName, text,
-    x: 0, y: 0,
-    glow: 1.0,
-    orbitAngle: Math.random() * Math.PI * 2,
-    orbitSpeed: 0.004 + Math.random() * 0.005,
-    anchorX: 0, anchorY: 0, orbitDist: 50 + Math.random() * 60,
-    _seed: Math.random(),
-    _seed2: Math.random(),
-    birthTime: Date.now(),
-  };
-  layoutContributo(c);
-  S.contributi.push(c);
+/* ═══════════════════════════════════════════════════════
+   RELATION POPOVER — click su arco per definire tipo
+═══════════════════════════════════════════════════════ */
+const REL_LABELS = {
+  IS_A:'è un', HAS:'ha', DOES:'fa', PART_OF:'parte di',
+  CAUSES:'causa', SIMILAR_TO:'simile a', OPPOSITE_OF:'opposto di', USED_FOR:'usato per'
+};
+let currentPopoverEdge = null;
 
-  if (S.contributi.length > 120) S.contributi.shift();
-  return c;
+function edgeEndpointLabels(edge) {
+  const a = dots.find(d => d.id === edge.a);
+  const b = dots.find(d => d.id === edge.b);
+  const la = edge.wordA || (a ? a.label : '?');
+  const lb = edge.wordB || (b ? b.label : '?');
+  return [la, lb];
 }
 
-// Un solo puntino per ogni teach (non la scomposizione delle parole)
-function processTeachResult(data, text, tipo) {
-  const fractals = data.fractals_touched || [];
-  const fractalsActivated = fractals.map(([name, activation]) => ({ name, activation }));
-
-  // Etichetta: prime 3 parole significative del testo
-  const words = text.trim().split(/\s+/).filter(w => w.length > 2);
-  const label = words.slice(0, 3).join(' ') || text.slice(0, 20);
-  addContributo(label, tipo, fractalsActivated, S.userName, text);
-
-  // Illumina i frattali toccati
-  fractals.forEach(([name, activation]) => {
-    const f = S.fractalMap[name.toLowerCase()];
-    if (f) f._glow = Math.min(1.0, (f._glow || 0) + activation * 2);
+function openRelationPopover(edge, pos) {
+  currentPopoverEdge = edge;
+  const pop = document.getElementById('relationPopover');
+  const [la, lb] = edgeEndpointLabels(edge);
+  document.getElementById('rpPair').innerHTML =
+    '<span class="rp-w">' + la + '</span> — <span class="rp-w">' + lb + '</span>';
+  // evidenzia il bottone della relazione corrente (se già tipizzata)
+  pop.querySelectorAll('.rp-btn').forEach(b => {
+    b.style.fontWeight = (edge.relation && b.dataset.rel === edge.relation) ? '600' : '400';
   });
-
-  S.partecipanti.add(S.userName);
-  aggiornaPartecipanti();
+  // ripristina confidence e via dall'edge
+  const slider = document.getElementById('rpConfidence');
+  slider.value = Math.round((edge.confidence || 0.9) * 100);
+  document.getElementById('rpConfVal').textContent = (slider.value / 100).toFixed(1);
+  document.getElementById('rpVia').value = edge.via || '';
+  // posizione del popover nel canvas-wrap
+  const wrap = document.getElementById('canvasWrap');
+  const wr = wrap.getBoundingClientRect();
+  let lx = pos.x + 12, ly = pos.y - 20;
+  if (lx + 190 > wr.width)  lx = pos.x - 190;
+  if (ly + 380 > wr.height) ly = Math.max(4, wr.height - 390);
+  pop.style.left = lx + 'px';
+  pop.style.top  = ly + 'px';
+  pop.classList.add('open');
 }
 
-// ═══════════════════════════════════════════════════════════════
-// SESSIONE FEED
-// ═══════════════════════════════════════════════════════════════
-
-function aggiungiSessione(tipo, testo, fractals) {
-  const list = document.getElementById('sessione-list');
-  const vuota = list.querySelector('.sessione-vuota');
-  if (vuota) vuota.remove();
-
-  const item = document.createElement('div');
-  item.className = 'sessione-item';
-
-  const shortText = testo.length > 80 ? testo.slice(0, 80) + '...' : testo;
-  let fracInfo = '';
-  if (fractals?.length > 0) {
-    fracInfo = `<span class="frattali"> — ${fractals.slice(0, 3).map(([n]) => n).join(', ')}</span>`;
-  }
-
-  item.innerHTML = `
-    <span class="sessione-tipo ${tipo}">${tipo}</span>
-    <span class="sessione-testo">${shortText}${fracInfo}</span>
-  `;
-
-  list.insertBefore(item, list.firstChild);
-  while (list.children.length > 30) list.removeChild(list.lastChild);
+function closeRelationPopover() {
+  document.getElementById('relationPopover').classList.remove('open');
+  currentPopoverEdge = null;
 }
 
-function aggiornaPartecipanti() {
-  const n = S.partecipanti.size;
-  document.getElementById('partecipanti-count').textContent = `${n} nel campo`;
+function setEdgeRelation(rel) {
+  if (!currentPopoverEdge) return;
+  const conf = document.getElementById('rpConfidence').value / 100;
+  const via  = document.getElementById('rpVia').value.trim().toLowerCase();
+  currentPopoverEdge.relation   = rel;
+  currentPopoverEdge.confidence = conf;
+  currentPopoverEdge.via        = via || null;
+  closeRelationPopover();
 }
 
-// ═══════════════════════════════════════════════════════════════
-// WEBSOCKET
-// ═══════════════════════════════════════════════════════════════
-
-function connettiWS() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws`);
-  S.ws = ws;
-
-  ws.onopen = () => {
-    document.getElementById('ws-dot').style.background = 'var(--connessione)';
-  };
-
-  ws.onclose = () => {
-    document.getElementById('ws-dot').style.background = 'var(--text-soft)';
-    setTimeout(connettiWS, 3000);
-  };
-
-  ws.onerror = () => ws.close();
-
-  ws.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      if (msg.type !== 'campo_update') return;
-      const eMio = msg.user_name === S.userName;
-
-      if (msg.event === 'narra' && !eMio) {
-        const fractalsActivated = (msg.fractals_touched || []).map(([name, act]) => ({ name, activation: act }));
-        const words = msg.words_new || [];
-
-        // Un solo punto per il contributo dell'altro utente
-        if (words.length > 0) {
-          const label = words.slice(0, 3).join(' ');
-          addContributo(label, 'altri', fractalsActivated, msg.user_name, null);
-        }
-
-        // Illumina frattali
-        (msg.fractals_touched || []).forEach(([name, act]) => {
-          const f = S.fractalMap[name.toLowerCase()];
-          if (f) f._glow = Math.min(1.0, (f._glow || 0) + act * 2);
-        });
-
-        if (words.length > 0) {
-          mostraToast('racconto', msg.user_name,
-            `ha condiviso: ${words.slice(0, 4).join(', ')}${words.length > 4 ? '...' : ''}`);
-          aggiungiSessione('altri',
-            `${msg.user_name}: ${words.slice(0, 6).join(', ')}`,
-            msg.fractals_touched);
-        }
-
-        S.partecipanti.add(msg.user_name);
-        aggiornaPartecipanti();
-      }
-
-      if (msg.event === 'connetti' && !eMio) {
-        const label = `${msg.subject} ↔ ${msg.object}`;
-        addContributo(label, 'connessione', [], msg.user_name, null);
-        mostraToast('connessione', msg.user_name,
-          `${msg.subject} → ${relLabels[msg.relation] || msg.relation} → ${msg.object}`);
-        aggiungiSessione('altri',
-          `${msg.user_name}: ${msg.subject} → ${relLabels[msg.relation] || msg.relation} → ${msg.object}`);
-        S.partecipanti.add(msg.user_name);
-        aggiornaPartecipanti();
-      }
-    } catch(e) {}
-  };
+function clearEdgeRelation() {
+  if (!currentPopoverEdge) return;
+  edges = edges.filter(e => e !== currentPopoverEdge);
+  closeRelationPopover();
 }
 
-// ═══════════════════════════════════════════════════════════════
-// TOAST
-// ═══════════════════════════════════════════════════════════════
-
-function mostraToast(tipo, nome, testo) {
-  const area = document.getElementById('toast-area');
-  const toast = document.createElement('div');
-  toast.className = `toast tipo-${tipo}`;
-  toast.innerHTML = `<span class="toast-nome">${nome}</span><span class="toast-testo">${testo}</span>`;
-  area.insertBefore(toast, area.firstChild);
-  setTimeout(() => {
-    toast.style.transition = 'opacity 0.5s';
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 500);
-  }, 4000);
-  while (area.children.length > 3) area.removeChild(area.lastChild);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// CARICA FRATTALI
-// ═══════════════════════════════════════════════════════════════
-
-async function loadFractals() {
-  try {
-    const r = await fetch('/api/universe');
-    const data = await r.json();
-    if (!data.fractals) return;
-
-    S.fractals = data.fractals.map(f => {
-      const lower = f.lower ?? Math.floor(f.id / 8);
-      const upper = f.upper ?? (f.id % 8);
-
-      // Coordinate 3D su sfera: lower → latitudine, upper → longitudine
-      const lat = ((lower / 7) * Math.PI - Math.PI / 2) * 0.88; // -79° a +79°
-      const lon = (upper / 8) * Math.PI * 2;
-      const x3d = Math.cos(lat) * Math.cos(lon);
-      const y3d = Math.sin(lat);
-      const z3d = Math.cos(lat) * Math.sin(lon);
-
-      return {
-        id: f.id,
-        name: f.name,
-        word_count: f.word_count || 0,
-        lower,
-        upper,
-        x: 0, y: 0,
-        isPure: false,
-        radius: 3.5,
-        _glow: 0,
-        // Coordinate 3D
-        x3d, y3d, z3d,
-      };
-    });
-
-    S.fractalMap = {};
-    S.fractals.forEach(f => {
-      S.fractalMap[f.name.toLowerCase()] = f;
-    });
-
-    layoutFractals();
-  } catch(e) { console.error('loadFractals error:', e); }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// KEYBOARD SHORTCUTS
-// ═══════════════════════════════════════════════════════════════
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-    if (document.getElementById('vista-racconta').classList.contains('attiva'))
-      eseguiRacconta();
-    else if (document.getElementById('vista-collega').classList.contains('attiva'))
-      eseguiCollega();
-    else if (document.getElementById('vista-rispondi').classList.contains('attiva'))
-      eseguiRispondi();
-  }
-  if (e.key === 'Escape') {
-    if (S.collegaMode) toggleCollegaMode();
-    else tornaScelta();
-  }
+// slider live update
+document.getElementById('rpConfidence').addEventListener('input', function() {
+  document.getElementById('rpConfVal').textContent = (this.value / 100).toFixed(1);
 });
 
-// ═══════════════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════════════
-
-function inizializza() {
-  connettiWS();
-  loadFractals();
-  S.partecipanti.add(S.userName);
-  aggiornaPartecipanti();
-  if (window.innerWidth <= 768) cambiaPannello('campo');
+/* ═══════════════════════════════════════════════════════
+   EXPORT — trasmetti al campo globale come file di curazione
+═══════════════════════════════════════════════════════ */
+function exportCurationTSV() {
+  const rows = [];
+  for (const e of edges) {
+    if (!e.relation) continue;
+    const [la, lb] = edgeEndpointLabels(e);
+    if (!la || !lb) continue;
+    const conf = (e.confidence || 0.9).toFixed(2);
+    const via  = e.via || '';
+    // formato: subject  relation  object  confidence  via
+    rows.push(la.toLowerCase() + '\t' + e.relation + '\t' + lb.toLowerCase() + '\t' + conf + (via ? '\t' + via : ''));
+  }
+  if (rows.length === 0) {
+    alert('Nessun arco tipizzato.\nCollega due punti trascinandoli e poi clicca l\'arco per assegnare un tipo di relazione.');
+    return;
+  }
+  const header = '# Curazione UI-R1 — ' + new Date().toISOString().slice(0,16) + '\n'
+               + '# subject\trelation\tobject\tconfidence\tvia\n';
+  const blob = new Blob([header + rows.join('\n') + '\n'], { type:'text/tab-separated-values' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const ts   = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  a.href     = url;
+  a.download = 'ui-r1-curation-' + ts + '.tsv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
 }
+
+/* ═══════════════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════════════ */
+resizeCanvas();
+seedDots();
+requestAnimationFrame(draw);
 </script>
 </body>
 </html>
