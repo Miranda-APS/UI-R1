@@ -1,0 +1,3363 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Il Campo — UI-R1</title>
+<style>
+/* Font UI-R1: JetBrains Mono self-hosted, inline per evitare round-trip. */
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('/campovasto/fonts/jetbrains-mono-400.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;src:url('/campovasto/fonts/jetbrains-mono-500.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:600;font-display:swap;src:url('/campovasto/fonts/jetbrains-mono-600.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:700;font-display:swap;src:url('/campovasto/fonts/jetbrains-mono-700.woff2') format('woff2')}
+@font-face{font-family:'JetBrains Mono';font-style:italic;font-weight:400;font-display:swap;src:url('/campovasto/fonts/jetbrains-mono-400-italic.woff2') format('woff2')}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --paper:   #F4F0E6;
+  --paper2:  #EAE4D4;
+  --surface: #FDFBF7;
+  --ink:     #1E1B14;
+  --ink2:    #5A5245;
+  --ink3:    #9C9082;
+  --red:     #B83225;
+  --blue:    #1E3F6F;
+  --green:   #1F4D33;
+  --ochre:   #9A6E0A;
+  --grid:    rgba(90,82,69,0.10);
+}
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-size: 17px;
+  overflow: hidden;
+  height: 100vh;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
+  z-index: 0;
+}
+header, .main { position: relative; z-index: 1; }
+
+/* HEADER */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 28px;
+  background: var(--surface);
+  border-bottom: 1.5px solid var(--ink);
+  flex-shrink: 0;
+}
+.h-brand { display: flex; align-items: baseline; gap: 12px; }
+.h-title { font-family:'JetBrains Mono', monospace; font-size:16px; font-weight:500; letter-spacing:.12em; }
+.h-sep { color:var(--ink3); font-weight:300; }
+.h-sub { font-size:13px; font-weight:300; color:var(--ink2); font-style:italic; }
+.live-pill {
+  display:flex; align-items:center; gap:7px;
+  font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.07em;
+  color:var(--green); border:1px solid var(--green);
+  padding:5px 12px; background:rgba(31,77,51,.05);
+}
+.live-dot { width:7px; height:7px; border-radius:50%; background:var(--green); animation:blink 2.5s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+/* LAYOUT */
+.main { flex:1; position:relative; overflow:hidden; }
+
+/* ── VIZ PANEL ── */
+.viz-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.viz-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 16px;
+  border-bottom:1px solid var(--ink2);
+  flex-shrink:0;
+}
+.viz-label { font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.09em; color:var(--ink2); text-transform:uppercase; }
+.viz-controls { display:flex; gap:8px; align-items:center; }
+.viz-btn {
+  font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.07em;
+  color:var(--ink2); border:1px solid var(--ink3);
+  background:transparent; padding:3px 9px; cursor:pointer;
+  transition:background .12s, color .12s;
+}
+.viz-btn:hover { background:var(--ink); color:white; border-color:var(--ink); }
+.viz-btn.active { background:var(--ink); color:white; border-color:var(--ink); }
+
+.canvas-wrap {
+  flex:1;
+  position:relative;
+  overflow:hidden;
+  cursor:crosshair;
+}
+
+canvas#field {
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  display:block;
+}
+
+/* tooltip */
+.dot-tooltip {
+  position:absolute;
+  pointer-events:none;
+  background:var(--surface);
+  border:1.5px solid var(--ink);
+  padding:8px 12px;
+  box-shadow:3px 3px 0 var(--ink2);
+  max-width:220px;
+  z-index:10;
+  display:none;
+}
+.tt-type {
+  font-family:'JetBrains Mono', monospace; font-size:10px;
+  letter-spacing:.08em; text-transform:uppercase;
+  margin-bottom:4px;
+}
+.tt-text { font-size:13px; font-weight:300; line-height:1.5; color:var(--ink); }
+
+/* Pannello "come UI-R1 legge la frase" — in basso, sostituisce la legenda */
+.understanding-panel {
+  display:flex; flex-direction:column;
+  background:var(--surface);
+  border-top:1px solid var(--ink2);
+  font-family:'JetBrains Mono', monospace;
+  color:var(--ink);
+  max-height:45vh;
+  flex-shrink:0;
+}
+.understanding-panel.empty .up-header .up-header-snippet::before { content:'(nessuna frase analizzata)'; }
+.understanding-panel.empty .up-body { display:none; }
+
+.up-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 14px;
+  border-bottom:1px solid var(--ink2);
+  cursor:pointer; user-select:none;
+  background:rgba(250,248,244,.8);
+}
+.up-header:hover { background:rgba(245,240,230,.95); }
+.up-header-left {
+  display:flex; align-items:center; gap:8px;
+  font-family:'JetBrains Mono', monospace;
+  font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--ink3);
+}
+.up-header-snippet {
+  font-family:'JetBrains Mono', monospace;
+  text-transform:none; letter-spacing:0;
+  font-size:12px; font-style:italic; color:var(--ink);
+  max-width:60ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.up-header-right {
+  font-family:'JetBrains Mono', monospace;
+  font-size:10px; color:var(--ink3);
+  display:flex; align-items:center; gap:10px;
+}
+.up-badge {
+  padding:1px 6px; border:1px solid var(--ink2); border-radius:2px;
+}
+.up-arrow {
+  font-size:13px; color:var(--ink3); transition:transform .2s;
+}
+.understanding-panel.collapsed .up-arrow { transform:rotate(180deg); }
+
+.up-body {
+  overflow:auto; padding:10px 14px 14px;
+  font-size:13px; line-height:1.5;
+}
+.understanding-panel.collapsed .up-body { display:none; }
+.understanding-panel.collapsed { max-height:none; }
+
+.up-section { margin-top:8px; }
+.up-section:first-child { margin-top:0; }
+.up-section-title {
+  font-family:'JetBrains Mono', monospace;
+  font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink3); margin-bottom:3px;
+}
+.up-item { padding:2px 0; font-size:13px; }
+.up-item .up-kind {
+  font-family:'JetBrains Mono', monospace; font-size:11px;
+  color:var(--ink3); margin-right:6px;
+}
+.up-item .up-tgt { font-weight:500; }
+.up-item .up-conf {
+  color:var(--ink3); font-size:11px; margin-left:6px;
+  font-family:'JetBrains Mono', monospace;
+}
+.up-chain {
+  color:var(--ink); font-size:12px; padding:3px 0;
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:6px;
+}
+.up-chain-word { font-weight:500; }
+.up-chain-rel {
+  font-family:'JetBrains Mono', monospace; font-size:10px;
+  color:var(--ink3); padding:0 4px;
+  border:1px solid var(--ink2); border-radius:2px;
+}
+.up-hyp { padding:3px 0 3px 0; font-size:12px; color:var(--ink); }
+.up-hyp::before { content:'? '; color:#c17a1f; font-weight:600; }
+.up-hyp .up-meta {
+  color:var(--ink3); font-size:11px; margin-left:6px;
+  font-family:'JetBrains Mono', monospace;
+}
+.up-unknown { color:#c2185b; font-style:italic; font-size:12px; }
+
+/* Sunto — testo prosa di cosa significa la frase */
+.up-summary {
+  font-size:13px; line-height:1.55;
+  color:var(--ink);
+  padding:4px 0;
+}
+
+/* Ipotesi con conferma/rifiuta */
+.up-hyp-row {
+  padding:6px 0 6px 0;
+  border-bottom:1px dashed rgba(0,0,0,.07);
+  display:flex; flex-direction:column; gap:3px;
+}
+.up-hyp-row:last-child { border-bottom:none; }
+.up-hyp-row.confirmed { opacity:.55; }
+.up-hyp-row.rejected { opacity:.45; }
+.up-hyp-claim {
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:6px;
+  font-size:13px;
+}
+.up-hyp-word { font-weight:600; color:var(--ink); }
+.up-hyp-rel {
+  font-family:'JetBrains Mono', monospace; font-size:10px;
+  color:var(--ink3); padding:1px 5px;
+  border:1px solid var(--ink2); border-radius:2px;
+}
+.up-hyp-rationale {
+  font-size:11px; color:var(--ink3);
+  font-family:'JetBrains Mono', monospace;
+  padding-left:2px;
+}
+.up-hyp-actions {
+  display:flex; gap:6px; margin-top:3px;
+}
+.up-btn {
+  font-family:inherit; font-size:11px;
+  padding:3px 9px;
+  border:1px solid var(--ink2); border-radius:2px;
+  background:transparent; color:var(--ink2); cursor:pointer;
+  transition:all .14s;
+}
+.up-btn:hover { background:rgba(0,0,0,.04); }
+.up-btn.confirm { border-color:#6aa06a; color:#5a8a5a; }
+.up-btn.confirm:hover { background:rgba(90,138,90,.12); color:#3e7a3e; }
+.up-btn.reject { border-color:#b97070; color:#a06060; }
+.up-btn.reject:hover { background:rgba(185,112,112,.1); color:#8a4a4a; }
+.up-btn-done {
+  font-family:'JetBrains Mono', monospace; font-size:10px;
+  padding:2px 7px; border-radius:2px;
+  letter-spacing:.04em;
+}
+.up-btn-done.confirmed { color:#3e7a3e; background:rgba(90,138,90,.12); }
+.up-btn-done.rejected  { color:#8a4a4a; background:rgba(185,112,112,.1); }
+.up-wordblock {
+  margin-top:10px; padding:8px 10px;
+  background:rgba(250,248,244,.6);
+  border-left:2px solid var(--ink2); border-radius:2px;
+}
+.up-wordblock:first-child { margin-top:0; }
+.up-wordhead {
+  display:flex; align-items:baseline; justify-content:space-between;
+  margin-bottom:4px; padding-bottom:3px;
+  border-bottom:1px dashed var(--ink2);
+}
+.up-word {
+  font-weight:600; font-size:14px; color:var(--ink);
+}
+.up-wordmeta {
+  font-family:'JetBrains Mono', monospace; font-size:10px;
+  color:var(--ink3);
+}
+.up-rel-line {
+  display:flex; gap:8px; padding:2px 0; font-size:12px;
+  align-items:baseline;
+}
+.up-rel-label {
+  font-family:'JetBrains Mono', monospace; font-size:10px;
+  color:var(--ink3); min-width:70px; text-transform:lowercase;
+  padding-top:1px;
+}
+.up-rel-targets {
+  flex:1; color:var(--ink);
+}
+.up-rel-targets > span { margin-right:2px; }
+
+/* caption bar */
+.caption-bar {
+  border-top:1px solid var(--ink2);
+  padding:10px 16px;
+  min-height:62px;
+  flex-shrink:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:3px;
+  background:var(--surface);
+}
+.caption-label { font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink3); }
+.caption-text { font-size:16px; font-weight:300; color:var(--ink); line-height:1.5; font-style:italic; }
+.caption-empty { font-size:15px; color:var(--ink3); font-style:italic; }
+
+/* connect mode hint */
+.connect-hint {
+  position:absolute; bottom:70px; left:50%; transform:translateX(-50%);
+  background:var(--ink); color:white;
+  font-family:'JetBrains Mono', monospace; font-size:11px;
+  letter-spacing:.07em; padding:5px 14px;
+  pointer-events:none; opacity:0;
+  transition:opacity .2s;
+  white-space:nowrap;
+  z-index:20;
+}
+.connect-hint.visible { opacity:1; }
+
+/* legend */
+.viz-legend {
+  display:flex; gap:14px; padding:8px 16px;
+  border-top:1px dashed var(--ink3); flex-wrap:wrap; flex-shrink:0;
+  background:var(--paper);
+}
+.leg-item { display:flex; align-items:center; gap:5px; font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--ink2); letter-spacing:.04em; }
+.leg-dot { width:8px; height:8px; border-radius:50%; }
+
+/* ── FLOATING INPUT WIDGET ── */
+.input-widget {
+  position: absolute;
+  top: 52px; right: 12px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.widget-trigger {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 500;
+  letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--ink);
+  padding: 7px 13px; cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink2);
+  transition: transform .1s, box-shadow .1s;
+  display: flex; align-items: center; gap: 7px;
+  white-space: nowrap; user-select: none;
+}
+.widget-trigger:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
+
+.input-panel {
+  width: 290px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  border-top: none;
+  box-shadow: 4px 4px 0 var(--ink2);
+  padding: 18px 18px 14px;
+  display: none;
+  flex-direction: column;
+}
+.input-panel.open { display: flex; }
+
+.step { display:none; }
+.step.active { display:flex; flex-direction:column; gap:0; }
+
+.step-counter { font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.1em; color:var(--ink3); text-transform:uppercase; margin-bottom:10px; }
+.step-q { font-size:20px; font-weight:300; letter-spacing:-.01em; margin-bottom:3px; line-height:1.2; }
+.step-hint { font-size:13px; font-weight:300; font-style:italic; color:var(--ink2); margin-bottom:16px; line-height:1.5; }
+
+.action-cards { display:flex; flex-direction:column; gap:7px; }
+.action-card {
+  background:var(--paper); border:1.5px solid var(--ink);
+  padding:9px 12px; cursor:pointer;
+  display:flex; align-items:center; gap:12px;
+  transition:transform .1s, box-shadow .1s;
+  box-shadow:2px 2px 0 var(--ink2);
+}
+.action-card:hover { transform:translate(-2px,-2px); box-shadow:4px 4px 0 var(--ink); }
+.action-card:active { transform:translate(1px,1px); box-shadow:1px 1px 0 var(--ink); }
+.card-index { font-family:'JetBrains Mono', monospace; font-size:15px; font-weight:500; min-width:18px; line-height:1; }
+.action-card.narra .card-index    { color:var(--red); }
+.action-card.connetti .card-index { color:var(--green); }
+.action-card.risuona .card-index  { color:var(--blue); }
+.card-body { display:flex; flex-direction:column; gap:1px; }
+.card-title { font-size:15px; font-weight:500; }
+.action-card.narra .card-title    { color:var(--red); }
+.action-card.connetti .card-title { color:var(--green); }
+.action-card.risuona .card-title  { color:var(--blue); }
+.card-desc { font-size:13px; font-weight:300; color:var(--ink2); line-height:1.4; }
+.card-arrow { margin-left:auto; color:var(--ink3); font-size:13px; }
+
+.back-btn { font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.07em; color:var(--ink3); background:none; border:none; cursor:pointer; padding:0; margin-bottom:12px; text-decoration:underline; text-underline-offset:3px; transition:color .12s; }
+.back-btn:hover { color:var(--ink); }
+
+.write-q { font-size:17px; font-weight:300; margin-bottom:4px; display:flex; align-items:center; gap:7px; }
+.write-accent { display:inline-block; width:3px; height:15px; flex-shrink:0; }
+.write-hint { font-size:11px; font-weight:300; font-style:italic; color:var(--ink2); line-height:1.55; margin-bottom:4px; padding-left:9px; border-left:1px solid var(--ink3); }
+.example-note { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--ink3); line-height:1.6; margin-bottom:12px; padding:6px 9px; background:var(--paper2); border-left:2px solid var(--ink3); }
+
+textarea.field, input[type="text"].field {
+  width:100%; font-family:'JetBrains Mono', monospace; font-size:15px; font-weight:300;
+  color:var(--ink); background:var(--paper); border:1.5px solid var(--ink);
+  padding:8px 10px; outline:none; border-radius:0; -webkit-appearance:none;
+  transition:box-shadow .12s; box-shadow:2px 2px 0 var(--ink2);
+}
+textarea.field { min-height:72px; resize:vertical; line-height:1.7;
+  background-image:repeating-linear-gradient(transparent,transparent calc(1.7em - 1px),rgba(90,82,69,.10) calc(1.7em - 1px),rgba(90,82,69,.10) 1.7em);
+  background-attachment:local; }
+textarea.field:focus, input[type="text"].field:focus { box-shadow:3px 3px 0 var(--ink); }
+textarea.field::placeholder, input[type="text"].field::placeholder { color:#C0B6A4; font-weight:300; }
+
+.char-row { font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--ink3); text-align:right; letter-spacing:.05em; margin:3px 0 10px; }
+
+.connect-pair { display:grid; grid-template-columns:1fr auto 1fr; align-items:end; gap:6px; margin-bottom:9px; }
+.connect-arrow-sym { font-family:'JetBrains Mono', monospace; font-size:15px; color:var(--ink3); padding-bottom:8px; text-align:center; }
+.field-label { font-family:'JetBrains Mono', monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink3); margin-bottom:4px; }
+
+.prometeo-box { background:var(--paper); border:1.5px solid var(--blue); padding:9px 11px; margin-bottom:12px; box-shadow:2px 2px 0 rgba(30,63,111,.2); }
+.prometeo-label { font-family:'JetBrains Mono', monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--blue); margin-bottom:4px; opacity:.7; }
+.prometeo-text { font-size:12px; font-weight:300; font-style:italic; color:var(--blue); line-height:1.55; }
+
+.submit-btn {
+  width:100%; font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:500;
+  letter-spacing:.06em; text-transform:uppercase; color:white;
+  border:1.5px solid var(--ink); padding:10px 14px; cursor:pointer;
+  box-shadow:3px 3px 0 var(--ink); border-radius:0;
+  transition:transform .1s, box-shadow .1s;
+}
+.submit-btn:hover:not(:disabled) { transform:translate(-2px,-2px); box-shadow:5px 5px 0 var(--ink); }
+.submit-btn:active:not(:disabled) { transform:translate(1px,1px); box-shadow:2px 2px 0 var(--ink); }
+.submit-btn:disabled { opacity:.38; cursor:not-allowed; transform:none; }
+
+@keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.success-wrap { display:flex; flex-direction:column; align-items:flex-start; animation:fadeUp .3s ease; }
+.postcard { width:100%; background:var(--paper); border:1.5px solid var(--ink); box-shadow:3px 3px 0 var(--ink); overflow:hidden; }
+.pc-top { display:flex; align-items:stretch; border-bottom:1px solid var(--ink2); }
+.pc-stripe { width:4px; flex-shrink:0; }
+.pc-top-inner { padding:8px 11px; flex:1; }
+.pc-to { font-family:'JetBrains Mono', monospace; font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink3); margin-bottom:2px; }
+.pc-subject { font-size:12px; font-weight:500; color:var(--ink); }
+.pc-stamp { width:36px; border-left:1px solid var(--ink2); display:flex; align-items:center; justify-content:center; }
+.stamp-box { width:22px; height:26px; border:1px solid var(--ink2); display:flex; align-items:center; justify-content:center; font-size:10px; position:relative; }
+.stamp-box::after { content:''; position:absolute; inset:2px; border:.5px dashed var(--ink3); }
+.pc-body { padding:9px 11px; font-size:11px; font-weight:300; font-style:italic; color:var(--ink2); line-height:1.55; border-bottom:1px solid var(--paper2); }
+.pc-body strong { font-weight:400; font-style:normal; color:var(--ink); }
+.pc-foot { padding:6px 11px; display:flex; justify-content:space-between; align-items:center; }
+.pc-type { font-family:'JetBrains Mono', monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase; }
+.pc-time { font-family:'JetBrains Mono', monospace; font-size:9px; color:var(--ink3); }
+.again-btn { margin-top:12px; font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:500; letter-spacing:.06em; text-transform:uppercase; color:var(--ink); background:transparent; border:1.5px solid var(--ink); padding:7px 16px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); transition:transform .1s, box-shadow .1s; }
+.again-btn:hover { transform:translate(-2px,-2px); box-shadow:4px 4px 0 var(--ink); }
+
+.session-log { margin-top:14px; padding-top:10px; border-top:1px solid var(--ink3); }
+.log-heading { font-family:'JetBrains Mono', monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink3); margin-bottom:7px; }
+.log-entry { display:flex; align-items:baseline; gap:7px; font-size:11px; font-weight:300; color:var(--ink2); margin-bottom:5px; line-height:1.5; animation:fadeUp .2s ease; }
+.log-type { font-family:'JetBrains Mono', monospace; font-size:9px; letter-spacing:.07em; text-transform:uppercase; flex-shrink:0; min-width:60px; }
+
+@media(max-width:600px) {
+  .input-widget { top:8px; right:8px; }
+  .input-panel { width: calc(100vw - 24px); }
+}
+/* ── EXPORT MODAL ── */
+.modal-backdrop {
+  display: none;
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(30,27,20,0.55);
+  align-items: center; justify-content: center;
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  box-shadow: 6px 6px 0 var(--ink2);
+  width: min(860px, 94vw);
+  max-height: 82vh;
+  display: flex; flex-direction: column;
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ink2);
+  flex-shrink: 0;
+}
+.modal-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink2);
+}
+.modal-actions { display: flex; gap: 8px; }
+.modal-btn {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500;
+  letter-spacing: .05em; text-transform: uppercase;
+  border: 1.5px solid var(--ink); padding: 6px 14px; cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink2); background: var(--surface); color: var(--ink);
+  transition: transform .1s, box-shadow .1s;
+}
+.modal-btn:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); }
+.modal-btn.primary { background: var(--ink); color: var(--surface); }
+.modal-body { overflow: auto; padding: 16px 18px; flex: 1; }
+.csv-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.csv-table th {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink2);
+  border-bottom: 1.5px solid var(--ink2); padding: 6px 10px;
+  text-align: left; background: var(--paper2); white-space: nowrap;
+}
+.csv-table td {
+  padding: 5px 10px; border-bottom: 1px solid var(--border, #DDD6C5);
+  font-family: 'JetBrains Mono', monospace; font-weight: 300;
+  color: var(--ink); max-width: 260px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.csv-table tr:last-child td { border-bottom: none; }
+.type-pill {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  padding: 2px 7px; letter-spacing: .05em;
+}
+.ctx-menu {
+  position: fixed; z-index: 200;
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink2);
+  padding: 8px 0;
+  min-width: 200px;
+  display: none;
+}
+.ctx-menu.open { display: block; }
+.ctx-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink3); padding: 4px 14px 6px; border-bottom: 1px solid var(--ink3);
+  margin-bottom: 4px;
+}
+.ctx-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px;
+}
+.ctx-row input {
+  font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 300;
+  color: var(--ink); background: var(--paper);
+  border: 1px solid var(--ink2); padding: 5px 8px;
+  outline: none; flex: 1;
+}
+.ctx-row input:focus { border-color: var(--ink); }
+.ctx-add {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--surface); background: var(--ink);
+  border: none; padding: 6px 10px; cursor: pointer;
+  white-space: nowrap;
+}
+.ctx-add:hover { opacity: .85; }
+
+/* ── Menu tipo relazione ── */
+.rel-menu {
+  position: fixed; z-index: 210;
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink2);
+  padding: 6px 0;
+  min-width: 230px;
+  display: none;
+}
+.rel-menu.open { display: block; }
+.rel-menu .rel-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink3); padding: 4px 14px 6px; border-bottom: 1px solid var(--ink3);
+  margin-bottom: 2px;
+}
+.rel-menu .rel-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 14px; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  color: var(--ink); transition: background .1s;
+}
+.rel-menu .rel-item:hover { background: var(--paper2); }
+.rel-item .rel-line {
+  width: 28px; height: 0; flex-shrink: 0;
+  border-top-width: 2px; border-top-style: solid;
+}
+.rel-item-main {
+  display: flex; align-items: center; gap: 10px;
+  flex: 1; cursor: pointer;
+}
+.rel-item .rel-label { font-weight: 500; }
+.rel-item .rel-desc { color: var(--ink3); font-size: 11px; margin-left: auto; }
+.rel-plus {
+  width: 22px; height: 22px; line-height: 22px; text-align: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600;
+  color: var(--ink3); border: 1px solid var(--ink3); cursor: pointer;
+  flex-shrink: 0; margin-left: 6px;
+}
+.rel-plus:hover { color: var(--ink); border-color: var(--ink); }
+.rel-natures-panel {
+  padding: 2px 14px 6px 52px;
+  border-bottom: 1px solid var(--grid);
+}
+.rel-nature-item {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--ink2); padding: 3px 8px; cursor: pointer;
+}
+.rel-nature-item:hover { color: var(--ink); background: var(--paper2); }
+.rel-nature-add {
+  display: flex; gap: 4px; margin-top: 3px;
+}
+.rel-nature-add input {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--ink); background: var(--paper);
+  border: 1px solid var(--ink3); padding: 2px 6px;
+  outline: none; flex: 1; min-width: 0;
+}
+.rel-nature-add input:focus { border-color: var(--ink); }
+.rel-nature-add button {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--surface); background: var(--ink);
+  border: none; padding: 2px 8px; cursor: pointer;
+}
+.rel-nature-add button:hover { opacity: .85; }
+
+/* ── Menu rapido su right-click vuoto ── */
+.ctx-fab {
+  position: fixed; z-index: 210;
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  box-shadow: 3px 3px 0 var(--ink2);
+  padding: 4px 0;
+  min-width: 150px;
+  display: none;
+}
+.ctx-fab.open { display: block; }
+.ctx-fab-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 500;
+  color: var(--ink);
+  transition: background .1s;
+}
+.ctx-fab-item:hover { background: var(--paper2); }
+.ctx-fab-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.rel-menu .rel-sep {
+  border: none; border-top: 1px solid var(--ink3);
+  margin: 4px 14px;
+}
+.rel-menu .rel-custom-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px;
+}
+.rel-menu .rel-custom-row input {
+  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  color: var(--ink); background: var(--paper);
+  border: 1px solid var(--ink2); padding: 4px 8px;
+  outline: none; flex: 1;
+}
+.rel-menu .rel-custom-row input:focus { border-color: var(--ink); }
+.rel-menu .rel-custom-row button {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--surface); background: var(--ink);
+  border: none; padding: 5px 10px; cursor: pointer;
+  white-space: nowrap;
+}
+.rel-menu .rel-custom-row button:hover { opacity: .85; }
+</style>
+</head>
+<body>
+<header>
+  <div class="h-brand">
+    <span class="h-title">IL CAMPO</span>
+    <span class="h-sep">·</span>
+    <span class="h-sub">educazione distribuita</span>
+  </div>
+  <div class="live-pill">
+    <div class="live-dot"></div>
+    <span id="countLabel">2 NEL CAMPO</span>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- VIZ — full screen -->
+  <div class="viz-panel">
+    <div class="viz-bar">
+      <span class="viz-label">stato del campo</span>
+      <div class="viz-controls">
+        <button class="viz-btn" onclick="resetLayout()" title="Ridistribuisci punti">↺ ridistribuisci</button>
+        <button class="viz-btn" onclick="clearField()" title="Svuota il campo">✕ svuota</button>
+        <button class="viz-btn" onclick="reseedField()" title="Ricarica il campo demo">↺ ricarica</button>
+        <button class="viz-btn" onclick="saveSession()" title="Salva configurazione">💾 salva</button>
+        <button class="viz-btn" onclick="document.getElementById('loadInput').click()" title="Carica configurazione">📂 carica</button>
+        <input type="file" id="loadInput" accept=".json" style="display:none" onchange="loadSession(this)">
+        <span class="viz-label" id="vizTime" style="margin-left:4px">—</span>
+      </div>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="field"></canvas>
+      <div class="dot-tooltip" id="tooltip">
+        <div class="tt-type" id="tt-type"></div>
+        <div class="tt-text" id="tt-text"></div>
+      </div>
+      <div class="connect-hint" id="connectHint" style="display:none"></div>
+    </div>
+
+    <div class="caption-bar" id="captionBar">
+      <span class="caption-empty" id="captionEmpty">← clicca un punto per leggere il contributo</span>
+      <span class="caption-label" id="captionLabel" style="display:none"></span>
+      <span class="caption-text" id="captionText" style="display:none"></span>
+    </div>
+
+    <!-- Pannello UI-R1 legge: sostituisce la legenda, collassabile -->
+    <div class="understanding-panel empty collapsed" id="understandingPanel">
+      <div class="up-header" id="upHeader" title="clicca per espandere/comprimere">
+        <div class="up-header-left">
+          <span>UI-R1 legge</span>
+          <span class="up-header-snippet" id="upHeaderSnippet"></span>
+        </div>
+        <div class="up-header-right">
+          <span class="up-badge" id="upBadgeDepth">0 archi</span>
+          <span class="up-badge" id="upBadgeHyp" style="display:none"></span>
+          <span class="up-arrow" id="upArrow">▲</span>
+        </div>
+      </div>
+      <div class="up-body" id="upBody"></div>
+    </div>
+  </div>
+
+  <!-- FLOATING INPUT WIDGET -->
+  <div class="input-widget">
+    <button class="widget-trigger" onclick="toggleWidget(this)">
+      <span>+ contribuisci</span>
+    </button>
+    <div class="input-panel" id="inputPanel">
+
+    <!-- STEP 1 -->
+    <div class="step active" id="step1">
+      <div class="step-counter">01 — scegli un'azione</div>
+      <p class="step-q">Cosa porti al campo?</p>
+      <p class="step-hint">Ogni cosa che scrivi entra in Prometeo e cambia ciò che sa del quartiere.</p>
+      <div class="action-cards">
+        <div class="action-card narra" onclick="goStep('narra')">
+          <span class="card-index">R</span>
+          <div class="card-body">
+            <div class="card-title">Racconta</div>
+            <div class="card-desc">Una storia, un ricordo, qualcosa che sai di questo posto</div>
+          </div>
+          <span class="card-arrow">→</span>
+        </div>
+        <div class="action-card connetti" onclick="goStep('connetti')">
+          <span class="card-index">C</span>
+          <div class="card-body">
+            <div class="card-title">Collega</div>
+            <div class="card-desc">Spiega come due parole o idee stanno insieme</div>
+          </div>
+          <span class="card-arrow">→</span>
+        </div>
+        <div class="action-card risuona" onclick="goStep('risuona')">
+          <span class="card-index">↩</span>
+          <div class="card-body">
+            <div class="card-title">Rispondi</div>
+            <div class="card-desc">Leggi quello che dice Prometeo e aggiungici qualcosa</div>
+          </div>
+          <span class="card-arrow">→</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RACCONTA -->
+    <div class="step" id="step2-narra">
+      <button class="back-btn" onclick="backToChoose()">← cambia</button>
+      <div class="step-counter">02 — racconta</div>
+      <p class="write-q"><span class="write-accent" style="background:var(--red)"></span>Racconta qualcosa</p>
+      <p class="write-hint">Una storia, un ricordo, un'osservazione. Frasi brevi funzionano meglio.</p>
+      <div class="example-note">"Quando piove forte, i bambini si rifugiano sotto il portico della scuola."<br>"La signora del bar del corso sapeva il nome di tutti."</div>
+      <textarea class="field" id="narrateInput" maxlength="500" placeholder="scrivi qui…" oninput="updateCount('narrateInput','cnt-narra','btn-narra')"></textarea>
+      <div class="char-row"><span id="cnt-narra">0</span> / 500</div>
+      <button class="submit-btn" id="btn-narra" style="background:var(--red)" disabled onclick="doSubmit('narra')">Invia al campo →</button>
+    </div>
+
+    <!-- COLLEGA -->
+    <div class="step" id="step2-connetti">
+      <button class="back-btn" onclick="backToChoose()">← cambia</button>
+      <div class="step-counter">02 — collega</div>
+      <p class="write-q"><span class="write-accent" style="background:var(--green)"></span>Collega due cose</p>
+      <p class="write-hint">Quali due parole o idee metti insieme? Poi spiega il legame.</p>
+      <div class="connect-pair">
+        <div><div class="field-label">prima cosa</div><input type="text" class="field" id="wordA" placeholder="es. pane" oninput="checkConnect()"></div>
+        <div class="connect-arrow-sym">—</div>
+        <div><div class="field-label">seconda cosa</div><input type="text" class="field" id="wordB" placeholder="es. cura" oninput="checkConnect()"></div>
+      </div>
+      <div class="field-label" style="margin-bottom:5px">come le colleghi?</div>
+      <textarea class="field" id="connectInput" style="min-height:90px" maxlength="300" placeholder="es. il pane condiviso è un atto di cura" oninput="checkConnect()"></textarea>
+      <div class="char-row"><span id="cnt-connetti">0</span> / 300</div>
+      <button class="submit-btn" id="btn-connetti" style="background:var(--green)" disabled onclick="doSubmit('connetti')">Collega nel campo →</button>
+    </div>
+
+    <!-- RISPONDI -->
+    <div class="step" id="step2-risuona">
+      <button class="back-btn" onclick="backToChoose()">← cambia</button>
+      <div class="step-counter">02 — rispondi</div>
+      <p class="write-q"><span class="write-accent" style="background:var(--blue)"></span>Rispondi a Prometeo</p>
+      <p class="write-hint">Prometeo ha detto qualcosa. Puoi aggiungere, correggere, espandere.</p>
+      <div class="prometeo-box">
+        <div class="prometeo-label">Prometeo dice</div>
+        <div class="prometeo-text" id="prometeoQuote">sto ascoltando il campo…</div>
+      </div>
+      <textarea class="field" id="risuonaInput" maxlength="500" placeholder="la tua risposta…" oninput="updateCount('risuonaInput','cnt-risuona','btn-risuona')"></textarea>
+      <div class="char-row"><span id="cnt-risuona">0</span> / 500</div>
+      <button class="submit-btn" id="btn-risuona" style="background:var(--blue)" disabled onclick="doSubmit('risuona')">Rispondi a Prometeo →</button>
+    </div>
+
+    <!-- CONFERMA -->
+    <div class="step" id="step3">
+      <div class="success-wrap">
+        <div class="postcard">
+          <div class="pc-top">
+            <div class="pc-stripe" id="pcStripe"></div>
+            <div class="pc-top-inner">
+              <div class="pc-to">a: il campo di prometeo</div>
+              <div class="pc-subject" id="pcSubject">contributo ricevuto</div>
+            </div>
+            <div class="pc-stamp"><div class="stamp-box">✓</div></div>
+          </div>
+          <div class="pc-body" id="pcBody">—</div>
+          <div class="pc-foot">
+            <span class="pc-type" id="pcType"></span>
+            <span class="pc-time" id="pcTime"></span>
+          </div>
+        </div>
+        <button class="again-btn" onclick="backToChoose()">contribuisci ancora</button>
+      </div>
+    </div>
+
+    <div class="session-log" id="sessionLog" style="display:none">
+      <div class="log-heading">questa sessione</div>
+      <div id="logEntries"></div>
+    </div>
+  </div><!-- /input-panel -->
+  </div><!-- /input-widget -->
+</div><!-- /main -->
+
+<script>
+const BASE = window.location.origin;
+const USERNAME = 'ospite';
+
+function toggleWidget(btn) {
+  const panel = document.getElementById('inputPanel');
+  const open  = panel.classList.toggle('open');
+  btn.querySelector('span').textContent = open ? '✕ chiudi' : '+ contribuisci';
+}
+
+/* ═══════════════════════════════════════════════════════
+   FIELD DATA MODEL
+═══════════════════════════════════════════════════════ */
+const COLORS = { narra:'#B83225', connetti:'#1F4D33', risuona:'#1E3F6F', word:'#9A6E0A' };
+const LABELS = { narra:'racconto', connetti:'connessione', risuona:'risposta', word:'parola' };
+
+const REL_TYPES = [
+  { id:'strutturale',    label:'strutturale',    desc:'è un, parte di',  dash:[3,3],   color:'#9C9082', natures:['è un','parte di'] },
+  { id:'causale',        label:'causale',        desc:'causa, abilita',  dash:false,   color:'#B83225', natures:['causa','abilita'] },
+  { id:'semantica',      label:'semantica',      desc:'simile, opposto', dash:[6,4],   color:'#1E3F6F', natures:['simile a','opposto di'] },
+  { id:'fenomenologica', label:'fenomenologica', desc:'ha, fa',          dash:[2,4],   color:'#1F4D33', natures:['ha','fa'] },
+  { id:'logica',         label:'logica',         desc:'usato per',       dash:[10,5],  color:'#9A6E0A', natures:['usato per'] },
+];
+let customRelTypes = []; // { id, label, desc, dash, color } aggiunti dall'utente
+
+let dots = [];        // { id, x, y, r, type, text, label, alpha, vx, vy, selected, phase }
+let edges = [];       // { a, b, alpha, wordA, wordB, relType }
+let lastScreenPos = { x: 300, y: 300 }; // per posizionare il menu relazione
+let nextId = 1;
+let selectedDot = null;
+let hoveredDot  = null;
+let hoveredEdge = null;
+
+function edgeAt(px, py, threshold) {
+  threshold = threshold || 14;
+  for (const edge of edges) {
+    const da = dots.find(d => d.id === edge.a);
+    const db = dots.find(d => d.id === edge.b);
+    if (!da || !db || edge.alpha < 0.1) continue;
+    const ax = da.x, ay = da.y, bx = db.x, by = db.y;
+    const mx = (ax+bx)/2, my = (ay+by)/2;
+    for (let t = 0; t <= 1; t += 0.05) {
+      const t1 = 1-t;
+      const x = t1*t1*ax + 2*t1*t*mx + t*t*bx;
+      const y = t1*t1*ay + 2*t1*t*my + t*t*by;
+      if (Math.hypot(x-px, y-py) < threshold) return edge;
+    }
+  }
+  return null;
+}
+let dragDot     = null;
+let dragOffX = 0, dragOffY = 0;
+let animating = true;
+
+// multi-crown state — Map<dotId, { dot, words, progress }>
+let openCrowns = new Map();
+
+// satellite drag — source word, target word
+let dragSatellite  = null;  // { sw, sourceDot, x, y }
+let snapCrownWord  = null;  // { sw, dot } — target snap
+const SAT_SNAP = 90;
+
+const STOP = new Set([
+  'il','la','lo','le','i','gli','un','una','uno',
+  'di','del','della','dei','degli','delle','da','dal','dalla',
+  'a','ad','al','alla','ai','agli',
+  'in','nel','nella','nei','negli','nelle',
+  'su','sul','sulla','sui','sugli','sulle',
+  'per','con','tra','fra','e','o','ma','se','che',
+  'è','ha','ho','sono','era','era','ci','si','mi','ti','vi',
+  'non','più','anche','già','qui','là','come','quando',
+  'questo','questa','questi','queste','quello','quella',
+  'tutto','tutta','tutti','tutte','ogni','molto','poco'
+]);
+
+function extractStarWords(text) {
+  if (!text) return [];
+  return text
+    .replace(/["""''«»()[\]{}]/g, ' ')
+    .split(/[\s,;:!?.\-–—]+/)
+    .map(w => w.toLowerCase().replace(/[^a-zàáèéìíòóùúa-z]/gi, ''))
+    .filter(w => w.length > 3 && !STOP.has(w))
+    .filter((w, i, arr) => arr.indexOf(w) === i)  // unique
+    .slice(0, 8);
+}
+
+/* seed some demo dots */
+function seedDots() {
+  const demos = [
+    // RACCONTI — memorie e osservazioni
+    { type:'narra', text:'La sera il parco Valentino è pieno di famiglie ma dopo le undici diventa un posto che fa paura.' },
+    { type:'narra', text:'Il mercato di corso Marconi era il cuore del quartiere. Da quando l\'hanno spostato non ci si incontra più.' },
+    { type:'narra', text:'Mia nonna abitava in via Ormea da cinquant\'anni. Il palazzo è stato ristrutturato e lei non poteva permettersi il nuovo affitto.' },
+    { type:'narra', text:'I ragazzi del doposcuola di via Belfiore vengono da dodici paesi diversi. Quando lavorano insieme non si vede la differenza.' },
+    { type:'narra', text:'Il cortile del caseggiato di via Saluzzo era un posto dove ci si conosceva. Adesso è un parcheggio.' },
+    { type:'narra', text:'C\'è un\'anziana in via Morgari che non scende da tre anni. Il citofono è rotto e nessuno lo aggiusta.' },
+    { type:'narra', text:'La palestra di quartiere aveva liste d\'attesa di sei mesi. Poi hanno alzato le quote e si è svuotata.' },
+
+    // CONNESSIONI — relazioni tra concetti
+    { type:'connetti', text:'affitto — spostamento: quando l\'affitto sale oltre una certa soglia la gente se ne va e il quartiere perde memoria.' },
+    { type:'connetti', text:'spazio pubblico — fiducia: i cortili e i portici dove ci si ferma a parlare sono dove nasce la fiducia tra vicini.' },
+    { type:'connetti', text:'scuola — coesione: le scuole di quartiere sono l\'unico posto dove bambini di famiglie diverse si incontrano davvero.' },
+    { type:'connetti', text:'isolamento — anziani: chi è anziano e solo dipende dallo spazio fisico del quartiere per avere contatti umani.' },
+    { type:'connetti', text:'degrado — stigma: quando un quartiere viene raccontato solo per i suoi problemi, chi ci abita smette di difenderlo.' },
+    { type:'connetti', text:'mercato — identità: i mercati rionali non vendono solo cibo, costruiscono un ritmo collettivo e un senso di appartenenza.' },
+    { type:'connetti', text:'verde — salute mentale: i parchi accessibili riducono l\'isolamento e offrono spazio neutro per incontri informali.' },
+
+    // PAROLE — concetti chiave del territorio
+    { type:'word', text:'affitto' },
+    { type:'word', text:'sicurezza' },
+    { type:'word', text:'solitudine' },
+    { type:'word', text:'riqualificazione' },
+    { type:'word', text:'solidarietà' },
+    { type:'word', text:'multiculturale' },
+    { type:'word', text:'associazioni' },
+    { type:'word', text:'rumori' },
+    { type:'word', text:'sporcizia' },
+    { type:'word', text:'radici' },
+
+    // RISPOSTE — reazioni al campo
+    { type:'risuona', text:'Anche nel mio palazzo succede così — i nuovi inquilini non si fermano mai a parlare nel cortile.' },
+    { type:'risuona', text:'Esatto: la scuola è l\'unico posto rimasto dove si mescola davvero tutto il quartiere.' },
+    { type:'risuona', text:'La parola riqualificazione fa sempre paura perché di solito significa che qualcuno arriverà a pagare di più.' },
+  ];
+
+  dots = []; edges = []; openCrowns.clear(); nextId = 1;
+  const W = canvas.width  || 700;
+  const H = canvas.height || 450;
+  const cx = W / 2, cy = H / 2;
+
+  // place all dots in a circle first, zero velocity
+  demos.forEach((d, i) => {
+    const angle = (Math.PI * 2 / demos.length) * i - Math.PI / 2;
+    const rad   = Math.min(W, H) * 0.38;
+    addDot(d.type, d.text,
+      (cx + Math.cos(angle) * rad) / W,
+      (cy + Math.sin(angle) * rad) / H,
+      true);
+    const dot = dots[dots.length - 1];
+    dot.vx = 0; dot.vy = 0;
+  });
+
+  // archi semantici iniziali tra concetti correlati
+  // affitto → spostamento (id 8 e 17)
+  // scuola → coesione (id 10 e 20)
+  // solitudine → anziani (id 19 e 11)
+  // I dot id partono da 1, nell'ordine inserito
+  const linkPairs = [
+    [8, 16],   // connessione affitto-spostamento ↔ parola affitto
+    [10, 17],  // connessione scuola-coesione ↔ parola solidarietà
+    [11, 18],  // connessione isolamento-anziani ↔ parola solitudine
+    [12, 20],  // connessione degrado-stigma ↔ parola riqualificazione
+    [13, 22],  // connessione mercato-identità ↔ parola radici
+    [4, 9],    // racconto Valentino ↔ racconto cortile
+    [6, 18],   // racconto palestra ↔ parola solitudine
+  ];
+  linkPairs.forEach(([a, b]) => {
+    if (dots[a-1] && dots[b-1]) {
+      edges.push({ a: dots[a-1].id, b: dots[b-1].id, alpha: 0, wordA: null, wordB: null, relType: 'semantica' });
+    }
+  });
+}
+
+function extractLabel(type, text) {
+  if (type === 'word') return text.trim().split(/\s+/)[0].slice(0, 14);
+  // tokenize
+  const tokens = text
+    .replace(/["""''«»()[\]{}\-–—]/g, ' ')
+    .split(/[\s,;:!?.]+/)
+    .map(w => w.toLowerCase().replace(/[^a-zàáèéìíòóùú]/gi, ''))
+    .filter(w => w.length > 2 && !STOP.has(w));
+  if (!tokens.length) return text.slice(0, 14);
+  // score: length bonus + rarity (longer & less common = more specific)
+  // also boost words that appear at start (often the topic)
+  const scored = tokens.map((w, i) => ({
+    w,
+    score: w.length * 1.5
+          + (i === 0 ? 3 : 0)           // first content word bonus
+          + (w.length > 7 ? 2 : 0)      // long word bonus
+          - (i > 3 ? i * 0.3 : 0)       // later words slight penalty
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].w.slice(0, 14);
+}
+
+function addDot(type, text, nx, ny, quiet) {
+  const W = canvas.width, H = canvas.height;
+  const x = (nx !== undefined) ? nx * W : (0.15 + Math.random() * 0.7) * W;
+  const y = (ny !== undefined) ? ny * H : (0.15 + Math.random() * 0.7) * H;
+  const dot = {
+    id: nextId++,
+    x, y,
+    r: type === 'word' ? 6 : 9,
+    type, text,
+    label: extractLabel(type, text),
+    alpha: 0.0,
+    targetAlpha: type === 'word' ? 0.55 : 0.80,
+    phase: Math.random() * Math.PI * 2,
+    vx: (Math.random() - 0.5) * 0.35,
+    vy: (Math.random() - 0.5) * 0.35,
+    selected: false,
+    pinned: false,
+    born: performance.now()
+  };
+  dots.push(dot);
+  if (!quiet) {
+    // flash the new dot
+    setTimeout(() => highlightDot(dot), 100);
+  }
+  return dot;
+}
+
+function highlightDot(dot) {
+  dot.flash = 1.0;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CANVAS SETUP
+═══════════════════════════════════════════════════════ */
+const canvas = document.getElementById('field');
+const ctx    = canvas.getContext('2d');
+const wrap   = document.getElementById('canvasWrap');
+
+function resizeCanvas() {
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+}
+
+window.addEventListener('resize', () => { resizeCanvas(); });
+resizeCanvas();
+
+/* ═══════════════════════════════════════════════════════
+   MOUSE / TOUCH
+═══════════════════════════════════════════════════════ */
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const src  = e.touches ? e.touches[0] : e;
+  return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+}
+
+function dotAt(x, y) {
+  let best = null, bestD = Infinity;
+  dots.forEach(d => {
+    const dx = d.x - x, dy = d.y - y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < d.r + 10 && dist < bestD) { best = d; bestD = dist; }
+  });
+  return best;
+}
+
+// shake detection
+let shakeHistory = [];   // [{x,y,t}] recent drag positions
+let shakeTriggered = false;
+
+
+function detectShake() {
+  if (shakeHistory.length < 6) return false;
+  const recent = shakeHistory.slice(-8);
+  let reversals = 0;
+  for (let i = 2; i < recent.length; i++) {
+    const dx1 = recent[i-1].x - recent[i-2].x;
+    const dx2 = recent[i].x   - recent[i-1].x;
+    const dy1 = recent[i-1].y - recent[i-2].y;
+    const dy2 = recent[i].y   - recent[i-1].y;
+    if ((dx1 * dx2 < -4) || (dy1 * dy2 < -4)) reversals++;
+  }
+  const timeSpan = recent[recent.length-1].t - recent[0].t;
+  return reversals >= 3 && timeSpan < 600;
+}
+
+function disconnectDot(dot) {
+  const before = edges.length;
+  edges = edges.filter(e => e.a !== dot.id && e.b !== dot.id);
+  if (edges.length < before) dot.flash = 1.5;
+}
+
+/* ── CROWN HELPERS ── */
+function makeCrownEntry(dot) {
+  // Alcuni dot (es. centro-frase) disabilitano la rosa auto-generata.
+  if (dot.noAutoCrown) {
+    return { dot, words: [], progress: 0 };
+  }
+
+  // Sorgente 1 — crownWords fornite dall'esterno (es. campo medio):
+  // ogni voce può avere {word, relation, confidence, direction}.
+  if (Array.isArray(dot.crownWords) && dot.crownWords.length) {
+    const list = dot.crownWords;
+    const count = list.length;
+    // Raggio cresce col numero di satelliti; niente seconda corona per ora.
+    const radius = Math.max(72, Math.min(170, 56 + count * 3.5));
+    return {
+      dot,
+      words: list.map((cw, i) => {
+        const angle = (Math.PI * 2 / count) * i - Math.PI / 2;
+        return {
+          word: cw.word,
+          relation: cw.relation || null,
+          confidence: (typeof cw.confidence === 'number') ? cw.confidence : null,
+          direction: cw.direction || 'out',
+          angle,
+          ox: Math.cos(angle) * radius,
+          oy: Math.sin(angle) * radius,
+          vx: 0, vy: 0,
+          progress: 0,
+          sx: undefined, sy: undefined,
+        };
+      }),
+      progress: 0,
+    };
+  }
+
+  // Sorgente 2 — parole *starred* nel testo del dot (community contributions)
+  const words = extractStarWords(dot.text).filter(w => w !== dot.label);
+  const count = words.length;
+  return {
+    dot,
+    words: words.map((w, i) => {
+      const angle = (Math.PI * 2 / count) * i - Math.PI / 2;
+      return {
+        word: w,
+        angle,
+        ox: Math.cos(angle) * 72,
+        oy: Math.sin(angle) * 72,
+        vx: 0, vy: 0,
+        progress: 0,
+        sx: undefined, sy: undefined
+      };
+    }),
+    progress: 0
+  };
+}
+
+function toggleCrown(dot) {
+  if (openCrowns.has(dot.id)) {
+    openCrowns.delete(dot.id);
+  } else {
+    openCrowns.set(dot.id, makeCrownEntry(dot));
+  }
+}
+
+function ensureCrownOpen(dot) {
+  if (!openCrowns.has(dot.id)) openCrowns.set(dot.id, makeCrownEntry(dot));
+}
+
+/* hit-test all open crown words; returns { sw, crownDot } or null */
+function satHitTest(x, y) {
+  for (const [, crown] of openCrowns) {
+    for (const sw of crown.words) {
+      if (sw.sx === undefined) continue;
+      const dx = x - sw.sx, dy = y - sw.sy;
+      if (Math.sqrt(dx*dx + dy*dy) < 16) return { sw, crownDot: crown.dot };
+    }
+  }
+  return null;
+}
+
+/* nearest dot (excluding one) within SAT_SNAP pixels of a position */
+function nearestDotToPos(x, y, excludeDot) {
+  let best = null, bestD = Infinity;
+  dots.forEach(d => {
+    if (excludeDot && d.id === excludeDot.id) return;
+    const dx = d.x - x, dy = d.y - y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < SAT_SNAP && dist < bestD) { best = d; bestD = dist; }
+  });
+  return best;
+}
+
+/* nearest crown word in ANY open crown except the source dot, within 44px */
+function nearestCrownWordExcluding(x, y, excludeDotId) {
+  let best = null, bestD = Infinity;
+  for (const [id, crown] of openCrowns) {
+    if (id === excludeDotId) continue;
+    for (const sw of crown.words) {
+      if (sw.sx === undefined) continue;
+      const dx = x - sw.sx, dy = y - sw.sy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 44 && dist < bestD) { best = { sw, crownDot: crown.dot }; bestD = dist; }
+    }
+  }
+  return best;
+}
+
+/* ── MERGE DOTS: quando due parole uguali si connettono,
+   i due punti si fondono in uno solo, unendo le corone ── */
+function mergeDots(keepDot, removeDot) {
+  const keepCrown   = openCrowns.get(keepDot.id);
+  const removeCrown = openCrowns.get(removeDot.id);
+  const keepWords   = keepCrown   ? keepCrown.words.map(w => w.word)   : [];
+  const removeWords = removeCrown ? removeCrown.words.map(w => w.word) : [];
+  const allWords    = [...new Set([...keepWords, ...removeWords])];
+
+  // retarget tutti gli archi da removeDot a keepDot
+  edges.forEach(e => {
+    if (e.a === removeDot.id) e.a = keepDot.id;
+    if (e.b === removeDot.id) e.b = keepDot.id;
+  });
+  // elimina self-loop e duplicati
+  edges = edges.filter(e => e.a !== e.b);
+  const seen = new Set();
+  edges = edges.filter(e => {
+    const key = Math.min(e.a,e.b)+'-'+Math.max(e.a,e.b);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+
+  // posiziona keepDot al punto medio, feedback visivo
+  keepDot.x = (keepDot.x + removeDot.x) / 2;
+  keepDot.y = (keepDot.y + removeDot.y) / 2;
+  keepDot.flash = 1.5;
+
+  // rimuovi removeDot
+  dots = dots.filter(d => d !== removeDot);
+  openCrowns.delete(removeDot.id);
+
+  // ricostruisci la corona unita
+  if (allWords.length > 0) {
+    const count = allWords.length;
+    openCrowns.set(keepDot.id, {
+      dot: keepDot,
+      words: allWords.map((w, i) => {
+        const angle = (Math.PI * 2 / count) * i - Math.PI / 2;
+        const existing = keepCrown?.words.find(sw => sw.word === w);
+        return existing
+          ? { ...existing, angle, ox: Math.cos(angle) * 72, oy: Math.sin(angle) * 72 }
+          : { word: w, angle, ox: Math.cos(angle) * 72, oy: Math.sin(angle) * 72,
+              vx: 0, vy: 0, progress: 0, sx: undefined, sy: undefined, flash: 1.0 };
+      }),
+      progress: keepCrown ? keepCrown.progress : 0
+    });
+  }
+}
+
+const DEFAULT_REL = 'causale'; // arco solido di default
+let lastCreatedEdge = null;    // riferimento all'ultimo arco creato, per il menu
+function createEdgeWithWords(dotA, dotB, wordA, wordB, relType) {
+  const exists = edges.find(e =>
+    (e.a === dotA.id && e.b === dotB.id) ||
+    (e.a === dotB.id && e.b === dotA.id));
+  if (exists) return;
+  // crea subito l'arco (solido di default se relType non specificato)
+  const edge = { a: dotA.id, b: dotB.id, alpha: 0, wordA, wordB, relType: relType || DEFAULT_REL };
+  edges.push(edge);
+  // se non è stata passata una relType esplicita → mostra il menu per cambiarla
+  if (!relType) {
+    lastCreatedEdge = edge;
+    // defer per evitare che il click del mouseup chiuda subito il menu
+    setTimeout(() => openRelMenu(lastScreenPos.x, lastScreenPos.y), 60);
+  }
+}
+
+/* ── EVENT HANDLERS ── */
+// Unified drag state — same for dots and crown words
+let pointerDown   = null;   // { x, y, type:'dot'|'sat', dot, sw, offX, offY }
+let isDragging    = false;
+const DRAG_THRESH = 5;
+
+// snap target for dots, snap crown word for satellites
+// reuse existing snapTarget / snapCrownWord globals
+
+function resetDrag() {
+  // close any auto-opened crowns that had no connection made
+  autoOpenedCrowns.forEach(id => openCrowns.delete(id));
+  autoOpenedCrowns.clear();
+  dragDot       = null;
+  dragSatellite = null;
+  snapTarget    = null;
+  snapCrownWord = null;
+  pointerDown   = null;
+  isDragging    = false;
+  shakeHistory  = [];
+  shakeTriggered = false;
+}
+
+function handleDown(pos) {
+  // satellite hit takes priority (smaller target — check first)
+  const hit = satHitTest(pos.x, pos.y);
+  if (hit) {
+    pointerDown    = { x: pos.x, y: pos.y, type: 'sat',
+                       sw: hit.sw, sourceDot: hit.crownDot };
+    isDragging     = false;
+    shakeHistory   = [{ x: pos.x, y: pos.y, t: Date.now() }];
+    shakeTriggered = false;
+    return;
+  }
+  const dot = dotAt(pos.x, pos.y);
+  if (dot) {
+    pointerDown    = { x: pos.x, y: pos.y, type: 'dot', dot };
+    isDragging     = false;
+    shakeHistory   = [{ x: pos.x, y: pos.y, t: Date.now() }];
+    shakeTriggered = false;
+  } else {
+    // hit-test sugli archi: click per selezionare, shake per eliminare
+    const hitEdge = edgeAt(pos.x, pos.y);
+    if (hitEdge) {
+      pointerDown    = { x: pos.x, y: pos.y, type: 'edge', edge: hitEdge };
+      isDragging     = false;
+      shakeHistory   = [{ x: pos.x, y: pos.y, t: Date.now() }];
+      shakeTriggered = false;
+    } else {
+      pointerDown = null;
+    }
+  }
+}
+
+function handleMove(pos) {
+  if (!pointerDown && !dragDot && !dragSatellite) {
+    hoveredDot = dotAt(pos.x, pos.y);
+    if (hoveredDot) {
+      hoveredEdge = null;
+      canvas.style.cursor = 'grab';
+      showTooltip(hoveredDot, pos);
+    } else if (satHitTest(pos.x, pos.y)) {
+      hoveredEdge = null;
+      canvas.style.cursor = 'grab';
+      showTooltip(null, pos);
+    } else {
+      hoveredEdge = edgeAt(pos.x, pos.y);
+      canvas.style.cursor = hoveredEdge ? 'pointer' : 'default';
+      if (hoveredEdge) showEdgeTooltip(hoveredEdge, pos);
+      else showTooltip(null, pos);
+    }
+    return;
+  }
+
+  // ── edge shake to delete ──
+  if (pointerDown && pointerDown.type === 'edge') {
+    shakeHistory.push({ x: pos.x, y: pos.y, t: Date.now() });
+    if (shakeHistory.length > 12) shakeHistory.shift();
+    canvas.style.cursor = 'grabbing';
+    if (!shakeTriggered && detectShake()) {
+      shakeTriggered = true;
+      edges = edges.filter(e => e !== pointerDown.edge);
+      resetDrag();
+    }
+    return;
+  }
+
+  // ── satellite shake to remove from crown ──
+  // Se tieni premuto su un petalo della rosa e scuoti, il petalo (relazione
+  // del campo medio) si stacca: utile per pulire rumore direttamente dalla
+  // scena community.
+  if (pointerDown && pointerDown.type === 'sat' && !isDragging) {
+    shakeHistory.push({ x: pos.x, y: pos.y, t: Date.now() });
+    if (shakeHistory.length > 12) shakeHistory.shift();
+    if (!shakeTriggered && detectShake()) {
+      shakeTriggered = true;
+      const parentDot = pointerDown.sourceDot;
+      const targetWord = pointerDown.sw.word;
+      if (parentDot && Array.isArray(parentDot.crownWords)) {
+        parentDot.crownWords = parentDot.crownWords.filter(cw => cw.word !== targetWord);
+        // Rigenera la crown entry per riflettere la rimozione
+        if (openCrowns.has(parentDot.id)) {
+          openCrowns.set(parentDot.id, makeCrownEntry(parentDot));
+        }
+      }
+      resetDrag();
+      shakeHistory = [];
+      return;
+    }
+  }
+
+  // activate drag once threshold exceeded
+  if (pointerDown && !isDragging) {
+    const d = Math.hypot(pos.x - pointerDown.x, pos.y - pointerDown.y);
+    if (d > DRAG_THRESH) {
+      isDragging = true;
+      if (pointerDown.type === 'dot') {
+        dragDot  = pointerDown.dot;
+        dragOffX = pointerDown.x - pointerDown.dot.x;
+        dragOffY = pointerDown.y - pointerDown.dot.y;
+      } else {
+        dragSatellite = { sw: pointerDown.sw, sourceDot: pointerDown.sourceDot,
+                          x: pointerDown.sw.sx, y: pointerDown.sw.sy };
+      }
+      selectedDot = null; // stop crown repulsion while dragging
+    } else {
+      return; // not yet dragging
+    }
+  }
+
+  // ── dot drag ──
+  if (dragDot) {
+    dragDot.x  = Math.max(dragDot.r, Math.min(canvas.width  - dragDot.r, pos.x - dragOffX));
+    dragDot.y  = Math.max(dragDot.r, Math.min(canvas.height - dragDot.r, pos.y - dragOffY));
+    dragDot.vx = 0; dragDot.vy = 0;
+    snapTarget = nearestOther(dragDot);
+
+    // auto-open crown of nearest dot only, close all others
+    const CROWN_OPEN_DIST = SAT_SNAP + 30;
+    let nearest = null, nearestDist = Infinity;
+    dots.forEach(d => {
+      if (d === dragDot) return;
+      const dist = Math.hypot(d.x - dragDot.x, d.y - dragDot.y);
+      if (dist < CROWN_OPEN_DIST && dist < nearestDist) {
+        nearest = d; nearestDist = dist;
+      }
+    });
+    // close any auto-opened crown that is no longer the nearest
+    autoOpenedCrowns.forEach(id => {
+      if (!nearest || id !== nearest.id) {
+        openCrowns.delete(id);
+        autoOpenedCrowns.delete(id);
+      }
+    });
+    // open the nearest if not already open
+    if (nearest && !openCrowns.has(nearest.id)) {
+      openCrowns.set(nearest.id, makeCrownEntry(nearest));
+      autoOpenedCrowns.add(nearest.id);
+    }
+    shakeHistory.push({ x: pos.x, y: pos.y, t: Date.now() });
+    if (shakeHistory.length > 12) shakeHistory.shift();
+    if (!shakeTriggered && detectShake()) {
+      shakeTriggered = true;
+      disconnectDot(dragDot);
+      shakeHistory = [];
+    }
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
+
+  // ── satellite drag ──
+  if (dragSatellite) {
+    const parent = dragSatellite.sourceDot;
+    dragSatellite.x = pos.x;
+    dragSatellite.y = pos.y;
+    dragSatellite.sw.ox = pos.x - parent.x;
+    dragSatellite.sw.oy = pos.y - parent.y;
+    dragSatellite.sw.vx = 0;
+    dragSatellite.sw.vy = 0;
+    snapCrownWord = nearestCrownWordExcluding(pos.x, pos.y, parent.id);
+    if (!snapCrownWord) {
+      const nd = nearestDotToPos(pos.x, pos.y, parent);
+      snapCrownWord = nd ? { sw: null, crownDot: nd, isDotCenter: true } : null;
+    }
+
+    // auto-open nearest dot crown during satellite drag
+    const CROWN_OPEN_DIST = SAT_SNAP + 30;
+    let nearest = null, nearestDist = Infinity;
+    dots.forEach(d => {
+      if (d === parent) return;
+      const dist = Math.hypot(d.x - pos.x, d.y - pos.y);
+      if (dist < CROWN_OPEN_DIST && dist < nearestDist) {
+        nearest = d; nearestDist = dist;
+      }
+    });
+    autoOpenedCrowns.forEach(id => {
+      if (!nearest || id !== nearest.id) {
+        openCrowns.delete(id);
+        autoOpenedCrowns.delete(id);
+      }
+    });
+    if (nearest && !openCrowns.has(nearest.id)) {
+      openCrowns.set(nearest.id, makeCrownEntry(nearest));
+      autoOpenedCrowns.add(nearest.id);
+    }
+    shakeHistory.push({ x: pos.x, y: pos.y, t: Date.now() });
+    if (shakeHistory.length > 12) shakeHistory.shift();
+    if (!shakeTriggered && detectShake()) {
+      shakeTriggered = true;
+      const sid = parent.id, word = dragSatellite.sw.word;
+      edges = edges.filter(e => !((e.a===sid&&e.wordA===word)||(e.b===sid&&e.wordB===word)));
+      dragSatellite.sw.flash = 1.0;
+      shakeHistory = [];
+    }
+    canvas.style.cursor = 'grabbing';
+  }
+}
+
+function handleUp(pos) {
+  if (dragDot) {
+    if (snapTarget && !shakeTriggered) {
+      createEdgeWithWords(dragDot, snapTarget, null, null);
+      autoOpenedCrowns.delete(snapTarget.id);
+    }
+    dragDot.pinned = true;   // stays where dropped
+    dragDot.vx = 0; dragDot.vy = 0;
+    resetDrag();
+    return;
+  }
+  if (dragSatellite) {
+    if (snapCrownWord && !shakeTriggered) {
+      // parole uguali → merge dei due punti
+      if (snapCrownWord.sw && dragSatellite.sw.word === snapCrownWord.sw.word
+          && dragSatellite.sourceDot.id !== snapCrownWord.crownDot.id) {
+        mergeDots(snapCrownWord.crownDot, dragSatellite.sourceDot);
+      } else {
+        snapCrownWord.isDotCenter
+          ? createEdgeWithWords(dragSatellite.sourceDot, snapCrownWord.crownDot, dragSatellite.sw.word, null)
+          : createEdgeWithWords(dragSatellite.sourceDot, snapCrownWord.crownDot, dragSatellite.sw.word, snapCrownWord.sw.word);
+      }
+    }
+    resetDrag();
+    return;
+  }
+  // click (no drag) — toggle crown o configura arco
+  if (pointerDown && !isDragging && pos && Math.hypot(pos.x - pointerDown.x, pos.y - pointerDown.y) <= DRAG_THRESH) {
+    if (pointerDown.type === 'dot') {
+      // Se la rosellina è già aperta, il click la richiude e deseleziona.
+      const wasOpen = openCrowns.has(pointerDown.dot.id);
+      toggleCrown(pointerDown.dot);
+      if (wasOpen) {
+        deselectAll();
+      } else {
+        selectedDot = pointerDown.dot;
+        showCaption(pointerDown.dot);
+      }
+    } else if (pointerDown.type === 'edge') {
+      // click su un arco → apri menu per cambiare tipo relazione
+      lastCreatedEdge = pointerDown.edge;
+      setTimeout(() => openRelMenu(lastScreenPos.x, lastScreenPos.y), 60);
+    } else if (pointerDown.type === 'sat') {
+      // Click su petalo della rosa (campo medio): apri menu relazione
+      // per cambiare il tipo o eliminare la relazione.
+      const sw = pointerDown.sw;
+      const parentDot = pointerDown.sourceDot;
+      setTimeout(() => openSatelliteMenu(sw, parentDot, lastScreenPos.x, lastScreenPos.y), 60);
+    }
+  }
+  resetDrag();
+}
+
+// Menu per modificare/eliminare una relazione rappresentata da un petalo
+// della rosa (campo medio importato). Non muta il KG server-side —
+// modifica solo la visualizzazione locale.
+function openSatelliteMenu(sw, parentDot, screenX, screenY) {
+  if (!sw || !parentDot) return;
+  const m = document.getElementById('ctxMenu');
+  if (!m) return;
+  const currentRel = sw.relation || 'SIMILAR_TO';
+  const rels = [
+    ['IS_A', 'è'], ['HAS', 'ha'], ['DOES', 'fa'], ['PART_OF', 'parte di'],
+    ['CAUSES', 'causa'], ['REQUIRES', 'richiede'], ['ENABLES', 'abilita'],
+    ['SIMILAR_TO', 'simile a'], ['OPPOSITE_OF', 'opposto di'],
+    ['USED_FOR', 'usato per'], ['EXPRESSES', 'esprime'],
+  ];
+  m.innerHTML = `
+    <div class="ctx-item ctx-title">${parentDot.label} → ${sw.word}</div>
+    <div class="ctx-sep"></div>
+    <div style="padding:6px 12px;font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.1em">cambia relazione</div>
+    ${rels.map(([k, l]) => `<div class="ctx-item${k===currentRel?' selected':''}" data-rel="${k}">${l}</div>`).join('')}
+    <div class="ctx-sep"></div>
+    <div class="ctx-item danger" data-action="remove">✕ elimina relazione</div>
+  `;
+  m.style.left = screenX + 'px';
+  m.style.top  = screenY + 'px';
+  m.classList.add('open');
+  m.querySelectorAll('.ctx-item').forEach(it => {
+    const rel = it.dataset.rel;
+    const act = it.dataset.action;
+    if (!rel && !act) return;
+    it.onclick = () => {
+      m.classList.remove('open');
+      if (act === 'remove') {
+        if (Array.isArray(parentDot.crownWords)) {
+          parentDot.crownWords = parentDot.crownWords.filter(cw => cw.word !== sw.word);
+          if (openCrowns.has(parentDot.id)) {
+            openCrowns.set(parentDot.id, makeCrownEntry(parentDot));
+          }
+        }
+      } else if (rel) {
+        if (Array.isArray(parentDot.crownWords)) {
+          parentDot.crownWords.forEach(cw => {
+            if (cw.word === sw.word) cw.relation = rel;
+          });
+          if (openCrowns.has(parentDot.id)) {
+            openCrowns.set(parentDot.id, makeCrownEntry(parentDot));
+          }
+        }
+      }
+    };
+  });
+  const closeOnOutside = (e) => {
+    if (!m.contains(e.target)) {
+      m.classList.remove('open');
+      document.removeEventListener('mousedown', closeOnOutside);
+    }
+  };
+  setTimeout(() => document.addEventListener('mousedown', closeOnOutside), 0);
+}
+
+canvas.addEventListener('mousedown', e => { e.preventDefault(); lastScreenPos={x:e.clientX,y:e.clientY}; handleDown(getCanvasPos(e)); });
+canvas.addEventListener('mousemove', e => { lastScreenPos={x:e.clientX,y:e.clientY}; handleMove(getCanvasPos(e)); });
+canvas.addEventListener('mouseup',   e => { lastScreenPos={x:e.clientX,y:e.clientY}; handleUp(getCanvasPos(e)); });
+canvas.addEventListener('mouseleave', () => {
+  hoveredDot = null;
+  document.getElementById('tooltip').style.display = 'none';
+  canvas.style.cursor = 'default';
+  // commit any pending drag
+  if (dragDot && snapTarget && !shakeTriggered) createEdgeWithWords(dragDot, snapTarget, null, null);
+  if (dragSatellite && snapCrownWord && !shakeTriggered) {
+    if (snapCrownWord.sw && dragSatellite.sw.word === snapCrownWord.sw.word
+        && dragSatellite.sourceDot.id !== snapCrownWord.crownDot.id) {
+      mergeDots(snapCrownWord.crownDot, dragSatellite.sourceDot);
+    } else {
+      snapCrownWord.isDotCenter
+        ? createEdgeWithWords(dragSatellite.sourceDot, snapCrownWord.crownDot, dragSatellite.sw.word, null)
+        : createEdgeWithWords(dragSatellite.sourceDot, snapCrownWord.crownDot, dragSatellite.sw.word, snapCrownWord.sw.word);
+    }
+  }
+  resetDrag();
+});
+
+canvas.addEventListener('touchstart', e => { e.preventDefault(); handleDown(getCanvasPos(e)); }, { passive: false });
+canvas.addEventListener('touchmove',  e => { e.preventDefault(); handleMove(getCanvasPos(e)); }, { passive: false });
+canvas.addEventListener('touchend',   e => { handleUp(getCanvasPos(e.changedTouches ? { touches: e.changedTouches } : e)); }, { passive: false });
+
+
+
+/* ═══════════════════════════════════════════════════════
+   SELECTION DISPLAY
+═══════════════════════════════════════════════════════ */
+const SNAP_DIST = 65;
+let snapTarget = null;
+let autoOpenedCrowns = new Set(); // dot ids auto-opened during drag
+
+function nearestOther(dot) {
+  let best = null, bestD = Infinity;
+  dots.forEach(d => {
+    if (d.id === dot.id) return;
+    const dx = d.x - dot.x, dy = d.y - dot.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < SNAP_DIST && dist < bestD) { best = d; bestD = dist; }
+  });
+  return best;
+}
+
+function showCaption(dot) {
+  document.getElementById('captionEmpty').style.display  = 'none';
+  document.getElementById('captionLabel').style.display  = '';
+  document.getElementById('captionText').style.display   = '';
+  document.getElementById('captionLabel').textContent    = LABELS[dot.type] || dot.type;
+  document.getElementById('captionLabel').style.color    = COLORS[dot.type];
+  document.getElementById('captionText').textContent     = dot.text || '—';
+}
+
+function deselectAll() {
+  selectedDot = null;
+  document.getElementById('captionEmpty').style.display = '';
+  document.getElementById('captionLabel').style.display = 'none';
+  document.getElementById('captionText').style.display  = 'none';
+}
+
+function showEdgeTooltip(edge, pos) {
+  const tt = document.getElementById('tooltip');
+  const rt = [...REL_TYPES, ...customRelTypes].find(r => r.id === edge.relType);
+  const da = dots.find(d => d.id === edge.a);
+  const db = dots.find(d => d.id === edge.b);
+  const nameA = edge.wordA || (da ? da.label : '?');
+  const nameB = edge.wordB || (db ? db.label : '?');
+  document.getElementById('tt-type').textContent = rt ? rt.label : edge.relType;
+  document.getElementById('tt-type').style.color = rt ? rt.color : '#5A5245';
+  document.getElementById('tt-text').textContent = `${nameA} — ${rt ? rt.desc : edge.relType} — ${nameB}`;
+  let tx = pos.x + 14, ty = pos.y - 10;
+  if (tx + 230 > canvas.width)  tx = pos.x - 230;
+  if (ty + 80  > canvas.height) ty = pos.y - 80;
+  tt.style.left = tx+'px'; tt.style.top = ty+'px'; tt.style.display = 'block';
+}
+
+function showTooltip(dot, pos) {
+  const tt = document.getElementById('tooltip');
+  if (!dot) { tt.style.display = 'none'; return; }
+  document.getElementById('tt-type').textContent  = LABELS[dot.type] || dot.type;
+  document.getElementById('tt-type').style.color  = COLORS[dot.type];
+  document.getElementById('tt-text').textContent  = dot.text.length > 80 ? dot.text.slice(0,80)+'…' : dot.text;
+  let tx = pos.x + 14, ty = pos.y - 10;
+  if (tx + 230 > canvas.width)  tx = pos.x - 230;
+  if (ty + 80  > canvas.height) ty = pos.y - 80;
+  tt.style.left = tx+'px'; tt.style.top = ty+'px'; tt.style.display = 'block';
+}
+
+/* ═══════════════════════════════════════════════════════
+   DRAW LOOP
+═══════════════════════════════════════════════════════ */
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const now = performance.now();
+
+  /* ── force-directed physics ── */
+  dots.forEach(d => {
+    d.phase += 0.007;
+    if (d.alpha < d.targetAlpha) d.alpha = Math.min(d.targetAlpha, d.alpha + 0.025);
+    if (d.flash > 0) d.flash = Math.max(0, d.flash - 0.03);
+  });
+
+  if (animating && dots.length > 1) {
+    const isDragging = dragDot !== null || dragSatellite !== null;
+
+    const fx = new Float32Array(dots.length);
+    const fy = new Float32Array(dots.length);
+
+    // Grado di connessione per dot — usato sia per gravità sia per il tipo di
+    // attrazione dell'arco (hub→leaf viene tirato più stretto).
+    const degById = new Map();
+    dots.forEach(d => degById.set(d.id, 0));
+    edges.forEach(e => {
+      degById.set(e.a, (degById.get(e.a) || 0) + 1);
+      degById.set(e.b, (degById.get(e.b) || 0) + 1);
+    });
+    let maxDeg = 1;
+    for (const v of degById.values()) if (v > maxDeg) maxDeg = v;
+    const HUB_THRESHOLD = 4;  // degree per considerare un dot un "hub"
+
+    // Repulsione — corona aperta = raggio esteso; margine di aria 35px.
+    const CROWN_MARGIN = 20;
+    const DOT_AIR = 35;
+    const REPULSION_K = 0.22;
+    for (let i = 0; i < dots.length; i++) {
+      for (let j = i + 1; j < dots.length; j++) {
+        const dx = dots[i].x - dots[j].x;
+        const dy = dots[i].y - dots[j].y;
+        const dist = Math.sqrt(dx*dx + dy*dy) || 0.1;
+        const ri = dots[i].r + (openCrowns.has(dots[i].id) ? 72 + CROWN_MARGIN : 0);
+        const rj = dots[j].r + (openCrowns.has(dots[j].id) ? 72 + CROWN_MARGIN : 0);
+        const minD = ri + rj + DOT_AIR;
+        if (dist < minD) {
+          const f = (minD - dist) * REPULSION_K;
+          const nx = dx / dist, ny = dy / dist;
+          if (!dots[i].pinned) { fx[i] += nx * f;  fy[i] += ny * f; }
+          if (!dots[j].pinned) { fx[j] -= nx * f;  fy[j] -= ny * f; }
+        }
+      }
+    }
+
+    if (!isDragging) {
+      // Gravità radiale: ogni dot ha un raggio ideale dal centro in base al
+      // suo grado — tanti link → vicino al centro (hub); pochi → margine
+      // esterno (foglie). La frase ('narra') è sempre ancorata al centro.
+      const cx = W / 2, cy = H / 2;
+      const RMAX = Math.min(W, H) * 0.44;
+      const RMIN = 32;
+      dots.forEach((d, i) => {
+        if (d.type === 'narra') {
+          // Ancoraggio forte al centro per il nodo frase.
+          const dx = cx - d.x, dy = cy - d.y;
+          fx[i] += dx * 0.006;
+          fy[i] += dy * 0.006;
+          return;
+        }
+        const deg = degById.get(d.id) || 0;
+        const norm = maxDeg > 1 ? deg / maxDeg : 0;
+        const idealR = RMAX - norm * (RMAX - RMIN);
+        const dx = d.x - cx, dy = d.y - cy;
+        const dist = Math.sqrt(dx*dx + dy*dy) || 0.1;
+        const stretch = dist - idealR;
+        const f = -stretch * 0.006;
+        fx[i] += (dx / dist) * f;
+        fy[i] += (dy / dist) * f;
+      });
+
+      // Attrazione degli archi: arco leaf→hub (una foglia appesa a un hub) ha
+      // distanza ideale stretta (70px) — così i vicini KG si stringono attorno
+      // alla loro parola madre, formando un "cluster a rosa" leggibile.
+      // Archi tra dots di pari importanza (hub↔hub, o in una catena) restano
+      // all'ideale standard di 180px.
+      edges.forEach(edge => {
+        const ai = dots.findIndex(d => d.id === edge.a);
+        const bi = dots.findIndex(d => d.id === edge.b);
+        if (ai < 0 || bi < 0) return;
+        const dx = dots[bi].x - dots[ai].x;
+        const dy = dots[bi].y - dots[ai].y;
+        const dist = Math.sqrt(dx*dx + dy*dy) || 0.1;
+        const aDeg = degById.get(dots[ai].id) || 0;
+        const bDeg = degById.get(dots[bi].id) || 0;
+        const leafHub = (aDeg === 1 && bDeg >= HUB_THRESHOLD) ||
+                        (bDeg === 1 && aDeg >= HUB_THRESHOLD);
+        const ideal = leafHub ? 72 : 180;
+        const dead  = leafHub ? 12 : 20;
+        const k     = leafHub ? 0.008 : 0.004;
+        const stretch = dist - ideal;
+        if (Math.abs(stretch) < dead) return;
+        const f = stretch * k;
+        const nx = dx / dist, ny = dy / dist;
+        fx[ai] += nx * f;  fy[ai] += ny * f;
+        fx[bi] -= nx * f;  fy[bi] -= ny * f;
+      });
+
+      // crown repulsion (click-opened only)
+      for (const [id, crown] of openCrowns) {
+        if (autoOpenedCrowns.has(id)) continue;
+        const parentIdx = dots.findIndex(d => d.id === id);
+        crown.words.forEach(sw => {
+          if (sw.sx === undefined || sw.progress < 0.7) return;
+          dots.forEach((d, i) => {
+            if (i === parentIdx) return;
+            const dx = d.x - sw.sx;
+            const dy = d.y - sw.sy;
+            const dist = Math.sqrt(dx*dx + dy*dy) || 0.1;
+            if (dist > 100) return;
+            const f = (100 - dist) * 0.10;
+            fx[i] += (dx / dist) * f;
+            fy[i] += (dy / dist) * f;
+          });
+        });
+      }
+    }
+
+    // integrate — damping forte, velocità limitata per evitare scatti fuori canvas
+    const DAMP  = isDragging ? 0.3  : 0.38;
+    const VMAX  = isDragging ? 0.8  : 1.2;
+    const VSTOP = 0.08;
+
+    dots.forEach((d, i) => {
+      if (d === dragDot) return;
+      if (d.pinned) { d.vx = 0; d.vy = 0; return; }
+      d.vx = (d.vx + fx[i]) * DAMP;
+      d.vy = (d.vy + fy[i]) * DAMP;
+      const speed = Math.sqrt(d.vx*d.vx + d.vy*d.vy);
+      if (speed < VSTOP) { d.vx = 0; d.vy = 0; return; }
+      if (speed > VMAX) { d.vx = d.vx/speed*VMAX; d.vy = d.vy/speed*VMAX; }
+      d.x += d.vx; d.y += d.vy;
+      // Clamp duro: i dot NON escono mai dal canvas, e la velocità si annulla
+      // al confine (invece che rimbalzare) per evitare oscillazioni residue.
+      const pad = d.r + 14;
+      if (d.x < pad)     { d.x = pad;     d.vx = 0; }
+      if (d.x > W - pad) { d.x = W - pad; d.vx = 0; }
+      if (d.y < pad)     { d.y = pad;     d.vy = 0; }
+      if (d.y > H - pad) { d.y = H - pad; d.vy = 0; }
+    });
+  }
+
+  // build live dot lookup — rebuilt every frame
+  const dotById = new Map();
+  dots.forEach(d => dotById.set(d.id, d));
+
+  // animate all open crowns with spring physics + repulsione naturale tra
+  // satelliti di rose diverse: i petali si piegano dove non c'è spazio,
+  // come fiori che crescono fra loro.
+  const SPRING_K    = 0.16;
+  const SPRING_DAMP = 0.72;
+  const SAT_REPEL_DIST = 22;   // distanza minima fra due satelliti
+  const SAT_REPEL_K = 0.55;
+  const DOT_REPEL_DIST = 28;   // distanza minima da un dot centrale altrui
+  const DOT_REPEL_K = 0.40;
+  const SAT_PAD = 14;          // margine dal bordo canvas
+
+  // Pass 1 — target + molla (come prima)
+  for (const [id, crown] of openCrowns) {
+    const liveDot = dotById.get(id);
+    if (!liveDot) { openCrowns.delete(id); continue; }
+    crown.dot = liveDot;
+    crown.progress = Math.min(1, crown.progress + 0.055);
+
+    crown.words.forEach((sw, i) => {
+      sw.progress = Math.min(1, crown.progress * 1.3 - i * 0.06);
+      if (sw.progress < 0) sw.progress = 0;
+
+      if (dragSatellite?.sw === sw) {
+        sw.sx = dragSatellite.x;
+        sw.sy = dragSatellite.y;
+        sw.vx = 0; sw.vy = 0;
+        return;
+      }
+
+      const ease = 1 - Math.pow(1 - Math.max(0, sw.progress), 3);
+      const targetX = liveDot.x + sw.ox * ease;
+      const targetY = liveDot.y + sw.oy * ease;
+
+      if (sw.sx === undefined) { sw.sx = targetX; sw.sy = targetY; }
+
+      const fx = (targetX - sw.sx) * SPRING_K;
+      const fy = (targetY - sw.sy) * SPRING_K;
+
+      sw.vx = (sw.vx + fx) * SPRING_DAMP;
+      sw.vy = (sw.vy + fy) * SPRING_DAMP;
+    });
+  }
+
+  // Pass 2 — forze di piegamento. I satelliti si respingono l'un l'altro e
+  // si ritraggono da dot diversi dal proprio genitore. Così le rose si
+  // piegano naturalmente quando sovrappongono lo spazio disponibile.
+  const allSats = [];
+  for (const [id, crown] of openCrowns) {
+    for (const sw of crown.words) {
+      if (sw.sx === undefined || sw.progress < 0.3) continue;
+      if (dragSatellite?.sw === sw) continue;
+      allSats.push({ sw, parentId: id });
+    }
+  }
+
+  for (let i = 0; i < allSats.length; i++) {
+    const a = allSats[i];
+    // Repulsione sat-sat (anche tra rose diverse: le rose si contendono spazio)
+    for (let j = i + 1; j < allSats.length; j++) {
+      const b = allSats[j];
+      const dx = a.sw.sx - b.sw.sx;
+      const dy = a.sw.sy - b.sw.sy;
+      const d2 = dx*dx + dy*dy;
+      if (d2 >= SAT_REPEL_DIST * SAT_REPEL_DIST) continue;
+      const d = Math.sqrt(d2) || 0.1;
+      const push = (SAT_REPEL_DIST - d) * SAT_REPEL_K;
+      const nx = dx / d, ny = dy / d;
+      a.sw.vx += nx * push * 0.5;
+      a.sw.vy += ny * push * 0.5;
+      b.sw.vx -= nx * push * 0.5;
+      b.sw.vy -= ny * push * 0.5;
+    }
+    // Repulsione dai dot centrali altrui (evita di attraversarli)
+    dots.forEach(d => {
+      if (d.id === a.parentId) return;
+      const dx = a.sw.sx - d.x;
+      const dy = a.sw.sy - d.y;
+      const d2 = dx*dx + dy*dy;
+      const thresh = d.r + DOT_REPEL_DIST;
+      if (d2 >= thresh * thresh) return;
+      const dist = Math.sqrt(d2) || 0.1;
+      const push = (thresh - dist) * DOT_REPEL_K;
+      a.sw.vx += (dx / dist) * push;
+      a.sw.vy += (dy / dist) * push;
+    });
+  }
+
+  // Pass 3 — integra velocità, clamp al canvas (satelliti restano dentro)
+  for (const a of allSats) {
+    const sw = a.sw;
+    sw.sx += sw.vx;
+    sw.sy += sw.vy;
+    if (sw.sx < SAT_PAD)      { sw.sx = SAT_PAD;      sw.vx *= -0.2; }
+    if (sw.sx > W - SAT_PAD)  { sw.sx = W - SAT_PAD;  sw.vx *= -0.2; }
+    if (sw.sy < SAT_PAD)      { sw.sy = SAT_PAD;      sw.vy *= -0.2; }
+    if (sw.sy > H - SAT_PAD)  { sw.sy = H - SAT_PAD;  sw.vy *= -0.2; }
+  }
+
+  /* focus state — computed once, used by edges and dots */
+  const hasFocus = selectedDot !== null;
+
+  /* draw edges — always from live dot positions */
+  edges.forEach(edge => {
+    const da = dotById.get(edge.a);
+    const db = dotById.get(edge.b);
+    if (!da || !db) return;
+    if (edge.alpha < 0.7) edge.alpha = Math.min(0.7, edge.alpha + 0.02);
+
+    // always start from live dot centers
+    let ax = da.x, ay = da.y, bx = db.x, by = db.y;
+    let labelA = null, labelB = null;
+
+    // offset to word satellite if crown is open and word has progressed
+    // L'endpoint si sposta al satellite, ma NON si imposta il label:
+    // il satellite della corona lo disegna già da sé, evitando duplicazioni.
+    if (edge.wordA) {
+      const cA = openCrowns.get(da.id);
+      const sw = cA?.words.find(w => w.word === edge.wordA);
+      if (sw && sw.progress > 0.4 && sw.sx !== undefined) {
+        ax = sw.sx; ay = sw.sy;
+        // labelA solo se la corona è chiusa (satellite non visibile)
+      } else if (!openCrowns.has(da.id)) {
+        labelA = edge.wordA;
+      }
+    }
+    if (edge.wordB) {
+      const cB = openCrowns.get(db.id);
+      const sw = cB?.words.find(w => w.word === edge.wordB);
+      if (sw && sw.progress > 0.4 && sw.sx !== undefined) {
+        bx = sw.sx; by = sw.sy;
+      } else if (!openCrowns.has(db.id)) {
+        labelB = edge.wordB;
+      }
+    }
+
+    ctx.save();
+    const edgeInFocus = !hasFocus || (selectedDot && (da.id === selectedDot.id || db.id === selectedDot.id));
+    ctx.globalAlpha = edge.alpha * (edgeInFocus ? 1 : 0.12);
+    // stile in base al tipo di relazione
+    const rt = [...REL_TYPES, ...customRelTypes].find(r => r.id === edge.relType);
+    ctx.strokeStyle = rt ? rt.color : '#5A5245';
+    if (rt && rt.square) {
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'butt';
+    } else {
+      ctx.lineWidth = edge.wordA ? 1.4 : 1.2;
+      ctx.lineCap = 'round';
+    }
+    ctx.setLineDash(rt && rt.dash ? rt.dash : [4, 4]);
+    const mx = (ax + bx) / 2;
+    const my = (ay + by) / 2;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.quadraticCurveTo(mx, my, bx, by);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // natura della relazione al punto medio — sempre visibile
+    const relText = edge.relNature || (rt ? rt.natures[0] : '');
+    ctx.globalAlpha = edge.alpha * 0.55;
+    ctx.fillStyle   = rt ? rt.color : '#9C9082';
+    ctx.font = "400 9px 'JetBrains Mono', monospace";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    if (relText) ctx.fillText(relText, mx, my - 4);
+
+    // word labels at endpoints when snapped to words
+    if (labelA || labelB) {
+      ctx.font = "400 12px 'JetBrains Mono', monospace";
+      ctx.textBaseline = 'bottom';
+      // fix: se le due parole sono uguali, mostra una sola volta al centro
+      if (labelA && labelB && labelA === labelB) {
+        ctx.globalAlpha = edge.alpha * 0.7;
+        ctx.fillStyle = COLORS[da.type];
+        ctx.textAlign = 'center';
+        ctx.fillText(labelA, mx, my - 16);
+      } else {
+        if (labelA) {
+          ctx.globalAlpha = edge.alpha * 0.7;
+          ctx.fillStyle = COLORS[da.type];
+          ctx.textAlign = ax < mx ? 'right' : 'left';
+          ctx.fillText(labelA, ax + (ax < mx ? -5 : 5), ay - 3);
+        }
+        if (labelB) {
+          ctx.globalAlpha = edge.alpha * 0.7;
+          ctx.fillStyle = COLORS[db.type];
+          ctx.textAlign = bx < mx ? 'right' : 'left';
+          ctx.fillText(labelB, bx + (bx < mx ? -5 : 5), by - 3);
+        }
+      }
+    }
+
+    ctx.restore();
+  });
+
+  /* snap preview line — shown while dragging near another dot */
+  if (dragDot && snapTarget) {
+    const progress = 1 - (Math.hypot(dragDot.x - snapTarget.x, dragDot.y - snapTarget.y) / SNAP_DIST);
+    ctx.save();
+    ctx.globalAlpha = 0.25 + progress * 0.55;
+    ctx.strokeStyle = '#1E1B14';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(dragDot.x, dragDot.y);
+    ctx.lineTo(snapTarget.x, snapTarget.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // snap target highlight ring
+    ctx.globalAlpha = 0.20 + progress * 0.40;
+    ctx.strokeStyle = COLORS[snapTarget.type];
+    ctx.lineWidth   = 2;
+    ctx.beginPath();
+    ctx.arc(snapTarget.x, snapTarget.y, snapTarget.r + 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* draw dots — skip dragDot, drawn separately last */
+  dots.forEach(d => {
+    if (d === dragDot) return;
+    const isSelected = d === selectedDot;
+    const isHovered  = d === hoveredDot;
+    const col = COLORS[d.type];
+    const pulse = 1 + 0.08 * Math.sin(d.phase);
+    const flashBoost = d.flash ? d.flash * 0.5 : 0;
+    const r = d.r * (isSelected ? 1.45 : pulse);
+
+    // dim non-selected dots when a dot is focused
+    const dimFactor = hasFocus && !isSelected ? 0.22 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, d.alpha + flashBoost) * dimFactor;
+
+    // selection ring
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // hover ring
+    if (isHovered && !isSelected) {
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = 1;
+      ctx.globalAlpha = 0.35;
+      ctx.stroke();
+      ctx.globalAlpha = Math.min(1, d.alpha + flashBoost);
+    }
+
+    // fill
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.fill();
+
+    // outline
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 1.2;
+    ctx.globalAlpha = Math.min(1, d.alpha + flashBoost) * 0.6;
+    ctx.stroke();
+
+    // inner dot for larger types
+    if (d.r >= 8) {
+      ctx.globalAlpha = Math.min(1, d.alpha + flashBoost) * 0.3;
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, r * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // crown indicator dots — shown when crown is closed
+    const crown = openCrowns.get(d.id);
+    const wordCount = extractStarWords(d.text).length;
+    if (wordCount > 0 && !crown) {
+      const indicR   = r + 6;          // orbit radius
+      const dotR     = 2.2;
+      const baseAlpha = Math.min(1, d.alpha + flashBoost) * 0.55;
+      ctx.globalAlpha = baseAlpha;
+      ctx.fillStyle   = col;
+      for (let i = 0; i < wordCount; i++) {
+        const angle = (Math.PI * 2 / wordCount) * i - Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(
+          d.x + Math.cos(angle) * indicR,
+          d.y + Math.sin(angle) * indicR,
+          dotR, 0, Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+
+    // always-visible label below the dot
+    if (d.label) {
+      const labelAlpha = Math.min(1, d.alpha + flashBoost);
+      const fontSize   = isSelected ? 14 : 13;
+      ctx.font         = (isSelected ? '500 ' : '400 ') + fontSize + "px 'JetBrains Mono', monospace";
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'top';
+      const lx = d.x;
+      const ly = d.y + r + 4;
+      const tw = ctx.measureText(d.label).width;
+      const pw = tw + 7, ph = fontSize + 5;
+      // pill background
+      ctx.globalAlpha = labelAlpha * (isSelected ? 0.90 : 0.70);
+      ctx.fillStyle   = '#F4F0E6';
+      ctx.fillRect(lx - pw / 2, ly - 1, pw, ph);
+      // text
+      ctx.globalAlpha = labelAlpha * (isSelected ? 1.0 : 0.80);
+      ctx.fillStyle   = isSelected ? col : '#5A5245';
+      ctx.fillText(d.label, lx, ly + 1);
+    }
+
+    ctx.restore();
+  });
+
+  /* draw dragDot on top — always fully visible while dragging */
+  if (dragDot) {
+    const d   = dragDot;
+    const col = COLORS[d.type];
+    const r   = d.r * 1.3;
+    ctx.save();
+    ctx.globalAlpha = 1;
+    // drag ring
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r + 7, 0, Math.PI * 2);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]);
+    // fill
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = col; ctx.fill();
+    // outline
+    ctx.strokeStyle = col; ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.6; ctx.stroke();
+    // inner highlight
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    // label
+    if (d.label) {
+      ctx.globalAlpha = 1;
+      ctx.font = "500 13px 'JetBrains Mono', monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      const tw = ctx.measureText(d.label).width;
+      const lx = d.x, ly = d.y + r + 4;
+      ctx.fillStyle = '#F4F0E6';
+      ctx.fillRect(lx - tw/2 - 3, ly - 1, tw + 6, 13);
+      ctx.fillStyle = col;
+      ctx.fillText(d.label, lx, ly + 1);
+    }
+    ctx.restore();
+  }
+
+  /* ── helper: draw a star corona ── */
+  function drawCrown(crown, orbitR) {
+    const col = COLORS[crown.dot.type];
+    crown.words.forEach(sw => {
+      if (sw.progress <= 0) return;
+
+      const isBeingDragged = dragSatellite?.sw === sw;
+      const isSnapped      = snapCrownWord?.sw === sw;
+
+      if (isBeingDragged) return;
+
+      ctx.save();
+      const flashBoost = sw.flash ? sw.flash * 0.4 : 0;
+      if (sw.flash > 0) sw.flash = Math.max(0, sw.flash - 0.04);
+      ctx.globalAlpha = Math.min(1, sw.progress * 0.9 + flashBoost);
+
+      // spoke from parent center to word
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = isSnapped ? 1.5 : 0.8;
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath();
+      ctx.moveTo(crown.dot.x, crown.dot.y);
+      ctx.lineTo(sw.sx, sw.sy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // dot
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(sw.sx, sw.sy, isSnapped ? 6 : 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (isSnapped) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth   = 1.5;
+        ctx.globalAlpha = sw.progress * 0.45;
+        ctx.beginPath();
+        ctx.arc(sw.sx, sw.sy, 10, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // label — direction from parent to word
+      const dx = sw.ox, dy = sw.oy;
+      const onLeft  = dx < -8;
+      const onRight = dx >  8;
+      ctx.font         = (isSnapped ? '600' : '500') + " 11px 'JetBrains Mono', monospace";
+      ctx.textBaseline = 'middle';
+      ctx.textAlign    = onLeft ? 'right' : onRight ? 'left' : 'center';
+      const lox = onLeft ? -8 : onRight ? 8 : 0;
+      const loy = (!onLeft && !onRight) ? (dy > 0 ? 11 : -11) : 0;
+      const tw  = ctx.measureText(sw.word).width;
+      const bw  = tw + 6, bh = 14;
+      const bx  = sw.sx + lox - (onLeft ? bw : onRight ? 0 : bw/2) - 1;
+      const by  = sw.sy + loy - 7;
+      ctx.globalAlpha = Math.min(1, sw.progress * 0.85 + flashBoost);
+      ctx.fillStyle   = '#F4F0E6';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.globalAlpha = Math.min(1, sw.progress + flashBoost);
+      ctx.fillStyle   = col;
+      ctx.fillText(sw.word, sw.sx + lox, sw.sy + loy);
+
+      // Etichetta tipo relazione, se fornita (es. dal campo medio).
+      // Piccola, italiana, sopra lo spoke (a metà tra centro e parola).
+      if (sw.relation) {
+        const relLabel = KG_REL_LABEL_IT_SHORT[sw.relation] || sw.relation.toLowerCase();
+        const midX = (crown.dot.x + sw.sx) / 2;
+        const midY = (crown.dot.y + sw.sy) / 2;
+        ctx.save();
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        const rLabW = ctx.measureText(relLabel).width;
+        ctx.globalAlpha = Math.min(0.85, sw.progress * 0.85);
+        ctx.fillStyle = '#F4F0E6';
+        ctx.fillRect(midX - rLabW/2 - 2, midY - 6, rLabW + 4, 12);
+        ctx.fillStyle = '#888';
+        ctx.fillText(relLabel, midX, midY);
+        ctx.restore();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  /* draw all open crowns */
+  for (const [, crown] of openCrowns) {
+    drawCrown(crown, 72);
+  }
+
+  /* dragged satellite — follows cursor, snaps to crown word */
+  if (dragSatellite) {
+    const { sw, sourceDot } = dragSatellite;
+    const col  = COLORS[sourceDot.type];
+    const tipX = sw.sx ?? dragSatellite.x;
+    const tipY = sw.sy ?? dragSatellite.y;
+
+    ctx.save();
+    // thread from parent to current word position
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = snapCrownWord ? 1.5 : 1;
+    ctx.setLineDash(snapCrownWord ? [] : [3, 4]);
+    ctx.globalAlpha = snapCrownWord ? 0.75 : 0.5;
+    ctx.beginPath();
+    ctx.moveTo(sourceDot.x, sourceDot.y);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // snap target ring
+    if (snapCrownWord) {
+      const tx = snapCrownWord.isDotCenter ? snapCrownWord.crownDot.x : snapCrownWord.sw.sx;
+      const ty = snapCrownWord.isDotCenter ? snapCrownWord.crownDot.y : snapCrownWord.sw.sy;
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = COLORS[snapCrownWord.crownDot.type];
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.arc(tx, ty, 10, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      // dot at current word position when free-floating
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle   = col;
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 5, 0, Math.PI * 2);
+      ctx.fill();
+      // label
+      ctx.font = "600 13px 'JetBrains Mono', monospace";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const tw = ctx.measureText(sw.word).width;
+      ctx.globalAlpha = 0.88;
+      ctx.fillStyle   = '#F4F0E6';
+      ctx.fillRect(tipX - tw/2 - 4, tipY - 18, tw + 8, 14);
+      ctx.fillStyle = col;
+      ctx.fillText(sw.word, tipX, tipY - 11);
+    }
+    ctx.restore();
+  }
+
+  requestAnimationFrame(draw);
+}
+
+function clearField() {
+  dots = []; edges = []; openCrowns.clear();
+  autoOpenedCrowns.clear();
+  selectedDot = null; hoveredDot = null;
+  dragDot = null; dragSatellite = null;
+  snapTarget = null; snapCrownWord = null;
+  nextId = 1;
+}
+
+function reseedField() {
+  resetDrag();
+  openCrowns.clear();
+  autoOpenedCrowns.clear();
+  selectedDot = null;
+  resizeCanvas();
+  seedDots();
+}
+
+function resetLayout() {
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2, rad = Math.min(W,H) * 0.38;
+  dots.forEach((d, i) => {
+    const angle = (Math.PI * 2 / dots.length) * i - Math.PI / 2;
+    d.x = cx + Math.cos(angle) * rad;
+    d.y = cy + Math.sin(angle) * rad;
+    d.vx = 0; d.vy = 0;
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════════ */
+function showStep(id) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+}
+
+function goStep(type) {
+  if (type === 'risuona') fetchState();
+  showStep('step2-' + type);
+}
+
+function backToChoose() {
+  ['narrateInput','risuonaInput','connectInput','wordA','wordB'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  updateCount('narrateInput','cnt-narra','btn-narra');
+  updateCount('risuonaInput','cnt-risuona','btn-risuona');
+  document.getElementById('cnt-connetti').textContent = '0';
+  document.getElementById('btn-connetti').disabled = true;
+  showStep('step1');
+}
+
+function updateCount(inputId, cntId, btnId) {
+  const el = document.getElementById(inputId);
+  document.getElementById(cntId).textContent = el.value.length;
+  document.getElementById(btnId).disabled = el.value.trim().length < 4;
+}
+
+function checkConnect() {
+  const a = document.getElementById('wordA').value.trim();
+  const b = document.getElementById('wordB').value.trim();
+  const t = document.getElementById('connectInput').value;
+  document.getElementById('cnt-connetti').textContent = t.length;
+  document.getElementById('btn-connetti').disabled = !(a && b && t.trim().length > 3);
+}
+
+/* ═══════════════════════════════════════════════════════
+   SUBMIT
+═══════════════════════════════════════════════════════ */
+async function doSubmit(type) {
+  let text = '', preview = '', label = '', color = '';
+
+  if (type === 'narra') {
+    text = document.getElementById('narrateInput').value.trim();
+    preview = text.slice(0,80) + (text.length>80?'…':'');
+    label = 'racconto'; color = COLORS.narra;
+  } else if (type === 'connetti') {
+    const a = document.getElementById('wordA').value.trim();
+    const b = document.getElementById('wordB').value.trim();
+    const r = document.getElementById('connectInput').value.trim();
+    text    = r + ' (' + a + ' — ' + b + ')';
+    preview = a + ' — ' + b;
+    label = 'connessione'; color = COLORS.connetti;
+    fetch(BASE+'/api/word_connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({word_a:a,word_b:b,relation:r,username:USERNAME})}).catch(()=>{});
+  } else {
+    text = document.getElementById('risuonaInput').value.trim();
+    preview = text.slice(0,80) + (text.length>80?'…':'');
+    label = 'risposta'; color = COLORS.risuona;
+  }
+
+  const btn = document.getElementById('btn-'+type);
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'invio…';
+
+  try {
+    await fetch(BASE+'/api/community/teach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,username:USERNAME})});
+    // ADD DOT TO FIELD
+    const dot = addDot(type, text);
+    setTimeout(() => {
+      ensureCrownOpen(dot);
+      selectedDot = dot;
+      showCaption(dot);
+    }, 300);
+    showSuccess(preview, label, color);
+    addLog(label, preview, color);
+  } catch(e) {
+    btn.textContent = 'errore — riprova';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
+  }
+}
+
+function showSuccess(preview, label, color) {
+  const now = new Date();
+  const t   = now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('pcStripe').style.background = color;
+  document.getElementById('pcType').style.color        = color;
+  document.getElementById('pcSubject').textContent     = label + ' ricevuto';
+  document.getElementById('pcBody').innerHTML          = '"<strong>'+preview+'</strong>"<br>è entrato nel campo.';
+  document.getElementById('pcType').textContent        = label;
+  document.getElementById('pcTime').textContent        = t;
+  showStep('step3');
+}
+
+function addLog(label, text, color) {
+  const log = document.getElementById('sessionLog');
+  log.style.display = 'block';
+  const e = document.createElement('div');
+  e.className = 'log-entry';
+  e.innerHTML = `<span class="log-type" style="color:${color}">${label}</span><span>${text}</span>`;
+  document.getElementById('logEntries').prepend(e);
+}
+
+/* ═══════════════════════════════════════════════════════
+   API
+═══════════════════════════════════════════════════════ */
+async function fetchState() {
+  try {
+    const res = await fetch(BASE+'/api/state');
+    const d   = await res.json();
+    const q   = d?.report?.last_output || d?.locus?.name || null;
+    if (q) document.getElementById('prometeoQuote').textContent = q;
+  } catch(_){}
+}
+
+function updateTime() {
+  const now = new Date();
+  document.getElementById('vizTime').textContent =
+    now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+}
+updateTime();
+setInterval(updateTime, 60000);
+
+function connectWS() {
+  try {
+    const proto = location.protocol==='https:'?'wss':'ws';
+    const ws = new WebSocket(proto+'://'+location.hostname+':'+(location.port||'3002')+'/ws');
+    ws.onmessage = e => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.participants != null) {
+          const n = msg.participants;
+          document.getElementById('countLabel').textContent =
+            n+(n===1?' PERSONA NEL CAMPO':' NEL CAMPO');
+        }
+        // contributo esterno: aggiungi punto al campo
+        if (msg.new_contribution) {
+          const c = msg.new_contribution;
+          addDot(c.type||'word', c.text||c.type||'contributo');
+        }
+      } catch(_){}
+    };
+    ws.onclose = () => setTimeout(connectWS, 4000);
+  } catch(_){}
+}
+connectWS();
+
+/* ═══════════════════════════════════════════════════════
+   RICEVITORE PAYLOAD DAL CAMPO MEDIO (di campovasto2)
+═══════════════════════════════════════════════════════ */
+function consumeMedioPayload() {
+  try {
+    const raw = sessionStorage.getItem('uir1_medio_to_community');
+    if (!raw) return null;
+    sessionStorage.removeItem('uir1_medio_to_community');
+    return JSON.parse(raw);
+  } catch(_){ return null; }
+}
+
+// Mappa relazioni KG (es. IS_A, SIMILAR_TO) → relType + relNature del community.
+const KG_TO_COMMUNITY_REL = {
+  IS_A:            { type: 'strutturale',    nature: 'è un' },
+  PART_OF:         { type: 'strutturale',    nature: 'parte di' },
+  CAUSES:          { type: 'causale',        nature: 'causa' },
+  ENABLES:         { type: 'causale',        nature: 'abilita' },
+  REQUIRES:        { type: 'causale',        nature: 'richiede' },
+  TRANSFORMS_INTO: { type: 'causale',        nature: 'diventa' },
+  SIMILAR_TO:      { type: 'semantica',      nature: 'simile a' },
+  OPPOSITE_OF:     { type: 'semantica',      nature: 'opposto di' },
+  SYMBOLIZES:      { type: 'semantica',      nature: 'simbolizza' },
+  HAS:             { type: 'fenomenologica', nature: 'ha' },
+  DOES:            { type: 'fenomenologica', nature: 'fa' },
+  FEELS_AS:        { type: 'fenomenologica', nature: 'sente come' },
+  USED_FOR:        { type: 'logica',         nature: 'usato per' },
+  EXPRESSES:       { type: 'logica',         nature: 'esprime' },
+  IMPLIES:         { type: 'logica',         nature: 'implica' },
+};
+
+function loadFromMedioPayload(payload) {
+  clearField();
+  const W = canvas.width  || 700;
+  const H = canvas.height || 450;
+  const cx = W / 2, cy = H / 2;
+
+  const byLabel = new Map();
+
+  // Scena pulita: un dot per ogni parola della frase, ciascuno con la propria
+  // rosa espandibile. Nessun nodo centrale — la frase vive nel pannello basso.
+  const words = (payload.words || []);
+  const N = Math.max(1, words.length);
+  // Più le rose saranno grandi, più margine ci serve dal bordo — il raggio base
+  // scala col numero di parole per distribuirle senza cozzare.
+  const R1 = Math.min(W, H) * (N <= 2 ? 0.18 : N <= 4 ? 0.24 : 0.30);
+
+  words.forEach((w, i) => {
+    const angle = (Math.PI * 2 / N) * i - Math.PI / 2;
+    const wx = cx + Math.cos(angle) * R1;
+    const wy = cy + Math.sin(angle) * R1;
+
+    let wordDot = byLabel.get(w.w);
+    if (!wordDot) {
+      addDot('word', w.w, wx / W, wy / H, true);
+      wordDot = dots[dots.length - 1];
+      wordDot.vx = 0; wordDot.vy = 0;
+      // Dot più grande delle parole normali per enfasi
+      wordDot.r = 8;
+      byLabel.set(w.w, wordDot);
+    }
+
+    const nbs = (w.neighbors || []).filter(n => n && n.word && n.word !== w.w);
+    if (nbs.length) {
+      wordDot.crownWords = nbs.map(n => ({
+        word: n.word,
+        relation: n.rel || null,
+        confidence: typeof n.conf === 'number' ? n.conf / 100 : null,
+        direction: n.direction || 'out',
+      }));
+    } else {
+      wordDot.noAutoCrown = true;
+    }
+  });
+
+  // Il pannello mostra la frase ed il ragionamento di UI-R1.
+  fetchUnderstandingAndRender(payload.sentence);
+}
+
+/* ═══════════════════════════════════════════════════════
+   PANNELLO COMPRENSIONE — multi-hop testuale senza toccare il grafo
+═══════════════════════════════════════════════════════ */
+const KG_REL_LABEL_IT = {
+  IS_A: 'è', HAS: 'ha', DOES: 'fa', PART_OF: 'parte di',
+  CAUSES: 'causa', ENABLES: 'abilita', REQUIRES: 'richiede', TRANSFORMS_INTO: 'diventa',
+  SIMILAR_TO: 'simile a', OPPOSITE_OF: 'opposto di', USED_FOR: 'usato per',
+  EXPRESSES: 'esprime', SYMBOLIZES: 'simbolizza', CONTEXT_OF: 'contesto di',
+  FEELS_AS: 'sente come', WONDERS_ABOUT: "si chiede di", REMEMBERS_AS: 'ricorda come',
+};
+
+// Etichette brevi per i rami della rosa (disegnate sopra lo spoke).
+const KG_REL_LABEL_IT_SHORT = {
+  IS_A: 'è', HAS: 'ha', DOES: 'fa', PART_OF: 'parte di',
+  CAUSES: 'causa', ENABLES: 'abilita', REQUIRES: 'richiede', TRANSFORMS_INTO: 'diventa',
+  SIMILAR_TO: '~', OPPOSITE_OF: '≠', USED_FOR: 'usato per',
+  EXPRESSES: 'esprime', SYMBOLIZES: 'simbolo', CONTEXT_OF: 'contesto',
+  FEELS_AS: 'sente', WONDERS_ABOUT: '?', REMEMBERS_AS: 'ricorda',
+};
+
+async function fetchUnderstandingAndRender(sentence) {
+  if (!sentence || sentence.trim().length < 2) return;
+  try {
+    const r = await fetch('/api/understanding?sentence=' + encodeURIComponent(sentence));
+    if (!r.ok) return;
+    const data = await r.json();
+    renderUnderstandingPanel(sentence, data);
+  } catch (e) {
+    console.warn('[understanding] fetch fallito', e);
+  }
+}
+
+// Stato locale delle ipotesi: id → "pending" | "confirmed" | "rejected"
+const _hypothesisStatus = new Map();
+
+function renderUnderstandingPanel(sentence, u) {
+  const panel = document.getElementById('understandingPanel');
+  const body = document.getElementById('upBody');
+  const header = document.getElementById('upHeader');
+  const snippet = document.getElementById('upHeaderSnippet');
+  const badgeDepth = document.getElementById('upBadgeDepth');
+  const badgeHyp = document.getElementById('upBadgeHyp');
+  if (!panel || !body || !header) return;
+
+  const parts = [];
+
+  // 1. SUNTO — cosa significa la frase secondo il KG
+  if (u.summary && u.summary.trim()) {
+    parts.push(`<div class="up-section">
+      <div class="up-section-title">sunto</div>
+      <div class="up-summary">${escapeHtml(u.summary)}</div>
+    </div>`);
+  }
+
+  // 2. IPOTESI DA CONFERMARE — relazioni logiche non ancora nel KG
+  if (u.proposed_edges && u.proposed_edges.length) {
+    const items = u.proposed_edges.map(p => {
+      const status = _hypothesisStatus.get(p.id) || p.status || 'pending';
+      const statusClass = status === 'confirmed' ? 'confirmed'
+                        : status === 'rejected' ? 'rejected' : 'pending';
+      const buttons = status === 'pending'
+        ? `<button class="up-btn confirm" data-id="${escapeHtml(p.id)}"
+             data-s="${escapeHtml(p.subject)}" data-r="${escapeHtml(p.relation)}"
+             data-o="${escapeHtml(p.object)}" data-c="${p.confidence.toFixed(2)}">✓ conferma</button>
+           <button class="up-btn reject" data-id="${escapeHtml(p.id)}"
+             data-s="${escapeHtml(p.subject)}" data-r="${escapeHtml(p.relation)}"
+             data-o="${escapeHtml(p.object)}">✗ rifiuta</button>`
+        : status === 'confirmed'
+          ? `<span class="up-btn-done confirmed">✓ aggiunto al KG</span>`
+          : `<span class="up-btn-done rejected">✗ rifiutato</span>`;
+      return `<div class="up-hyp-row ${statusClass}" data-id="${escapeHtml(p.id)}">
+        <div class="up-hyp-claim">
+          <span class="up-hyp-word">${escapeHtml(p.subject)}</span>
+          <span class="up-hyp-rel">${escapeHtml(p.relation_label)}</span>
+          <span class="up-hyp-word">${escapeHtml(p.object)}</span>
+          <span class="up-conf">${p.confidence.toFixed(2)}</span>
+        </div>
+        <div class="up-hyp-rationale">${escapeHtml(p.rationale)}</div>
+        <div class="up-hyp-actions">${buttons}</div>
+      </div>`;
+    }).join('');
+    parts.push(`<div class="up-section">
+      <div class="up-section-title">ipotesi — relazioni non tracciate</div>
+      ${items}
+    </div>`);
+  }
+
+  // 3. PAROLE IGNOTE (lacuna KG)
+  if (u.unknown_words && u.unknown_words.length) {
+    parts.push(`<div class="up-section">
+      <div class="up-section-title">parole ignote al KG</div>
+      <div class="up-unknown">${u.unknown_words.map(escapeHtml).join(', ')}</div>
+    </div>`);
+  }
+
+  // 4. DIAGNOSTICA
+  parts.push(`<div class="up-section">
+    <div class="up-section-title">diagnostica</div>
+    <div class="up-item" style="font-size:11px;color:var(--ink3)">
+      ruolo: ${escapeHtml((u.syntactic_role || '—').toLowerCase())} ·
+      ${u.comprehension_depth || 0} archi letti ·
+      lemmi: ${(u.lemmas || []).map(escapeHtml).join(', ')}
+    </div>
+  </div>`);
+
+  body.innerHTML = parts.join('');
+
+  // Header: frase breve + badge diagnostiche
+  if (snippet) snippet.textContent = '"' + sentence + '"';
+  if (badgeDepth) badgeDepth.textContent = (u.comprehension_depth || 0) + ' archi';
+  const pendingHyp = (u.proposed_edges || []).filter(p => {
+    const s = _hypothesisStatus.get(p.id) || 'pending';
+    return s === 'pending';
+  }).length;
+  if (badgeHyp) {
+    if (pendingHyp > 0) {
+      badgeHyp.textContent = pendingHyp + ' ipotesi';
+      badgeHyp.style.display = '';
+    } else {
+      badgeHyp.style.display = 'none';
+    }
+  }
+
+  panel.classList.remove('empty');
+  panel.classList.add('collapsed');
+
+  if (!header._bound) {
+    header._bound = true;
+    header.addEventListener('click', () => {
+      panel.classList.toggle('collapsed');
+    });
+  }
+
+  // Binding dei bottoni conferma/rifiuta (re-bind ad ogni render)
+  body.querySelectorAll('.up-btn.confirm').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await confirmHypothesis({
+        id: btn.dataset.id, subject: btn.dataset.s,
+        relation: btn.dataset.r, object: btn.dataset.o,
+        confidence: parseFloat(btn.dataset.c || '0.7'),
+      });
+      renderUnderstandingPanel(sentence, u); // ri-render per aggiornare stato
+    });
+  });
+  body.querySelectorAll('.up-btn.reject').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await rejectHypothesis({
+        id: btn.dataset.id, subject: btn.dataset.s,
+        relation: btn.dataset.r, object: btn.dataset.o,
+      });
+      renderUnderstandingPanel(sentence, u);
+    });
+  });
+}
+
+async function confirmHypothesis(h) {
+  try {
+    const r = await fetch('/api/kg/confirm_edge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: h.subject, relation: h.relation, object: h.object,
+        confidence: h.confidence,
+      }),
+    });
+    const d = await r.json();
+    _hypothesisStatus.set(h.id, d.ok ? 'confirmed' : 'pending');
+    if (!d.ok && d.message) console.warn('[conferma]', d.message);
+    // Aggiorna subito la scena del community: l'arco confermato diventa
+    // visibile, così il gruppo vede l'effetto del proprio contributo.
+    if (d.ok) addConfirmedEdgeToField(h.subject, h.relation, h.object, h.confidence);
+  } catch (e) {
+    console.warn('[conferma] errore', e);
+  }
+}
+
+// Aggiunge visivamente un arco confermato fra due parole della scena.
+// Se il soggetto è già un dot, aggiunge l'oggetto (se manca) come piccolo
+// dot satellite attorno al soggetto, poi traccia l'arco con la relazione.
+function addConfirmedEdgeToField(subject, relation, object, confidence) {
+  const byLabel = new Map();
+  for (const d of dots) if (d.label) byLabel.set(d.label.toLowerCase(), d);
+
+  const subjDot = byLabel.get(subject.toLowerCase());
+  if (!subjDot) return; // la parola non è nel campo corrente, skip
+
+  let objDot = byLabel.get(object.toLowerCase());
+  const W = canvas.width || 700, H = canvas.height || 450;
+  if (!objDot) {
+    // Posiziona il nuovo dot a ridosso del soggetto, angolo casuale sul cerchio
+    const theta = Math.random() * Math.PI * 2;
+    const R = 80;
+    addDot('word', object, (subjDot.x + Math.cos(theta) * R) / W, (subjDot.y + Math.sin(theta) * R) / H, true);
+    objDot = dots[dots.length - 1];
+    objDot.vx = 0; objDot.vy = 0;
+    objDot.r = 6;
+    objDot.flash = 1.5;
+  }
+  const mapped = KG_TO_COMMUNITY_REL[relation] || { type: 'semantica', nature: relation.toLowerCase() };
+  // Evita duplicati
+  const existing = edges.find(e =>
+    (e.a === subjDot.id && e.b === objDot.id) ||
+    (e.a === objDot.id && e.b === subjDot.id));
+  if (!existing) {
+    edges.push({
+      a: subjDot.id, b: objDot.id, alpha: 0,
+      wordA: null, wordB: null,
+      relType: mapped.type,
+      relNature: mapped.nature,
+      _justAdded: true,
+    });
+  }
+  // Flash per segnalare il nuovo nodo/arco
+  subjDot.flash = 1.2;
+}
+
+async function rejectHypothesis(h) {
+  try {
+    await fetch('/api/kg/reject_edge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: h.subject, relation: h.relation, object: h.object,
+      }),
+    });
+    _hypothesisStatus.set(h.id, 'rejected');
+  } catch (e) {
+    console.warn('[rifiuta] errore', e);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* ═══════════════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════════════ */
+resizeCanvas();
+const _medioPayload = consumeMedioPayload();
+if (_medioPayload) {
+  loadFromMedioPayload(_medioPayload);
+} else {
+  seedDots();
+}
+requestAnimationFrame(draw);
+</script>
+<!-- CONTEXT MENU -->
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-title" id="ctxTitle">aggiungi parola</div>
+  <div class="ctx-row">
+    <input type="text" id="ctxInput" placeholder="nuova parola…" maxlength="30"
+      onkeydown="if(event.key==='Enter') ctxConfirm(); if(event.key==='Escape') ctxClose();">
+    <button class="ctx-add" onclick="ctxConfirm()">+ aggiungi</button>
+  </div>
+</div>
+
+<!-- RELATION TYPE MENU -->
+<div class="rel-menu" id="relMenu">
+  <div class="rel-title">tipo di relazione</div>
+  <div id="relMenuItems"></div>
+  <hr class="rel-sep">
+  <div class="rel-custom-row">
+    <input type="text" id="relCustomInput" placeholder="relazione personalizzata…" maxlength="40"
+      onkeydown="if(event.key==='Enter') relConfirmCustom(); if(event.key==='Escape') relClose();">
+    <button onclick="relConfirmCustom()">+ aggiungi</button>
+  </div>
+</div>
+
+<!-- RIGHT-CLICK CONTRIBUTE MENU -->
+<div class="ctx-fab" id="ctxFab">
+  <div class="ctx-fab-item narra" onclick="ctxFabGo('narra')">
+    <span class="ctx-fab-dot" style="background:var(--red)"></span> racconta
+  </div>
+  <div class="ctx-fab-item connetti" onclick="ctxFabGo('connetti')">
+    <span class="ctx-fab-dot" style="background:var(--green)"></span> collega
+  </div>
+  <div class="ctx-fab-item risuona" onclick="ctxFabGo('risuona')">
+    <span class="ctx-fab-dot" style="background:var(--blue)"></span> rispondi
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="modal-backdrop" id="exportModal" onclick="e => { if(e.target===this) closeExport(); }">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <span class="modal-title">Esporta sessione — anteprima CSV</span>
+      <div class="modal-actions">
+        <button class="modal-btn primary" onclick="downloadCSV()">⬇ scarica CSV</button>
+        <button class="modal-btn" onclick="closeExport()">✕ chiudi</button>
+      </div>
+    </div>
+    <div class="modal-body" id="exportBody"></div>
+  </div>
+</div>
+
+<script>
+/* ── MOBILE VIEW ── */
+function openMobileView() {
+  window.open('il-campo-mobile.html', '_blank');
+}
+
+/* ── CONTEXT MENU (right-click to add crown word) ── */
+let ctxDot = null;
+
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const pos = getCanvasPos(e);
+  const dot = dotAt(pos.x, pos.y);
+
+  if (!dot) {
+    // click destro nello spazio vuoto → bottone "contribuisci"
+    ctxClose();
+    const fab = document.getElementById('ctxFab');
+    const left = Math.min(e.clientX, window.innerWidth  - 140);
+    const top  = Math.min(e.clientY, window.innerHeight - 40);
+    fab.style.left = left + 'px';
+    fab.style.top  = top  + 'px';
+    fab.classList.add('open');
+    return;
+  }
+
+  closeCtxFab();
+  ctxDot = dot;
+  const menu = document.getElementById('ctxMenu');
+  document.getElementById('ctxTitle').textContent = '"' + dot.label + '" — aggiungi parola';
+  document.getElementById('ctxInput').value = '';
+
+  // position menu near cursor, keep on screen
+  const mw = 220, mh = 70;
+  const left = Math.min(e.clientX, window.innerWidth  - mw - 8);
+  const top  = Math.min(e.clientY, window.innerHeight - mh - 8);
+  menu.style.left = left + 'px';
+  menu.style.top  = top  + 'px';
+  menu.classList.add('open');
+
+  // ensure crown is open
+  ensureCrownOpen(dot);
+
+  setTimeout(() => document.getElementById('ctxInput').focus(), 50);
+});
+
+function closeCtxFab() {
+  document.getElementById('ctxFab').classList.remove('open');
+}
+function ctxFabGo(type) {
+  closeCtxFab();
+  // apri il pannello contributi se chiuso
+  const panel = document.getElementById('inputPanel');
+  const btn = document.querySelector('.widget-trigger');
+  if (!panel.classList.contains('open')) {
+    panel.classList.add('open');
+    btn.querySelector('span').textContent = '✕ chiudi';
+  }
+  // vai direttamente allo step scelto
+  goStep(type);
+}
+document.addEventListener('click', e => {
+  if (!document.getElementById('ctxMenu').contains(e.target)) ctxClose();
+  const fab = document.getElementById('ctxFab');
+  if (fab.classList.contains('open') && !fab.contains(e.target)) closeCtxFab();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') ctxClose(); });
+
+function ctxClose() {
+  document.getElementById('ctxMenu').classList.remove('open');
+  document.getElementById('ctxInput').value = '';
+  ctxDot = null;
+}
+
+function ctxConfirm() {
+  const word = document.getElementById('ctxInput').value.trim().toLowerCase();
+  if (!word || !ctxDot) { ctxClose(); return; }
+
+  // add word to crown
+  const crown = openCrowns.get(ctxDot.id);
+  if (!crown) { ctxClose(); return; }
+
+  // avoid duplicates
+  if (crown.words.find(w => w.word === word)) { ctxClose(); return; }
+
+  const count = crown.words.length + 1;
+  // redistribute angles evenly
+  const allWords = [...crown.words.map(w => w.word), word];
+  crown.words = allWords.map((w, i) => {
+    const existing = crown.words.find(x => x.word === w);
+    const angle = (Math.PI * 2 / count) * i - Math.PI / 2;
+    return existing
+      ? { ...existing, angle, ox: Math.cos(angle) * 72, oy: Math.sin(angle) * 72 }
+      : { word: w, angle, ox: Math.cos(angle) * 72, oy: Math.sin(angle) * 72,
+          vx: 0, vy: 0, progress: 0, sx: undefined, sy: undefined, flash: 1.0 };
+  });
+
+  ctxClose();
+}
+
+/* ── RELATION TYPE MENU ── */
+function openRelMenu(mx, my) {
+  const menu = document.getElementById('relMenu');
+  const items = document.getElementById('relMenuItems');
+  items.innerHTML = '';
+  const allTypes = [...REL_TYPES, ...customRelTypes];
+  allTypes.forEach(rt => {
+    const row = document.createElement('div');
+    row.className = 'rel-item';
+    const dashStyle = rt.dash ? (rt.dash[0]<=3 ? 'dotted' : 'dashed') : 'solid';
+    // tratto + label (click → applica con prima natura di default)
+    const main = document.createElement('span');
+    main.className = 'rel-item-main';
+    main.innerHTML = `<span class="rel-line" style="border-top-color:${rt.color};border-top-style:${dashStyle}"></span>`
+      + `<span class="rel-label">${rt.label}</span>`
+      + `<span class="rel-desc">${rt.desc}</span>`;
+    main.onclick = () => relConfirmWithNature(rt.id, rt.natures?.[0] || rt.desc);
+    // bottone "+" → espandi sotto-menu nature
+    const plus = document.createElement('span');
+    plus.className = 'rel-plus';
+    plus.textContent = '+';
+    plus.onclick = (e) => { e.stopPropagation(); toggleNaturesPanel(rt, row); };
+    row.appendChild(main);
+    row.appendChild(plus);
+    items.appendChild(row);
+    // sotto-pannello nature (nascosto di default)
+    const panel = document.createElement('div');
+    panel.className = 'rel-natures-panel';
+    panel.style.display = 'none';
+    panel.dataset.rtId = rt.id;
+    // lista nature esistenti
+    (rt.natures || []).forEach(n => {
+      const ni = document.createElement('div');
+      ni.className = 'rel-nature-item';
+      ni.textContent = n;
+      ni.onclick = () => relConfirmWithNature(rt.id, n);
+      panel.appendChild(ni);
+    });
+    // input per nuova natura
+    const addRow = document.createElement('div');
+    addRow.className = 'rel-nature-add';
+    addRow.innerHTML = `<input type="text" placeholder="nuova natura…" maxlength="30">`
+      + `<button>+</button>`;
+    addRow.querySelector('button').onclick = () => {
+      const inp = addRow.querySelector('input');
+      const val = inp.value.trim().toLowerCase();
+      if (!val) return;
+      if (!rt.natures) rt.natures = [];
+      if (!rt.natures.includes(val)) rt.natures.push(val);
+      relConfirmWithNature(rt.id, val);
+    };
+    addRow.querySelector('input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') addRow.querySelector('button').click();
+    });
+    panel.appendChild(addRow);
+    items.appendChild(panel);
+  });
+  document.getElementById('relCustomInput').value = '';
+  const mw = 260, mh = 320;
+  menu.style.left = Math.min(mx, window.innerWidth  - mw - 8) + 'px';
+  menu.style.top  = Math.min(my, window.innerHeight - mh - 8) + 'px';
+  menu.classList.add('open');
+}
+
+function toggleNaturesPanel(rt, row) {
+  // chiudi tutti, poi apri il richiesto
+  document.querySelectorAll('.rel-natures-panel').forEach(p => {
+    p.style.display = p.dataset.rtId === rt.id && p.style.display === 'none' ? 'block' : 'none';
+  });
+}
+
+function relClose() {
+  document.getElementById('relMenu').classList.remove('open');
+  lastCreatedEdge = null;
+}
+
+function relConfirmWithNature(relType, relNature) {
+  if (!lastCreatedEdge) { relClose(); return; }
+  lastCreatedEdge.relType = relType;
+  lastCreatedEdge.relNature = relNature || null;
+  relClose();
+}
+
+function relConfirmCustom() {
+  const input = document.getElementById('relCustomInput');
+  const label = input.value.trim().toLowerCase();
+  if (!label || !lastCreatedEdge) { relClose(); return; }
+  const id = 'custom_' + label.replace(/\s+/g, '_');
+  if (!customRelTypes.find(r => r.id === id)) {
+    customRelTypes.push({ id, label, desc: label, dash: [2, 6], color: '#5A5245', square: true, natures: [label] });
+  }
+  relConfirmWithNature(id, label);
+}
+
+// chiudi il relMenu cliccando fuori
+document.addEventListener('click', e => {
+  const rm = document.getElementById('relMenu');
+  if (rm.classList.contains('open') && !rm.contains(e.target)) relClose();
+});
+
+
+
+function saveSession() {
+  const state = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    dots: dots.map(d => ({
+      id: d.id, x: d.x, y: d.y,
+      type: d.type, text: d.text, label: d.label,
+      pinned: d.pinned || false,
+      alpha: d.alpha, targetAlpha: d.targetAlpha, r: d.r
+    })),
+    edges: edges.map(e => ({
+      a: e.a, b: e.b,
+      wordA: e.wordA || null,
+      wordB: e.wordB || null,
+      relType: e.relType || 'semantica',
+      relNature: e.relNature || null
+    })),
+    nextId: nextId
+  };
+
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'campo_' + new Date().toISOString().slice(0,16).replace('T','_').replace(':','h') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function loadSession(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const state = JSON.parse(e.target.result);
+      if (!state.dots || !state.edges) throw new Error('formato non valido');
+
+      // reset
+      dots = []; edges = []; openCrowns.clear();
+      autoOpenedCrowns.clear(); selectedDot = null;
+      hoveredDot = null; dragDot = null; dragSatellite = null;
+      snapTarget = null; snapCrownWord = null;
+
+      nextId = state.nextId || 1;
+
+      state.dots.forEach(d => {
+        dots.push({
+          id: d.id, x: d.x, y: d.y,
+          type: d.type, text: d.text,
+          label: d.label || extractLabel(d.type, d.text),
+          pinned: d.pinned || false,
+          alpha: d.alpha ?? d.targetAlpha,
+          targetAlpha: d.targetAlpha,
+          r: d.r || (d.type === 'word' ? 6 : 9),
+          vx: 0, vy: 0,
+          phase: Math.random() * Math.PI * 2,
+          selected: false, flash: 0
+        });
+      });
+
+      state.edges.forEach(e => {
+        edges.push({ a: e.a, b: e.b, alpha: 0.7, wordA: e.wordA, wordB: e.wordB, relType: e.relType || 'semantica', relNature: e.relNature || null });
+      });
+
+    } catch(err) {
+      alert('Errore nel caricamento: ' + err.message);
+    }
+    input.value = ''; // reset so same file can be reloaded
+  };
+  reader.readAsText(file);
+}
+
+
+
+function buildCSV() {
+  const rows = [];
+
+  // ── SEZIONE 1: CONTRIBUTI ──
+  rows.push(['TIPO','ID','PAROLA_CHIAVE','PAROLE_CORONA','TESTO_COMPLETO']);
+
+  dots.forEach(d => {
+    const crownWords = extractStarWords(d.text).join(' | ');
+    rows.push([
+      (d.type === 'narra' ? 'racconto' : d.type === 'connetti' ? 'connessione' : d.type === 'risuona' ? 'risposta' : 'parola'),
+      String(d.id),
+      d.label || '',
+      crownWords,
+      d.text.replace(/[\r\n]+/g, ' ')
+    ]);
+  });
+
+  rows.push([]); // blank separator
+
+  // ── SEZIONE 2: CONNESSIONI ──
+  rows.push(['DA_ID','DA_PAROLA_CHIAVE','DA_PAROLA_CORONA','A_ID','A_PAROLA_CHIAVE','A_PAROLA_CORONA']);
+
+  edges.forEach(edge => {
+    const da = dots.find(d => d.id === edge.a);
+    const db = dots.find(d => d.id === edge.b);
+    if (!da || !db) return;
+    rows.push([
+      String(da.id),
+      da.label || '',
+      edge.wordA || '',
+      String(db.id),
+      db.label || '',
+      edge.wordB || ''
+    ]);
+  });
+
+  return rows;
+}
+
+function rowsToCSV(rows) {
+  return rows.map(r =>
+    r.map(cell => {
+      const s = String(cell);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? '"' + s.replace(/"/g, '""') + '"'
+        : s;
+    }).join(',')
+  ).join('\r\n');
+}
+
+function openExport() {
+  const rows = buildCSV();
+  const body = document.getElementById('exportBody');
+  const COLORS_UI = { racconto:'#B83225', connessione:'#1F4D33', risposta:'#1E3F6F', parola:'#9A6E0A' };
+
+  let html = '';
+
+  // nodes table
+  html += '<p style="font-family:\'JetBrains Mono\',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#9C9082;margin:0 0 8px">Contributi (' + dots.length + ')</p>';
+  html += '<table class="csv-table"><thead><tr>';
+  rows[0].forEach(h => { html += '<th>' + h + '</th>'; });
+  html += '</tr></thead><tbody>';
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.length === 0) break;
+    const col = COLORS_UI[r[0]] || '#9C9082';
+    html += '<tr>';
+    html += '<td><span class="type-pill" style="color:' + col + ';border:1px solid ' + col + '40">' + r[0] + '</span></td>';
+    html += '<td style="font-family:\'JetBrains Mono\',monospace;color:#9C9082">' + r[1] + '</td>';
+    html += '<td style="font-weight:500">' + escH(r[2]) + '</td>';
+    html += '<td style="color:#9C9082;font-size:11px">' + escH(r[3]) + '</td>';
+    html += '<td title="' + escH(r[4]) + '">' + escH(r[4].slice(0, 80)) + (r[4].length > 80 ? '…' : '') + '</td>';
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+
+  // find separator blank row
+  const sepIdx = rows.findIndex(r => r.length === 0);
+  const edgeRows = rows.slice(sepIdx + 2); // skip blank + header
+
+  html += '<p style="font-family:\'JetBrains Mono\',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#9C9082;margin:20px 0 8px">Connessioni (' + edgeRows.length + ')</p>';
+
+  if (edgeRows.length === 0) {
+    html += '<p style="font-size:13px;font-style:italic;color:#9C9082">Nessuna connessione creata in questa sessione.</p>';
+  } else {
+    const edgeHeaders = rows[sepIdx + 1];
+    html += '<table class="csv-table"><thead><tr>';
+    edgeHeaders.forEach(h => { html += '<th>' + h + '</th>'; });
+    html += '</tr></thead><tbody>';
+    edgeRows.forEach(r => {
+      const daId = parseInt(r[0]), dbId = parseInt(r[3]);
+      const da = dots.find(d => d.id === daId);
+      const db = dots.find(d => d.id === dbId);
+      const colA = COLORS_UI[da ? (da.type === 'narra' ? 'racconto' : da.type === 'connetti' ? 'connessione' : da.type === 'risuona' ? 'risposta' : 'parola') : 'parola'] || '#9C9082';
+      const colB = COLORS_UI[db ? (db.type === 'narra' ? 'racconto' : db.type === 'connetti' ? 'connessione' : db.type === 'risuona' ? 'risposta' : 'parola') : 'parola'] || '#9C9082';
+      html += '<tr>';
+      html += '<td style="font-family:\'JetBrains Mono\',monospace;color:#9C9082">' + r[0] + '</td>';
+      html += '<td style="font-weight:500;color:' + colA + '">' + escH(r[1]) + '</td>';
+      html += '<td style="font-size:11px;color:#9C9082">' + escH(r[2]) + '</td>';
+      html += '<td style="font-family:\'JetBrains Mono\',monospace;color:#9C9082">' + r[3] + '</td>';
+      html += '<td style="font-weight:500;color:' + colB + '">' + escH(r[4]) + '</td>';
+      html += '<td style="font-size:11px;color:#9C9082">' + escH(r[5]) + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  body.innerHTML = html;
+  document.getElementById('exportModal').classList.add('open');
+}
+
+function closeExport() {
+  document.getElementById('exportModal').classList.remove('open');
+}
+
+function downloadCSV() {
+  const csv  = rowsToCSV(buildCSV());
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'campo_sansalvario_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function escH(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+
+</body>
+</html>

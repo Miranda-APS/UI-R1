@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0f0f1a">
+  <base href="/campovasto/">
+  <title>Campo Vasto — UI-R1</title>
+  <link rel="preload" href="/campovasto/fonts/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/campovasto/fonts/jetbrains-mono-500.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css?v=57">
+  <script src="/campovasto/vendor/vis-network.min.js"></script>
+  <script src="app.js?v=57" type="module"></script>
+</head>
+<body>
+
+<div id="graph">
+  <div id="stats"></div>
+  <nav id="breadcrumb" class="breadcrumb" aria-label="percorso di navigazione"></nav>
+  <!-- Bottone overlay: caricare un campo salvato sul server (visibile solo
+       in vasto). La creazione di un campo nuovo avviene dalla tab dedicata
+       in sidebar (vedi #scelta-campo .tab[data-view="nuovo"]). -->
+  <div id="vastoOverlayActions" class="overlay-actions">
+    <button id="caricaCampoOverlay" class="overlay-cta secondary" title="carica un campo salvato sul server">📂 carica un campo</button>
+  </div>
+  <!-- Pannello "UI-R1 legge" — mostrato solo quando il personale ha una frase -->
+  <div class="understanding-panel empty collapsed" id="understandingPanel">
+    <div class="up-header" id="upHeader" title="clicca per espandere/comprimere">
+      <div class="up-header-left">
+        <span>UI-R1 legge</span>
+        <span class="up-header-snippet" id="upHeaderSnippet"></span>
+      </div>
+      <div class="up-header-right">
+        <span class="up-badge" id="upBadgeDepth">0 archi</span>
+        <span class="up-badge" id="upBadgeHyp" style="display:none"></span>
+        <span class="up-arrow" id="upArrow">▲</span>
+      </div>
+    </div>
+    <div class="up-body" id="upBody"></div>
+  </div>
+</div>
+
+<div id="sidebarResizer" title="trascina per ridimensionare"></div>
+<button id="sidebarToggle" title="comprimi/espandi sidebar">‹</button>
+
+<div id="sidebar">
+  <div class="sidebar-scroll">
+    <header>
+      <div class="brand">UI-R1</div>
+      <nav>
+        <button id="btn-home" data-action="home" title="vai alla panoramica">⌂</button>
+        <button id="btn-back" data-action="back" title="deseleziona">←</button>
+      </nav>
+    </header>
+
+    <section id="scelta-campo">
+      <div id="intro">
+        <p>Hello, friend.</p>
+        <p>Sono UI-R1, un'entità cognitiva che pensa per topologia al momento posseggo 27.000 concetti connessi da relazioni logiche.</p>
+        <!--
+        <p>Ti trovi nel campo vasto, che visualizza circa 3000 parole tra tutte quelle contenute nella mia mente attuale.</p>
+        <p>Il campo vasto è la presentazione interna del mio mondo mentale, puoi esplorarlo con il mouse. Cliccando su una parola la selezioni, e puoi vedere le sue relazioni e dimensioni nei pannelli qui a destra.</p>
+        <p>Puoi anche creare un campo nuovo, che è una tua mappa mentale personale, dove puoi aggiungere parole e relazioni liberamente, e poi trasmetterlo al campo vasto se vuoi condividerlo.</p>
+        -->
+      </div>
+      <div class="tabs">
+        <button class="tab attivo" data-view="vasto" title="campo vasto (globale)">vasto</button>
+        <button class="tab"        data-view="nuovo" title="il tuo campo">nuovo</button>
+      </div>
+      <div class="azioni" id="viewActions"></div>
+    </section>
+
+    <section id="ricerca">
+      <button id="search-toggle" class="lente" type="button" title="cerca una parola">
+        <span class="icon">🔍</span><span class="label">cerca una parola</span>
+      </button>
+      <input id="search" type="text" placeholder="cerca una parola…" autocomplete="off" spellcheck="false" hidden>
+      <div id="search-results" class="search-results"></div>
+    </section>
+
+    <!-- Parola selezionata: visibilità gate da body.parola-selezionata. -->
+    <section id="info-parola">
+      <h3>parola</h3>
+      <div class="intesta">
+        <span class="etichetta titolo" id="info-title"></span>
+        <span class="segnale campo" id="info-campo"></span>
+      </div>
+      <div class="azioni">
+        <button class="modifica" id="parolaModifica">✎ modifica</button>
+        <button class="relazione" id="parolaRelazione">+ relazione</button>
+        <button class="elimina" id="parolaElimina">🗙 elimina</button>
+      </div>
+    </section>
+
+
+    <section id="dimensioni">
+      <h3>valori della parola</h3>
+      <div id="dim-bars"></div>
+    </section>
+
+    <section id="spinte">
+      <h3>spinte motivazionali</h3>
+      <canvas id="radar" width="480" height="320"></canvas>
+    </section>
+
+    <section id="sentencePanel" style="display:none"></section>
+
+    <section id="filtri">
+      <h3>dimensioni del campo vasto</h3>
+      <div class="sezione">
+        <div id="sigRanges"></div>
+      </div>
+      <div class="azioni">
+        <button class="azzera" id="filterReset">azzera</button>
+      </div>
+    </section>
+
+    <section id="relazioni">
+      <h3>relazioni</h3>
+      <div class="sezione">
+        <div class="etichetta">archi visibili</div>
+        <div id="dirFilter" class="riga">
+          <button class="chip dir" data-dir="both">entrambi</button>
+          <button class="chip dir attivo" data-dir="out">uscenti</button>
+          <button class="chip dir" data-dir="in">entranti</button>
+        </div>
+      </div>
+      <!-- Legenda interattiva delle relazioni: popolata da rel-legend.js.
+           Ogni gruppo è un toggle. Click sulla freccia ► espande i sotto-tipi
+           (IS_A, PART_OF, CAUSES, ...), ognuno con toggle individuale. -->
+      <div id="relLegend" class="rel-legend"></div>
+    </section>
+
+    <footer class="azioni">
+      <button data-action="add-word" title="aggiungi parola">+ parola</button>
+      <button data-action="add-rel" title="aggiungi relazione">+ relazione</button>
+      <button id="btnTransmit" data-action="transmit" style="display:none" title="trasmetti al campo vasto">↗ trasmetti</button>
+      <button id="btnToCommunity" data-action="to-community" style="display:none" title="porta la frase nel campo community">✉ community</button>
+      <button data-action="community" title="vai a community">community</button>
+    </footer>
+  </div>
+</div>
+
+<div id="loading">caricamento campo…</div>
+<div id="hover-label"></div>
+<div class="ctx-menu" id="ctxMenu"></div>
+<div class="edit-panel" id="editPanel"></div>
+
+<!-- Modale save/load collettivi (personale) -->
+<div class="modal-overlay" id="collectiveModal" style="display:none">
+  <div class="box modale" id="collectiveBox"></div>
+</div>
+
+</body>
+</html>

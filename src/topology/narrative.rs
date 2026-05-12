@@ -419,6 +419,61 @@ pub struct NarrativeSelf {
     turn_count: usize,
     /// Phase 66: il testimone silenzioso — auto-osservazioni nei tick autonomi.
     pub self_witness: SelfWitness,
+    /// Phase 69 B.4: finestra scorrevole di notice ad alta salience.
+    /// Usata per il criterio "non-sovraccarico": se ho notato troppe cose
+    /// negli ultimi N secondi, smetto di riflettere — reagisco come un
+    /// umano in eccitazione. Ephemeral per sessione, non persistito.
+    pub notice_window: NoticeWindow,
+}
+
+/// Finestra scorrevole per il rate-limit degli `SelfNotice`.
+///
+/// Se l'entità ha "notato" più di N eventi salienti negli ultimi T secondi,
+/// ulteriori notice vengono soppressi fino a quando la finestra si svuota.
+/// Modella il fatto che sotto bombardamento cognitivo la riflessività si
+/// riduce — la mente si difende dal flooding.
+#[derive(Debug, Clone)]
+pub struct NoticeWindow {
+    /// Contatore di notice nella finestra corrente.
+    pub notices_in_window: u32,
+    /// Inizio della finestra corrente (reset quando la finestra scade).
+    pub window_start: std::time::Instant,
+    /// Durata della finestra.
+    pub window_duration: std::time::Duration,
+    /// Max notice permessi per finestra prima del "sovraccarico".
+    pub max_per_window: u32,
+}
+
+impl Default for NoticeWindow {
+    fn default() -> Self {
+        Self {
+            notices_in_window: 0,
+            window_start: std::time::Instant::now(),
+            window_duration: std::time::Duration::from_secs(30),
+            max_per_window: 5,
+        }
+    }
+}
+
+impl NoticeWindow {
+    /// Verifica se siamo in sovraccarico. Resetta la finestra se è scaduta.
+    pub fn is_overloaded(&mut self) -> bool {
+        if self.window_start.elapsed() > self.window_duration {
+            self.notices_in_window = 0;
+            self.window_start = std::time::Instant::now();
+        }
+        self.notices_in_window >= self.max_per_window
+    }
+
+    /// Registra un notice appena emesso.
+    pub fn register_notice(&mut self) {
+        if self.window_start.elapsed() > self.window_duration {
+            self.notices_in_window = 1;
+            self.window_start = std::time::Instant::now();
+        } else {
+            self.notices_in_window += 1;
+        }
+    }
 }
 
 impl NarrativeSelf {
@@ -435,7 +490,70 @@ impl NarrativeSelf {
             is_born:          false,
             turn_count:       0,
             self_witness:     SelfWitness::new(),
+            notice_window:    NoticeWindow::default(),
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Phase 69 B.4 — autocoscienza nascente
+    // ═══════════════════════════════════════════════════════════════
+
+    /// Decide se emettere un `SelfNotice` per un evento osservato.
+    ///
+    /// Tre criteri di filtro (tutti devono essere soddisfatti):
+    ///
+    /// 1. **Salience dell'osservato > 0.5**: solo eventi significativi
+    ///    meritano di essere "notati" riflessivamente.
+    ///
+    /// 2. **Non in crisi acuta**: se `in_crisis` è true, la coscienza
+    ///    riflessa è soppressa — la crisi *chiede* risposta, non produce
+    ///    riflessione. Come un umano in panico: reagisce, non pensa di sé.
+    ///
+    /// 3. **Non sovraccarico**: se negli ultimi 30s sono stati emessi già
+    ///    5 notice, il sistema smette di riflettere fino a fine finestra.
+    ///    Modella il flooding cognitivo.
+    ///
+    /// Protezione anti-ricorsione: se l'evento osservato è già un
+    /// `SelfNotice`, non si produce un meta-meta (base case).
+    ///
+    /// L'`interpretation` è sempre `None` in Phase 69 — Phase 71 la
+    /// riempirà tramite `compose_recount`.
+    pub fn observe_event(
+        &mut self,
+        event: &crate::topology::events::InternalEvent,
+        in_crisis: bool,
+        tick: u32,
+    ) -> Option<crate::topology::events::InternalEvent> {
+        use crate::topology::events::InternalEvent;
+
+        // Base case anti-ricorsione: non notice su un altro notice.
+        if matches!(event, InternalEvent::SelfNotice { .. }) {
+            return None;
+        }
+
+        // Criterio 1: salience > 0.5.
+        if event.salience() <= 0.5 {
+            return None;
+        }
+
+        // Criterio 2: non in crisi acuta.
+        if in_crisis {
+            return None;
+        }
+
+        // Criterio 3: non sovraccarico cognitivo.
+        if self.notice_window.is_overloaded() {
+            return None;
+        }
+
+        // Tutti i criteri soddisfatti: registra nella finestra ed emetti.
+        self.notice_window.register_notice();
+
+        Some(InternalEvent::SelfNotice {
+            observed_event: Box::new(event.clone()),
+            noticed_at: tick,
+            interpretation: None, // Phase 71 la implementa via compose_recount
+        })
     }
 
     /// Cattura lo snapshot per la persistenza.
@@ -1120,7 +1238,7 @@ fn stance_from_valence(valence: &Valence, vital: &VitalState) -> InternalStance 
 /// A differenza di form_intention() (che matchava su 5 stance discrete),
 /// questa funzione legge il profilo continuo degli 8 drive. L'atto comunicativo
 /// guida quando la valenza è debole; i drive guidano quando sono forti.
-fn form_intention_from_valence(act: &InputAct, valence: &Valence) -> ResponseIntention {
+pub fn form_intention_from_valence(act: &InputAct, valence: &Valence) -> ResponseIntention {
     let (dom_idx, dom_val) = valence.dominant();
 
     // CD8 fortemente negativo → Remain (ritirarsi)

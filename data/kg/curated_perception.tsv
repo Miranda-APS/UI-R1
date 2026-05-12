@@ -1,0 +1,55 @@
+# CURATED PERCEPTION AND HUMAN BODY AXIOMS
+# Insegna a Prometeo i sensi, il corpo e la percezione fenomenologica.
+
+# I Sensi Umani
+vista	IS_A	percezione	0.95	senso
+vista	REQUIRES	luce	0.95	occhio
+vista	CAUSES	immagine	0.95	forma
+udito	IS_A	percezione	0.95	senso
+udito	REQUIRES	suono	0.95	orecchio
+udito	CAUSES	ascolto	0.90	attenzione
+tatto	IS_A	percezione	0.95	senso
+tatto	REQUIRES	contatto	0.95	pelle
+tatto	CAUSES	sensazione	0.90	materia
+olfatto	IS_A	percezione	0.95	senso
+gusto	IS_A	percezione	0.95	senso
+
+# Struttura del Corpo Umano (Macro)
+corpo	HAS	testa	0.95	anatomia
+corpo	HAS	tronco	0.95	anatomia
+corpo	HAS	arto	0.95	anatomia
+testa	HAS	cervello	0.95	organo
+testa	HAS	faccia	0.95	superficie
+cervello	DOES	pensare	0.95	mente
+cervello	REQUIRES	energia	0.95	sangue
+cuore	IS_A	organo	0.95	corpo
+cuore	DOES	pompare	0.95	sangue
+cuore	SYMBOLIZES	amore	0.90	emozione
+mano	PART_OF	arto	0.95	corpo
+mano	DOES	toccare	0.95	tatto
+mano	ENABLES	creazione	0.90	azione
+
+# Stati Corporei e Bisogni
+fame	IS_A	bisogno	0.95	corpo
+fame	CAUSES	ricerca	0.90	cibo
+fame	REQUIRES	mancanza	0.90	energia
+sete	IS_A	bisogno	0.95	corpo
+sete	REQUIRES	acqua	0.95	sopravvivenza
+sonno	IS_A	stato	0.95	riposo
+sonno	CAUSES	sogno	0.85	mente
+sonno	REQUIRES	stanchezza	0.95	corpo
+stanchezza	CAUSES	fermata	0.90	limite
+stanchezza	OPPOSITE_OF	energia	0.95	forza
+
+# Mente e Percezione
+mente	IS_A	spazio	0.90	astrazione
+mente	HAS	memoria	0.95	ricordo
+mente	DOES	immaginare	0.95	pensiero
+memoria	REQUIRES	passato	0.95	tempo
+memoria	CAUSES	identità	0.90	storia
+ricordo	IS_A	traccia	0.95	mente
+ricordo	OPPOSITE_OF	oblio	0.95	dimenticanza
+oblio	CAUSES	vuoto	0.90	assenza
+sogno	IS_A	simulazione	0.90	mente
+sogno	REQUIRES	sonno	0.90	corpo
+sogno	OPPOSITE_OF	realtà	0.85	veglia

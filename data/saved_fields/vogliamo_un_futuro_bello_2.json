@@ -1,0 +1,2150 @@
+{
+  "slug": "vogliamo_un_futuro_bello_2",
+  "name": "vogliamo un futuro bello 2",
+  "field_id": "nuovo",
+  "created_at": 1777826853,
+  "password_hash": "697d536c9f7a6f1db1cf4328249c98dd236ef8dc2ea56cdfb673cc2385304cfd",
+  "data": {
+    "edges": [
+      {
+        "conf": 70,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "avvenire",
+        "rel": "OPPOSITE_OF",
+        "to": "passato"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "attesa",
+        "rel": "REQUIRES",
+        "to": "tempo"
+      },
+      {
+        "conf": 80,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "attesa",
+        "rel": "REQUIRES",
+        "to": "speranza"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "attesa",
+        "rel": "IS_A",
+        "to": "stato"
+      },
+      {
+        "conf": 92,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "attesa",
+        "rel": "CAUSES",
+        "to": "incertezza"
+      },
+      {
+        "conf": 80,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "attesa",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "incertezza",
+        "rel": "IS_A",
+        "to": "stato"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "incertezza",
+        "rel": "HAS",
+        "to": "possibilità"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "responsabilità",
+        "rel": "REQUIRES",
+        "to": "scelta"
+      },
+      {
+        "conf": 100,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "mistero",
+        "rel": "IS_A",
+        "to": "stato"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "desiderio",
+        "rel": "CAUSES",
+        "to": "azione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "destino",
+        "rel": "REQUIRES",
+        "to": "tempo"
+      },
+      {
+        "conf": 80,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "destino",
+        "rel": "OPPOSITE_OF",
+        "to": "scelta"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "destino",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "motivazione",
+        "rel": "CAUSES",
+        "to": "azione"
+      },
+      {
+        "conf": 100,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "motivazione",
+        "rel": "IS_A",
+        "to": "stato"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "speranza",
+        "rel": "DOES",
+        "to": "aprire"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "speranza",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 91,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "speranza",
+        "rel": "CAUSES",
+        "to": "azione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "speranza",
+        "rel": "REQUIRES",
+        "to": "futuro"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "speranza",
+        "rel": "REQUIRES",
+        "to": "desiderio"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "speranza",
+        "rel": "HAS",
+        "to": "attesa"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "intenzione",
+        "rel": "IS_A",
+        "to": "stato"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "intenzione",
+        "rel": "CAUSES",
+        "to": "azione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "angoscia",
+        "rel": "CAUSES",
+        "to": "paura"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "paura",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "tempo",
+        "rel": "HAS",
+        "to": "presente"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "tempo",
+        "rel": "HAS",
+        "to": "passato"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "tempo",
+        "rel": "HAS",
+        "to": "futuro"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "tempo",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "tempo",
+        "rel": "IS_A",
+        "to": "dimensione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "tempo",
+        "rel": "CAUSES",
+        "to": "divenire"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "tempo",
+        "rel": "CAUSES",
+        "to": "attesa"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "scelta",
+        "rel": "CAUSES",
+        "to": "responsabilità"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "scelta",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "scelta",
+        "rel": "IS_A",
+        "to": "azione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "volere",
+        "rel": "HAS",
+        "to": "desiderio"
+      },
+      {
+        "conf": 100,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "volere",
+        "rel": "IS_A",
+        "to": "stato"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "volere",
+        "rel": "IS_A",
+        "to": "azione"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "volere",
+        "rel": "CAUSES",
+        "to": "intenzione"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "volere",
+        "rel": "CAUSES",
+        "to": "ricerca"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "volere",
+        "rel": "REQUIRES",
+        "to": "motivazione"
+      },
+      {
+        "conf": 100,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "bello",
+        "rel": "OPPOSITE_OF",
+        "to": "brutto"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "azione",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "azione",
+        "rel": "HAS",
+        "to": "tempo"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "azione",
+        "rel": "REQUIRES",
+        "to": "intenzione"
+      },
+      {
+        "conf": 100,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "brutto",
+        "rel": "OPPOSITE_OF",
+        "to": "bello"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "presente",
+        "rel": "HAS",
+        "to": "azione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "presente",
+        "rel": "IS_A",
+        "to": "tempo"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "presente",
+        "rel": "IS_A",
+        "to": "dimensione"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "presente",
+        "rel": "OPPOSITE_OF",
+        "to": "futuro"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "presente",
+        "rel": "OPPOSITE_OF",
+        "to": "passato"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "presente",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "stato",
+        "rel": "REQUIRES",
+        "to": "tempo"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "stato",
+        "rel": "OPPOSITE_OF",
+        "to": "azione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "ricerca",
+        "rel": "IS_A",
+        "to": "azione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 99,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "IS_A",
+        "to": "tempi"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "IS_A",
+        "to": "tempo"
+      },
+      {
+        "conf": 80,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "IS_A",
+        "to": "destino"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "IS_A",
+        "to": "dimensione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "IMPLIES",
+        "to": "possibilità"
+      },
+      {
+        "conf": 80,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "COEXISTS",
+        "to": "presente"
+      },
+      {
+        "conf": 91,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "HAS",
+        "to": "incertezza"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "HAS",
+        "to": "mistero"
+      },
+      {
+        "conf": 88,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "CAUSES",
+        "to": "angoscia"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "CAUSES",
+        "to": "speranza"
+      },
+      {
+        "conf": 92,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "CAUSES",
+        "to": "attesa"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "CAUSES",
+        "to": "scelta"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "CAUSES",
+        "to": "responsabilità"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "CAUSES",
+        "to": "paura"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "DOES",
+        "to": "aprire"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "DOES",
+        "to": "divenire"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "futuro",
+        "rel": "OPPOSITE_OF",
+        "to": "passato"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "divenire",
+        "rel": "IS_A",
+        "to": "azione"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "divenire",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "divenire",
+        "rel": "REQUIRES",
+        "to": "tempo"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "vita",
+        "rel": "REQUIRES",
+        "to": "tempo"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "vita",
+        "rel": "HAS",
+        "to": "divenire"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "passato",
+        "rel": "OPPOSITE_OF",
+        "to": "futuro"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "passato",
+        "rel": "IS_A",
+        "to": "tempo"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "passato",
+        "rel": "IS_A",
+        "to": "dimensione"
+      },
+      {
+        "conf": 80,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "passato",
+        "rel": "COEXISTS",
+        "to": "presente"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "passato",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "possibilità",
+        "rel": "DOES",
+        "to": "aprire"
+      },
+      {
+        "conf": 92,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "possibilità",
+        "rel": "CAUSES",
+        "to": "incertezza"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "possibilità",
+        "rel": "CAUSES",
+        "to": "speranza"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "possibilità",
+        "rel": "PART_OF",
+        "to": "vita"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": false,
+          "userCreated": false
+        },
+        "from": "possibilità",
+        "rel": "HAS",
+        "to": "futuro"
+      },
+      {
+        "conf": 80,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "volere",
+        "rel": "SIMILAR_TO",
+        "to": "intenzione"
+      },
+      {
+        "conf": 88,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "volere",
+        "rel": "IS_A",
+        "to": "desiderio"
+      },
+      {
+        "conf": 100,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "volere",
+        "rel": "CAUSES",
+        "to": "azione"
+      },
+      {
+        "conf": 96,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "PART_OF",
+        "to": "temporalità"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "IS_A",
+        "to": "prospettiva"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "HAS",
+        "to": "possibilità"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "HAS",
+        "to": "aspettativa"
+      },
+      {
+        "conf": 85,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "CAUSES",
+        "to": "incertezza"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "DOES",
+        "to": "attendere"
+      },
+      {
+        "conf": 70,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "SIMILAR_TO",
+        "to": "avvenire"
+      },
+      {
+        "conf": 70,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "SIMILAR_TO",
+        "to": "visione"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "REQUIRES",
+        "to": "possibilità"
+      },
+      {
+        "conf": 90,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "REQUIRES",
+        "to": "presente"
+      },
+      {
+        "conf": 80,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "REQUIRES",
+        "to": "speranza"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "REQUIRES",
+        "to": "tempo"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "futuro",
+        "rel": "EXCLUDES",
+        "to": "passato"
+      },
+      {
+        "conf": 95,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "bello",
+        "rel": "IS_A",
+        "to": "qualita"
+      },
+      {
+        "conf": 75,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "bello",
+        "rel": "SIMILAR_TO",
+        "to": "gradevole"
+      },
+      {
+        "conf": 82,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "bello",
+        "rel": "SIMILAR_TO",
+        "to": "splendido"
+      },
+      {
+        "conf": 72,
+        "flags": {
+          "fromExpansion": false,
+          "transmitted": true,
+          "userCreated": true
+        },
+        "from": "bello",
+        "rel": "SIMILAR_TO",
+        "to": "attraente"
+      }
+    ],
+    "expansionShown": true,
+    "sentence": "vogliamo un futuro bello",
+    "words": [
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          87,
+          88,
+          86,
+          92,
+          9,
+          91,
+          85,
+          14
+        ],
+        "userOct": null,
+        "w": "destino"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          12,
+          97,
+          55,
+          15,
+          3,
+          95,
+          53,
+          81
+        ],
+        "userOct": null,
+        "w": "intenzione"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          6,
+          99,
+          83,
+          0,
+          5,
+          98,
+          95,
+          24
+        ],
+        "userOct": null,
+        "w": "passato"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          8,
+          98,
+          49,
+          19,
+          2,
+          84,
+          5,
+          83
+        ],
+        "userOct": null,
+        "w": "dimensione"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          13,
+          90,
+          1,
+          20,
+          7,
+          0,
+          0,
+          34
+        ],
+        "userOct": null,
+        "w": "tempi"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          6,
+          96,
+          100,
+          98,
+          11,
+          98,
+          44,
+          6
+        ],
+        "userOct": null,
+        "w": "paura"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          11,
+          96,
+          96,
+          94,
+          3,
+          96,
+          96,
+          79
+        ],
+        "userOct": null,
+        "w": "presente"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          7,
+          97,
+          100,
+          96,
+          33,
+          98,
+          54,
+          6
+        ],
+        "userOct": null,
+        "w": "angoscia"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          10,
+          91,
+          96,
+          91,
+          4,
+          93,
+          55,
+          7
+        ],
+        "userOct": null,
+        "w": "brutto"
+      },
+      {
+        "displayName": "vogliamo",
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": true,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          86,
+          96,
+          100,
+          99,
+          5,
+          96,
+          57,
+          91
+        ],
+        "userOct": null,
+        "w": "volere"
+      },
+      {
+        "displayName": "bello",
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": true,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          11,
+          96,
+          99,
+          94,
+          3,
+          99,
+          57,
+          95
+        ],
+        "userOct": null,
+        "w": "bello"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          1,
+          100,
+          83,
+          100,
+          0,
+          99,
+          84,
+          34
+        ],
+        "userOct": null,
+        "w": "tempo"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          11,
+          91,
+          81,
+          99,
+          34,
+          95,
+          60,
+          29
+        ],
+        "userOct": null,
+        "w": "scelta"
+      },
+      {
+        "displayName": "futuro",
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": true,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          83,
+          1,
+          87,
+          100,
+          1,
+          99,
+          25,
+          86
+        ],
+        "userOct": null,
+        "w": "futuro"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          83,
+          91,
+          87,
+          100,
+          2,
+          96,
+          43,
+          94
+        ],
+        "userOct": null,
+        "w": "speranza"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          9,
+          91,
+          80,
+          99,
+          35,
+          95,
+          60,
+          72
+        ],
+        "userOct": null,
+        "w": "responsabilità"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          10,
+          22,
+          86,
+          98,
+          55,
+          92,
+          90,
+          91
+        ],
+        "userOct": null,
+        "w": "possibilità"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          2,
+          22,
+          28,
+          98,
+          55,
+          85,
+          60,
+          26
+        ],
+        "userOct": null,
+        "w": "ricerca"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          34,
+          35,
+          12,
+          40,
+          56,
+          35,
+          27,
+          27
+        ],
+        "userOct": null,
+        "w": "avvenire"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          6,
+          100,
+          99,
+          100,
+          1,
+          100,
+          90,
+          96
+        ],
+        "userOct": null,
+        "w": "azione"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          8,
+          100,
+          20,
+          0,
+          0,
+          100,
+          16,
+          52
+        ],
+        "userOct": null,
+        "w": "stato"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          83,
+          98,
+          98,
+          95,
+          3,
+          100,
+          47,
+          93
+        ],
+        "userOct": null,
+        "w": "vita"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          2,
+          92,
+          54,
+          93,
+          35,
+          93,
+          60,
+          20
+        ],
+        "userOct": null,
+        "w": "incertezza"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          2,
+          92,
+          30,
+          95,
+          5,
+          90,
+          60,
+          72
+        ],
+        "userOct": null,
+        "w": "visione"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          9,
+          93,
+          73,
+          98,
+          5,
+          96,
+          90,
+          80
+        ],
+        "userOct": null,
+        "w": "desiderio"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          84,
+          94,
+          70,
+          90,
+          5,
+          92,
+          97,
+          26
+        ],
+        "userOct": null,
+        "w": "divenire"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          83,
+          1,
+          85,
+          98,
+          73,
+          91,
+          91,
+          84
+        ],
+        "userOct": null,
+        "w": "attesa"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          83,
+          58,
+          75,
+          95,
+          74,
+          75,
+          91,
+          55
+        ],
+        "userOct": null,
+        "w": "mistero"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          60,
+          63,
+          73,
+          93,
+          79,
+          72,
+          93,
+          80
+        ],
+        "userOct": null,
+        "w": "motivazione"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          64,
+          67,
+          78,
+          70,
+          83,
+          97,
+          70,
+          93
+        ],
+        "userOct": null,
+        "w": "aprire"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": false,
+          "unknown": false,
+          "userCreated": false
+        },
+        "sig": [
+          69,
+          73,
+          93,
+          75,
+          89,
+          36,
+          74,
+          99
+        ],
+        "userOct": null,
+        "w": "gradevole"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": true,
+          "noSignature": true,
+          "transmitted": true,
+          "unknown": false,
+          "userCreated": true
+        },
+        "sig": [
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50
+        ],
+        "userOct": null,
+        "w": "un"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": false,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": true,
+          "transmitted": true,
+          "unknown": false,
+          "userCreated": true
+        },
+        "sig": [
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50,
+          50
+        ],
+        "userOct": null,
+        "w": "temporalità"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": true,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": true,
+          "unknown": false,
+          "userCreated": true
+        },
+        "sig": [
+          5,
+          40,
+          19,
+          17,
+          75,
+          29,
+          25,
+          59
+        ],
+        "userOct": null,
+        "w": "prospettiva"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": true,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": true,
+          "unknown": false,
+          "userCreated": true
+        },
+        "sig": [
+          50,
+          35,
+          18,
+          35,
+          80,
+          16,
+          25,
+          58
+        ],
+        "userOct": null,
+        "w": "aspettativa"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": true,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": true,
+          "unknown": false,
+          "userCreated": true
+        },
+        "sig": [
+          50,
+          35,
+          13,
+          35,
+          95,
+          16,
+          55,
+          51
+        ],
+        "userOct": null,
+        "w": "attendere"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": true,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": true,
+          "unknown": false,
+          "userCreated": true
+        },
+        "sig": [
+          20,
+          85,
+          12,
+          15,
+          5,
+          94,
+          5,
+          50
+        ],
+        "userOct": null,
+        "w": "qualita"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": true,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": true,
+          "unknown": false,
+          "userCreated": true
+        },
+        "sig": [
+          50,
+          35,
+          12,
+          35,
+          95,
+          25,
+          55,
+          50
+        ],
+        "userOct": null,
+        "w": "splendido"
+      },
+      {
+        "displayName": null,
+        "flags": {
+          "fromApi": true,
+          "fromExpansion": false,
+          "fromSentence": false,
+          "noSignature": false,
+          "transmitted": true,
+          "unknown": false,
+          "userCreated": true
+        },
+        "sig": [
+          50,
+          35,
+          27,
+          35,
+          80,
+          16,
+          25,
+          68
+        ],
+        "userOct": null,
+        "w": "attraente"
+      }
+    ]
+  }
+}

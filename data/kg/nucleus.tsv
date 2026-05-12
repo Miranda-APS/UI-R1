@@ -1,0 +1,926 @@
+# NUCLEO SEMANTICO — 64 Registri di Comprensione
+# Ogni registro ha 5-7 parole-ancora che lo rappresentano inequivocabilmente.
+# Le connessioni formano cluster che guidano il campo verso il registro giusto.
+# Formato: soggetto	RELAZIONE	oggetto	confidenza
+
+# ═══════════════════════════════════════════════════════════════
+# ☰/☰  POTERE — "C'è una volontà pura che agisce?"
+# Nucleo: forza che si esprime come forza
+# ═══════════════════════════════════════════════════════════════
+potere	SIMILAR_TO	forza	0.90
+potere	SIMILAR_TO	volontà	0.85
+potere	SIMILAR_TO	autorità	0.80
+potere	CAUSES	azione	0.85
+potere	CAUSES	controllo	0.80
+forza	SIMILAR_TO	volontà	0.75
+forza	CAUSES	movimento	0.80
+forza	OPPOSITE_OF	debolezza	0.90
+volontà	CAUSES	azione	0.90
+volontà	OPPOSITE_OF	rassegnazione	0.85
+dominare	IS_A	potere	0.85
+controllo	IS_A	potere	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☰/☷  CREAZIONE — "Questa forza porta qualcosa di nuovo nel permanente?"
+# ═══════════════════════════════════════════════════════════════
+creare	SIMILAR_TO	costruire	0.80
+creare	SIMILAR_TO	generare	0.85
+creare	SIMILAR_TO	inventare	0.75
+creare	CAUSES	opera	0.85
+creare	CAUSES	risultato	0.75
+costruire	SIMILAR_TO	fare	0.75
+nascere	SIMILAR_TO	creare	0.70
+nascere	CAUSES	vita	0.90
+origine	IS_A	creazione	0.85
+fare	CAUSES	risultato	0.80
+fare	SIMILAR_TO	agire	0.75
+opera	IS_A	creazione	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☰/☳  ENERGIA — "Quanto è intensa la spinta?"
+# ═══════════════════════════════════════════════════════════════
+energia	SIMILAR_TO	vitalità	0.85
+energia	SIMILAR_TO	dinamismo	0.80
+energia	CAUSES	movimento	0.90
+energia	CAUSES	calore	0.75
+spingere	IS_A	energia	0.80
+muovere	IS_A	energia	0.75
+accelerare	CAUSES	velocità	0.85
+vitalità	SIMILAR_TO	vigore	0.85
+vigore	OPPOSITE_OF	stanchezza	0.90
+attività	IS_A	energia	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☰/☵  INTENZIONE — "C'è uno scopo che dirige il flusso?"
+# ═══════════════════════════════════════════════════════════════
+intenzione	SIMILAR_TO	scopo	0.90
+intenzione	SIMILAR_TO	obiettivo	0.85
+intenzione	SIMILAR_TO	fine	0.80
+intenzione	CAUSES	azione	0.85
+scopo	SIMILAR_TO	obiettivo	0.88
+scopo	CAUSES	direzione	0.80
+mirare	IS_A	intenzione	0.85
+progetto	IS_A	intenzione	0.80
+piano	IS_A	intenzione	0.75
+direzione	IS_A	intenzione	0.70
+volere	SIMILAR_TO	intenzione	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☰/☶  DETERMINAZIONE — "La volontà si definisce attraverso un limite?"
+# ═══════════════════════════════════════════════════════════════
+determinazione	SIMILAR_TO	decisione	0.88
+determinazione	SIMILAR_TO	tenacia	0.85
+determinazione	SIMILAR_TO	impegno	0.80
+determinazione	OPPOSITE_OF	esitazione	0.85
+decidere	IS_A	determinazione	0.90
+persistere	IS_A	determinazione	0.85
+scegliere	CAUSES	determinazione	0.75
+tenacia	SIMILAR_TO	perseveranza	0.90
+impegno	SIMILAR_TO	dedizione	0.85
+resistere	IS_A	determinazione	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☰/☴  INFLUENZA — "Questa forza si propaga attraverso altri?"
+# ═══════════════════════════════════════════════════════════════
+influenza	SIMILAR_TO	potere	0.70
+influenzare	IS_A	influenza	0.90
+convincere	IS_A	influenza	0.85
+persuadere	SIMILAR_TO	convincere	0.88
+ispirare	IS_A	influenza	0.80
+guidare	IS_A	influenza	0.75
+autorità	IS_A	influenza	0.80
+esempio	CAUSES	influenza	0.75
+carisma	IS_A	influenza	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☰/☲  VISIONE — "La volontà illumina qualcosa, rivela?"
+# ═══════════════════════════════════════════════════════════════
+visione	SIMILAR_TO	immaginazione	0.80
+visione	SIMILAR_TO	prospettiva	0.85
+visione	SIMILAR_TO	sogno	0.75
+vedere	IS_A	visione	0.80
+immaginare	IS_A	visione	0.85
+prevedere	IS_A	visione	0.80
+futuro	SIMILAR_TO	visione	0.70
+sognare	IS_A	visione	0.75
+ideale	IS_A	visione	0.80
+intuire	IS_A	visione	0.70
+
+# ═══════════════════════════════════════════════════════════════
+# ☰/☱  DONO — "Questa forza si offre, si condivide?"
+# ═══════════════════════════════════════════════════════════════
+dare	SIMILAR_TO	offrire	0.85
+dare	SIMILAR_TO	condividere	0.80
+dare	OPPOSITE_OF	prendere	0.90
+offrire	IS_A	dono	0.90
+regalare	IS_A	dono	0.88
+generosità	IS_A	dono	0.85
+gratuito	IS_A	dono	0.80
+cura	SIMILAR_TO	dono	0.75
+aiutare	IS_A	dono	0.80
+servire	IS_A	dono	0.70
+
+# ═══════════════════════════════════════════════════════════════
+# ☷/☰  VITA — "La materia si attiva, si mette in moto?"
+# ═══════════════════════════════════════════════════════════════
+vita	SIMILAR_TO	esistenza	0.90
+vita	SIMILAR_TO	vivere	0.90
+vita	OPPOSITE_OF	morte	0.95
+vivere	IS_A	vita	0.95
+nascere	CAUSES	vita	0.90
+crescere	IS_A	vita	0.90
+respirare	IS_A	vita	0.90
+nutrirsi	IS_A	vita	0.90
+esistere	IS_A	vita	0.90
+animare	IS_A	vita	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☷/☷  MATERIA — "Quanto è concreto e solido questo?"
+# ═══════════════════════════════════════════════════════════════
+materia	SIMILAR_TO	sostanza	0.88
+materia	SIMILAR_TO	cosa	0.80
+materia	SIMILAR_TO	oggetto	0.85
+materia	OPPOSITE_OF	spirito	0.75
+corpo	IS_A	materia	0.85
+fisico	IS_A	materia	0.85
+concreto	IS_A	materia	0.80
+solido	IS_A	materia	0.80
+pesante	IS_A	materia	0.75
+tangibile	IS_A	materia	0.85
+elemento	IS_A	materia	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☷/☳  SENSAZIONE — "Qualcosa di stabile viene percepito con intensità?"
+# ═══════════════════════════════════════════════════════════════
+sensazione	SIMILAR_TO	percezione	0.90
+sensazione	SIMILAR_TO	sentire	0.90
+sentire	IS_A	sensazione	0.90
+toccare	IS_A	sensazione	0.85
+odorare	IS_A	sensazione	0.80
+gustare	IS_A	sensazione	0.80
+vedere	IS_A	sensazione	0.75
+caldo	IS_A	sensazione	0.80
+freddo	IS_A	sensazione	0.80
+dolore	IS_A	sensazione	0.85
+piacere	IS_A	sensazione	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☷/☵  MUTAMENTO — "Qualcosa di solido sta cambiando?"
+# ═══════════════════════════════════════════════════════════════
+mutamento	SIMILAR_TO	cambiamento	0.92
+mutamento	SIMILAR_TO	trasformazione	0.90
+cambiare	IS_A	mutamento	0.92
+trasformare	IS_A	mutamento	0.90
+evolvere	IS_A	mutamento	0.85
+modificare	IS_A	mutamento	0.85
+diventare	IS_A	mutamento	0.88
+crescere	IS_A	mutamento	0.80
+metamorfosi	IS_A	mutamento	0.90
+svoltare	IS_A	mutamento	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☷/☶  STRUTTURA — "Ha una forma organizzata, un'architettura?"
+# ═══════════════════════════════════════════════════════════════
+struttura	SIMILAR_TO	forma	0.85
+struttura	SIMILAR_TO	ordine	0.80
+struttura	SIMILAR_TO	organizzazione	0.88
+organizzare	IS_A	struttura	0.90
+forma	IS_A	struttura	0.85
+ordine	IS_A	struttura	0.85
+architettura	IS_A	struttura	0.90
+schema	IS_A	struttura	0.85
+regola	IS_A	struttura	0.80
+sistema	IS_A	struttura	0.80
+struttura	OPPOSITE_OF	caos	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☷/☴  MONDO — "È il tessuto delle cose, la realtà complessa?"
+# ═══════════════════════════════════════════════════════════════
+mondo	SIMILAR_TO	realtà	0.85
+mondo	SIMILAR_TO	universo	0.80
+mondo	SIMILAR_TO	tutto	0.75
+natura	IS_A	mondo	0.85
+ambiente	IS_A	mondo	0.80
+insieme	IS_A	mondo	0.75
+società	IS_A	mondo	0.80
+esistenza	IS_A	mondo	0.80
+contesto	IS_A	mondo	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☷/☲  REALTÀ — "È verificabile, certo, concreto?"
+# ═══════════════════════════════════════════════════════════════
+realtà	SIMILAR_TO	fatto	0.88
+realtà	SIMILAR_TO	verità	0.90
+realtà	OPPOSITE_OF	illusione	0.90
+realtà	OPPOSITE_OF	finzione	0.85
+concreto	IS_A	realtà	0.88
+certo	IS_A	realtà	0.85
+verificabile	IS_A	realtà	0.85
+esistente	IS_A	realtà	0.85
+accadere	IS_A	realtà	0.80
+fatto	IS_A	realtà	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☷/☱  NUTRIMENTO — "Sostiene, alimenta per necessità?"
+# ═══════════════════════════════════════════════════════════════
+nutrimento	SIMILAR_TO	cibo	0.85
+nutrimento	SIMILAR_TO	sostentamento	0.90
+mangiare	IS_A	nutrimento	0.90
+nutrire	IS_A	nutrimento	0.95
+cibo	IS_A	nutrimento	0.90
+crescere	IS_A	nutrimento	0.75
+sostenere	IS_A	nutrimento	0.80
+alimentare	IS_A	nutrimento	0.90
+bisogno	IS_A	nutrimento	0.75
+sazietà	IS_A	nutrimento	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☳/☰  INIZIATIVA — "Questa intensità vuole partire, agire?"
+# ═══════════════════════════════════════════════════════════════
+iniziativa	SIMILAR_TO	coraggio	0.80
+iniziativa	SIMILAR_TO	intraprendenza	0.88
+iniziare	IS_A	iniziativa	0.92
+cominciare	IS_A	iniziativa	0.90
+partire	IS_A	iniziativa	0.85
+lanciare	IS_A	iniziativa	0.80
+avviare	IS_A	iniziativa	0.88
+primo	IS_A	iniziativa	0.75
+aprire	IS_A	iniziativa	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☳/☷  RADICAMENTO — "L'energia si ancora, trova stabilità?"
+# ═══════════════════════════════════════════════════════════════
+radicamento	SIMILAR_TO	appartenenza	0.85
+radicamento	SIMILAR_TO	radice	0.90
+radicarsi	IS_A	radicamento	0.92
+appartenere	IS_A	radicamento	0.85
+restare	IS_A	radicamento	0.80
+fondare	IS_A	radicamento	0.85
+terra	IS_A	radicamento	0.75
+casa	IS_A	radicamento	0.75
+patria	IS_A	radicamento	0.80
+tradizione	IS_A	radicamento	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☳/☳  ARDORE — "Quanto è totale e pura l'intensità?"
+# ═══════════════════════════════════════════════════════════════
+ardore	SIMILAR_TO	intensità	0.88
+ardore	SIMILAR_TO	passione	0.85
+ardore	SIMILAR_TO	fuoco	0.80
+bruciare	IS_A	ardore	0.90
+ardere	IS_A	ardore	0.95
+fiamma	IS_A	ardore	0.85
+intenso	IS_A	ardore	0.88
+totale	IS_A	ardore	0.75
+assoluto	IS_A	ardore	0.75
+ardore	OPPOSITE_OF	tiepidezza	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☳/☵  RITMO — "L'intensità pulsa, si ripete nel tempo?"
+# ═══════════════════════════════════════════════════════════════
+ritmo	SIMILAR_TO	cadenza	0.90
+ritmo	SIMILAR_TO	pulsazione	0.88
+pulsare	IS_A	ritmo	0.92
+battere	IS_A	ritmo	0.85
+ripetere	IS_A	ritmo	0.80
+ciclo	IS_A	ritmo	0.85
+onda	IS_A	ritmo	0.80
+respiro	IS_A	ritmo	0.80
+cuore	IS_A	ritmo	0.80
+musica	IS_A	ritmo	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☳/☶  IMPATTO — "L'energia incontra un limite, si scontra?"
+# ═══════════════════════════════════════════════════════════════
+impatto	SIMILAR_TO	collisione	0.85
+impatto	SIMILAR_TO	effetto	0.80
+colpire	IS_A	impatto	0.90
+scontrarsi	IS_A	impatto	0.88
+urtare	IS_A	impatto	0.85
+conseguenza	IS_A	impatto	0.80
+forza	IS_A	impatto	0.75
+rottura	IS_A	impatto	0.80
+shock	IS_A	impatto	0.85
+trauma	IS_A	impatto	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☳/☴  RISONANZA — "L'intensità si propaga attraverso una rete?"
+# ═══════════════════════════════════════════════════════════════
+risonanza	SIMILAR_TO	eco	0.90
+risonanza	SIMILAR_TO	vibrazione	0.90
+risuonare	IS_A	risonanza	0.92
+vibrare	IS_A	risonanza	0.88
+echeggiare	IS_A	risonanza	0.85
+propagarsi	IS_A	risonanza	0.85
+amplificare	IS_A	risonanza	0.80
+sintonizzarsi	IS_A	risonanza	0.85
+frequenza	IS_A	risonanza	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☳/☲  EVIDENZA — "L'energia rende qualcosa visibile, innegabile?"
+# ═══════════════════════════════════════════════════════════════
+evidenza	SIMILAR_TO	prova	0.85
+evidenza	SIMILAR_TO	chiarezza	0.80
+evidente	IS_A	evidenza	0.92
+palese	IS_A	evidenza	0.88
+ovvio	IS_A	evidenza	0.85
+dimostrare	IS_A	evidenza	0.85
+mostrare	IS_A	evidenza	0.80
+apparire	IS_A	evidenza	0.80
+manifesto	IS_A	evidenza	0.85
+innegabile	IS_A	evidenza	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☳/☱  PASSIONE — "L'intensità si carica di desiderio?"
+# ═══════════════════════════════════════════════════════════════
+passione	SIMILAR_TO	ardore	0.85
+passione	SIMILAR_TO	desiderio	0.80
+passione	SIMILAR_TO	amore	0.75
+appassionarsi	IS_A	passione	0.92
+amare	IS_A	passione	0.80
+travolgere	IS_A	passione	0.85
+intensamente	IS_A	passione	0.80
+fervore	IS_A	passione	0.88
+entusiasmo	IS_A	passione	0.80
+passione	OPPOSITE_OF	indifferenza	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☵/☰  DESTINO — "Il flusso del tempo ha una direzione propria?"
+# ═══════════════════════════════════════════════════════════════
+destino	SIMILAR_TO	fato	0.90
+destino	SIMILAR_TO	cammino	0.80
+destino	SIMILAR_TO	traiettoria	0.75
+inevitabile	IS_A	destino	0.88
+chiamata	IS_A	destino	0.75
+direzione	IS_A	destino	0.75
+percorso	IS_A	destino	0.80
+senso	IS_A	destino	0.75
+futuro	IS_A	destino	0.80
+vocazione	IS_A	destino	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☵/☷  MEMORIA — "Il passato si cristallizza, rimane presente?"
+# ═══════════════════════════════════════════════════════════════
+memoria	SIMILAR_TO	ricordo	0.92
+memoria	SIMILAR_TO	passato	0.85
+ricordare	IS_A	memoria	0.95
+nostalgia	IS_A	memoria	0.88
+storia	IS_A	memoria	0.80
+traccia	IS_A	memoria	0.85
+conservare	IS_A	memoria	0.80
+rivivere	IS_A	memoria	0.85
+dimenticare	OPPOSITE_OF	memoria	0.90
+ieri	IS_A	memoria	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☵/☳  CRISI — "Il processo diventa urgente, esplosivo?"
+# ═══════════════════════════════════════════════════════════════
+crisi	SIMILAR_TO	pericolo	0.85
+crisi	SIMILAR_TO	emergenza	0.88
+crisi	SIMILAR_TO	rottura	0.80
+paura	IS_A	crisi	0.90
+urgenza	IS_A	crisi	0.88
+pericolo	IS_A	crisi	0.85
+collasso	IS_A	crisi	0.90
+limite	IS_A	crisi	0.75
+rottura	IS_A	crisi	0.85
+disperazione	IS_A	crisi	0.80
+crisi	OPPOSITE_OF	stabilità	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☵/☵  DIVENIRE — "Questo è puro cambiamento, processo?"
+# ═══════════════════════════════════════════════════════════════
+divenire	SIMILAR_TO	fluire	0.90
+divenire	SIMILAR_TO	processo	0.90
+diventare	IS_A	divenire	0.92
+trasformarsi	IS_A	divenire	0.90
+evolversi	IS_A	divenire	0.90
+scorrere	IS_A	divenire	0.90
+passare	IS_A	divenire	0.90
+mutare	IS_A	divenire	0.90
+fluire	IS_A	divenire	0.90
+movimento	IS_A	divenire	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☵/☶  DURATA — "Il processo si delimita, trova forma nel tempo?"
+# ═══════════════════════════════════════════════════════════════
+durata	SIMILAR_TO	permanenza	0.85
+durata	SIMILAR_TO	persistenza	0.88
+durare	IS_A	durata	0.95
+resistere	IS_A	durata	0.80
+persistere	IS_A	durata	0.88
+continuare	IS_A	durata	0.85
+restare	IS_A	durata	0.80
+lungo	IS_A	durata	0.75
+eterno	IS_A	durata	0.80
+tempo	IS_A	durata	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☵/☴  STORIA — "Il tempo intreccia eventi in una rete?"
+# ═══════════════════════════════════════════════════════════════
+storia	SIMILAR_TO	narrazione	0.85
+storia	SIMILAR_TO	racconto	0.80
+narrazione	IS_A	storia	0.90
+evento	IS_A	storia	0.85
+accadere	IS_A	storia	0.85
+cronaca	IS_A	storia	0.85
+passato	IS_A	storia	0.85
+tradizione	IS_A	storia	0.80
+sequenza	IS_A	storia	0.80
+origine	IS_A	storia	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☵/☲  COMPRENSIONE — "Il processo porta chiarezza?"
+# ═══════════════════════════════════════════════════════════════
+comprensione	SIMILAR_TO	capire	0.90
+comprensione	SIMILAR_TO	intuizione	0.80
+capire	IS_A	comprensione	0.95
+comprendere	IS_A	comprensione	0.95
+intuire	IS_A	comprensione	0.85
+riconoscere	IS_A	comprensione	0.85
+cogliere	IS_A	comprensione	0.85
+chiarire	IS_A	comprensione	0.80
+senso	IS_A	comprensione	0.80
+luce	IS_A	comprensione	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☵/☱  ESPERIENZA — "Il vissuto si carica di valore?"
+# ═══════════════════════════════════════════════════════════════
+esperienza	SIMILAR_TO	vissuto	0.92
+esperienza	SIMILAR_TO	pratica	0.80
+vivere	IS_A	esperienza	0.88
+provare	IS_A	esperienza	0.90
+attraversare	IS_A	esperienza	0.85
+imparare	IS_A	esperienza	0.85
+maturare	IS_A	esperienza	0.88
+testimoniare	IS_A	esperienza	0.80
+sentire	IS_A	esperienza	0.90
+passare	IS_A	esperienza	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☶/☰  IDENTITÀ — "Il confine si afferma, agisce?"
+# ═══════════════════════════════════════════════════════════════
+identità	SIMILAR_TO	sé	0.90
+identità	SIMILAR_TO	essere	0.85
+identità	SIMILAR_TO	carattere	0.85
+io	IS_A	identità	0.95
+sé	IS_A	identità	0.95
+persona	IS_A	identità	0.88
+individuo	IS_A	identità	0.88
+nome	IS_A	identità	0.75
+chi	IS_A	identità	0.80
+unicità	IS_A	identità	0.85
+identità	OPPOSITE_OF	anonimato	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☶/☷  CORPO — "Il limite è fisico, materiale?"
+# ═══════════════════════════════════════════════════════════════
+corpo	SIMILAR_TO	fisico	0.88
+corpo	SIMILAR_TO	carne	0.85
+mano	IS_A	corpo	0.90
+occhio	IS_A	corpo	0.90
+pelle	IS_A	corpo	0.90
+sangue	IS_A	corpo	0.88
+cuore	IS_A	corpo	0.85
+voce	IS_A	corpo	0.80
+gesto	IS_A	corpo	0.80
+respiro	IS_A	corpo	0.85
+movimento	IS_A	corpo	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☶/☳  RESISTENZA — "Il confine si irrigidisce contro qualcosa?"
+# ═══════════════════════════════════════════════════════════════
+resistenza	SIMILAR_TO	opposizione	0.85
+resistenza	SIMILAR_TO	tenuta	0.80
+resistere	IS_A	resistenza	0.95
+opporsi	IS_A	resistenza	0.90
+rifiutare	IS_A	resistenza	0.85
+difendere	IS_A	resistenza	0.85
+tenere	IS_A	resistenza	0.80
+barriera	IS_A	resistenza	0.85
+muro	IS_A	resistenza	0.80
+ostacolo	IS_A	resistenza	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☶/☵  EVOLUZIONE — "Il limite si trasforma nel tempo?"
+# ═══════════════════════════════════════════════════════════════
+evoluzione	SIMILAR_TO	sviluppo	0.88
+evoluzione	SIMILAR_TO	crescita	0.85
+evolvere	IS_A	evoluzione	0.95
+crescere	IS_A	evoluzione	0.88
+svilupparsi	IS_A	evoluzione	0.90
+adattarsi	IS_A	evoluzione	0.88
+progredire	IS_A	evoluzione	0.85
+migliorare	IS_A	evoluzione	0.80
+trasformarsi	IS_A	evoluzione	0.85
+maturare	IS_A	evoluzione	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☶/☶  SPAZIO — "È pura forma, puro luogo?"
+# ═══════════════════════════════════════════════════════════════
+spazio	SIMILAR_TO	luogo	0.90
+spazio	SIMILAR_TO	posto	0.90
+dove	IS_A	spazio	0.90
+luogo	IS_A	spazio	0.90
+posto	IS_A	spazio	0.90
+distanza	IS_A	spazio	0.90
+dentro	IS_A	spazio	0.90
+fuori	IS_A	spazio	0.90
+vicino	IS_A	spazio	0.90
+lontano	IS_A	spazio	0.90
+confine	IS_A	spazio	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☶/☴  ECOSISTEMA — "I confini si intrecciano in relazioni?"
+# ═══════════════════════════════════════════════════════════════
+ecosistema	SIMILAR_TO	ambiente	0.88
+ecosistema	SIMILAR_TO	equilibrio	0.80
+ambiente	IS_A	ecosistema	0.90
+naturale	IS_A	ecosistema	0.80
+interdipendenza	IS_A	ecosistema	0.90
+rete	IS_A	ecosistema	0.80
+bioma	IS_A	ecosistema	0.88
+habitat	IS_A	ecosistema	0.85
+comunità	IS_A	ecosistema	0.80
+equilibrio	IS_A	ecosistema	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☶/☲  SIMBOLO — "Il confine porta significato?"
+# ═══════════════════════════════════════════════════════════════
+simbolo	SIMILAR_TO	segno	0.88
+simbolo	SIMILAR_TO	metafora	0.80
+rappresentare	IS_A	simbolo	0.90
+significare	IS_A	simbolo	0.88
+segno	IS_A	simbolo	0.88
+immagine	IS_A	simbolo	0.80
+icona	IS_A	simbolo	0.85
+allegoria	IS_A	simbolo	0.85
+gesto	IS_A	simbolo	0.75
+rituale	IS_A	simbolo	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☶/☱  SOGLIA — "Il confine attrae, invita al passaggio?"
+# ═══════════════════════════════════════════════════════════════
+soglia	SIMILAR_TO	passaggio	0.88
+soglia	SIMILAR_TO	porta	0.80
+attraversare	IS_A	soglia	0.88
+transizione	IS_A	soglia	0.90
+confine	IS_A	soglia	0.80
+momento	IS_A	soglia	0.75
+inizio	IS_A	soglia	0.80
+fine	IS_A	soglia	0.80
+tra	IS_A	soglia	0.75
+varco	IS_A	soglia	0.88
+
+# ═══════════════════════════════════════════════════════════════
+# ☴/☰  STRATEGIA — "La complessità si organizza verso uno scopo?"
+# ═══════════════════════════════════════════════════════════════
+strategia	SIMILAR_TO	piano	0.85
+strategia	SIMILAR_TO	metodo	0.80
+pianificare	IS_A	strategia	0.90
+organizzare	IS_A	strategia	0.85
+approccio	IS_A	strategia	0.80
+tattica	IS_A	strategia	0.88
+progettare	IS_A	strategia	0.85
+coordinare	IS_A	strategia	0.80
+ottimizzare	IS_A	strategia	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☴/☷  CULTURA — "La complessità si sedimenta, diventa permanente?"
+# ═══════════════════════════════════════════════════════════════
+cultura	SIMILAR_TO	tradizione	0.85
+cultura	SIMILAR_TO	civiltà	0.80
+tradizione	IS_A	cultura	0.90
+valore	IS_A	cultura	0.85
+arte	IS_A	cultura	0.85
+lingua	IS_A	cultura	0.85
+eredità	IS_A	cultura	0.88
+costume	IS_A	cultura	0.80
+storia	IS_A	cultura	0.80
+sapere	IS_A	cultura	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☴/☳  CAOS — "La complessità esplode, perde forma?"
+# ═══════════════════════════════════════════════════════════════
+caos	SIMILAR_TO	disordine	0.92
+caos	SIMILAR_TO	confusione	0.88
+caos	OPPOSITE_OF	ordine	0.92
+disordine	IS_A	caos	0.92
+confusione	IS_A	caos	0.90
+frantumazione	IS_A	caos	0.85
+dispersione	IS_A	caos	0.85
+perdere	IS_A	caos	0.75
+rompere	IS_A	caos	0.80
+entropia	IS_A	caos	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☴/☵  PROCESSO — "La complessità scorre, si svolge?"
+# ═══════════════════════════════════════════════════════════════
+processo	SIMILAR_TO	percorso	0.85
+processo	SIMILAR_TO	sviluppo	0.80
+procedere	IS_A	processo	0.90
+svolgere	IS_A	processo	0.88
+avanzare	IS_A	processo	0.85
+passo	IS_A	processo	0.85
+fase	IS_A	processo	0.85
+sequenza	IS_A	processo	0.80
+procedura	IS_A	processo	0.85
+metodo	IS_A	processo	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☴/☶  SISTEMA — "La complessità si delimita, si organizza?"
+# ═══════════════════════════════════════════════════════════════
+sistema	SIMILAR_TO	rete	0.85
+sistema	SIMILAR_TO	struttura	0.80
+rete	IS_A	sistema	0.88
+insieme	IS_A	sistema	0.85
+connettere	IS_A	sistema	0.85
+coordinare	IS_A	sistema	0.80
+organismo	IS_A	sistema	0.85
+meccanismo	IS_A	sistema	0.85
+apparato	IS_A	sistema	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☴/☴  INTRECCIO — "È pura relazione, pura molteplicità?"
+# ═══════════════════════════════════════════════════════════════
+intreccio	SIMILAR_TO	relazione	0.88
+intreccio	SIMILAR_TO	connessione	0.90
+relazione	IS_A	intreccio	0.90
+connessione	IS_A	intreccio	0.90
+legame	IS_A	intreccio	0.88
+tessuto	IS_A	intreccio	0.85
+rete	IS_A	intreccio	0.85
+dipendenza	IS_A	intreccio	0.80
+scambio	IS_A	intreccio	0.80
+interazione	IS_A	intreccio	0.88
+
+# ═══════════════════════════════════════════════════════════════
+# ☴/☲  LINGUAGGIO — "La complessità si fa segno, definizione?"
+# ═══════════════════════════════════════════════════════════════
+linguaggio	SIMILAR_TO	lingua	0.88
+linguaggio	SIMILAR_TO	parola	0.85
+parola	IS_A	linguaggio	0.92
+lingua	IS_A	linguaggio	0.90
+parlare	IS_A	linguaggio	0.88
+dire	IS_A	linguaggio	0.88
+scrivere	IS_A	linguaggio	0.85
+significato	IS_A	linguaggio	0.85
+esprimere	IS_A	linguaggio	0.85
+comunicare	IS_A	linguaggio	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☴/☱  COMUNICAZIONE — "La complessità risuona tra più entità?"
+# ═══════════════════════════════════════════════════════════════
+comunicazione	SIMILAR_TO	dialogo	0.90
+comunicazione	SIMILAR_TO	scambio	0.85
+comunicare	IS_A	comunicazione	0.95
+trasmettere	IS_A	comunicazione	0.88
+condividere	IS_A	comunicazione	0.85
+messaggio	IS_A	comunicazione	0.90
+ascolto	IS_A	comunicazione	0.88
+risposta	IS_A	comunicazione	0.85
+dialogo	IS_A	comunicazione	0.92
+incontro	IS_A	comunicazione	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☲/☰  COSCIENZA — "La chiarezza si fa forza, si afferma?"
+# ═══════════════════════════════════════════════════════════════
+coscienza	SIMILAR_TO	consapevolezza	0.92
+coscienza	SIMILAR_TO	presenza	0.90
+consapevolezza	IS_A	coscienza	0.92
+sapere	IS_A	coscienza	0.90
+essere_presenti	IS_A	coscienza	0.90
+lucidità	IS_A	coscienza	0.90
+vigilanza	IS_A	coscienza	0.90
+attenzione	IS_A	coscienza	0.90
+risveglio	IS_A	coscienza	0.90
+chiarezza	IS_A	coscienza	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☲/☷  CONOSCENZA — "La chiarezza si cristallizza, diventa permanente?"
+# ═══════════════════════════════════════════════════════════════
+conoscenza	SIMILAR_TO	sapere	0.92
+conoscenza	SIMILAR_TO	sapienza	0.85
+sapere	IS_A	conoscenza	0.92
+imparare	IS_A	conoscenza	0.88
+studio	IS_A	conoscenza	0.85
+informazione	IS_A	conoscenza	0.80
+cultura	IS_A	conoscenza	0.80
+esperienza	IS_A	conoscenza	0.80
+verità	IS_A	conoscenza	0.90
+capire	IS_A	conoscenza	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☲/☳  PERCEZIONE — "La chiarezza è immediata, sensoriale?"
+# ═══════════════════════════════════════════════════════════════
+percezione	SIMILAR_TO	sensazione	0.90
+percezione	SIMILAR_TO	senso	0.90
+percepire	IS_A	percezione	0.95
+sentire	IS_A	percezione	0.90
+vedere	IS_A	percezione	0.90
+notare	IS_A	percezione	0.90
+osservare	IS_A	percezione	0.90
+accorgersi	IS_A	percezione	0.90
+toccare	IS_A	percezione	0.90
+ascoltare	IS_A	percezione	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☲/☵  INTUIZIONE — "La chiarezza emerge improvvisa dal flusso?"
+# ═══════════════════════════════════════════════════════════════
+intuizione	SIMILAR_TO	insight	0.88
+intuizione	SIMILAR_TO	presentimento	0.80
+intuire	IS_A	intuizione	0.95
+presentire	IS_A	intuizione	0.88
+improvviso	IS_A	intuizione	0.80
+flash	IS_A	intuizione	0.85
+istinto	IS_A	intuizione	0.80
+rivelazione	IS_A	intuizione	0.85
+lampo	IS_A	intuizione	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☲/☶  IDEA — "La chiarezza si delimita in una forma?"
+# ═══════════════════════════════════════════════════════════════
+idea	SIMILAR_TO	concetto	0.88
+idea	SIMILAR_TO	pensiero	0.90
+concetto	IS_A	idea	0.90
+proposta	IS_A	idea	0.85
+soluzione	IS_A	idea	0.80
+teoria	IS_A	idea	0.85
+ipotesi	IS_A	idea	0.85
+invenzione	IS_A	idea	0.85
+scoperta	IS_A	idea	0.80
+intuire	IS_A	idea	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☲/☴  PENSIERO — "La chiarezza si intreccia in rete?"
+# ═══════════════════════════════════════════════════════════════
+pensiero	SIMILAR_TO	ragionamento	0.90
+pensiero	SIMILAR_TO	riflessione	0.90
+pensare	IS_A	pensiero	0.95
+ragionare	IS_A	pensiero	0.90
+riflettere	IS_A	pensiero	0.90
+analizzare	IS_A	pensiero	0.90
+considerare	IS_A	pensiero	0.90
+valutare	IS_A	pensiero	0.90
+mente	IS_A	pensiero	0.90
+logica	IS_A	pensiero	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☲/☲  VERITÀ — "È pura chiarezza, distinzione netta?"
+# ═══════════════════════════════════════════════════════════════
+verità	SIMILAR_TO	autenticità	0.90
+verità	SIMILAR_TO	onestà	0.90
+verità	OPPOSITE_OF	menzogna	0.95
+vero	IS_A	verità	0.95
+autentico	IS_A	verità	0.90
+certo	IS_A	verità	0.90
+reale	IS_A	verità	0.90
+onesto	IS_A	verità	0.90
+genuino	IS_A	verità	0.90
+trasparente	IS_A	verità	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☲/☱  ESPRESSIONE — "La chiarezza risuona, si condivide?"
+# ═══════════════════════════════════════════════════════════════
+espressione	SIMILAR_TO	manifestazione	0.85
+espressione	SIMILAR_TO	voce	0.80
+esprimere	IS_A	espressione	0.95
+dire	IS_A	espressione	0.88
+mostrare	IS_A	espressione	0.85
+manifestare	IS_A	espressione	0.88
+articolare	IS_A	espressione	0.85
+comunicare	IS_A	espressione	0.80
+rivelare	IS_A	espressione	0.80
+creare	IS_A	espressione	0.75
+
+# ═══════════════════════════════════════════════════════════════
+# ☱/☰  DESIDERIO — "L'attrazione vuole, agisce?"
+# ═══════════════════════════════════════════════════════════════
+desiderio	SIMILAR_TO	voglia	0.90
+desiderio	SIMILAR_TO	brama	0.85
+desiderio	SIMILAR_TO	aspirazione	0.80
+volere	IS_A	desiderio	0.88
+desiderare	IS_A	desiderio	0.95
+bramare	IS_A	desiderio	0.88
+sperare	IS_A	desiderio	0.80
+aspirare	IS_A	desiderio	0.85
+cercare	IS_A	desiderio	0.80
+mancanza	IS_A	desiderio	0.80
+desiderio	OPPOSITE_OF	sazietà	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☱/☷  AMORE — "L'attrazione è stabile, duratura?"
+# ═══════════════════════════════════════════════════════════════
+amore	SIMILAR_TO	affetto	0.88
+amore	SIMILAR_TO	cura	0.85
+amare	IS_A	amore	0.98
+affetto	IS_A	amore	0.90
+tenerezza	IS_A	amore	0.88
+legame	IS_A	amore	0.85
+cura	IS_A	amore	0.85
+fedeltà	IS_A	amore	0.85
+dedizione	IS_A	amore	0.80
+amore	OPPOSITE_OF	odio	0.95
+
+# ═══════════════════════════════════════════════════════════════
+# ☱/☳  EMOZIONE — "L'attrazione è intensa, travolgente?"
+# ═══════════════════════════════════════════════════════════════
+emozione	SIMILAR_TO	sentimento	0.88
+emozione	SIMILAR_TO	stato_emotivo	0.85
+sentire	IS_A	emozione	0.90
+provare	IS_A	emozione	0.90
+triste	IS_A	emozione	0.88
+felice	IS_A	emozione	0.88
+paura	IS_A	emozione	0.90
+gioia	IS_A	emozione	0.90
+rabbia	IS_A	emozione	0.88
+piangere	IS_A	emozione	0.85
+ridere	IS_A	emozione	0.85
+tremare	IS_A	emozione	0.80
+# Connettori specifici per differenziazione sub-emozionale
+timore	IS_A	paura	0.90
+timore	CAUSES	tremore	0.85
+timore	CAUSES	agitazione	0.80
+paura	CAUSES	timore	0.90
+paura	SIMILAR_TO	timore	0.90
+ansia	IS_A	paura	0.90
+ansia	CAUSES	tensione	0.90
+paura	CAUSES	ansia	0.90
+rabbia	CAUSES	conflitto	0.85
+rabbia	CAUSES	urlo	0.80
+gioia	CAUSES	sorriso	0.90
+gioia	CAUSES	riso	0.85
+malinconia	IS_A	tristezza	0.88
+malinconia	CAUSES	silenzio	0.90
+pianto	IS_A	tristezza	0.85
+
+# ═══════════════════════════════════════════════════════════════
+# ☱/☵  EMPATIA — "L'attrazione fluisce tra esseri?"
+# ═══════════════════════════════════════════════════════════════
+empatia	SIMILAR_TO	compassione	0.88
+empatia	SIMILAR_TO	comprensione	0.80
+sentire_con	IS_A	empatia	0.92
+capire_l_altro	IS_A	empatia	0.90
+compassione	IS_A	empatia	0.88
+rispecchiare	IS_A	empatia	0.85
+sintonizzarsi	IS_A	empatia	0.85
+condividere	IS_A	empatia	0.80
+ascolto	IS_A	empatia	0.85
+presenza	IS_A	empatia	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☱/☶  ACCORDO — "L'attrazione trova una forma condivisa?"
+# ═══════════════════════════════════════════════════════════════
+accordo	SIMILAR_TO	consenso	0.88
+accordo	SIMILAR_TO	intesa	0.90
+trovare	IS_A	accordo	0.75
+concordare	IS_A	accordo	0.92
+intendersi	IS_A	accordo	0.90
+pace	IS_A	accordo	0.85
+armonia	IS_A	accordo	0.85
+patto	IS_A	accordo	0.88
+equilibrio	IS_A	accordo	0.80
+accordo	OPPOSITE_OF	conflitto	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☱/☴  SOCIETÀ — "L'attrazione si intreccia tra molti?"
+# ═══════════════════════════════════════════════════════════════
+società	SIMILAR_TO	comunità	0.90
+società	SIMILAR_TO	collettivo	0.85
+insieme	IS_A	società	0.85
+comunità	IS_A	società	0.92
+gruppo	IS_A	società	0.85
+noi	IS_A	società	0.90
+sociale	IS_A	società	0.90
+collettivo	IS_A	società	0.88
+popolo	IS_A	società	0.85
+relazione	IS_A	società	0.80
+
+# ═══════════════════════════════════════════════════════════════
+# ☱/☲  ETICA — "L'attrazione si fa principio?"
+# ═══════════════════════════════════════════════════════════════
+etica	SIMILAR_TO	morale	0.90
+etica	SIMILAR_TO	valore	0.85
+giusto	IS_A	etica	0.90
+sbagliato	IS_A	etica	0.90
+valore	IS_A	etica	0.88
+principio	IS_A	etica	0.90
+responsabilità	IS_A	etica	0.88
+rispetto	IS_A	etica	0.85
+onestà	IS_A	etica	0.88
+coscienza	IS_A	etica	0.90
+
+# ═══════════════════════════════════════════════════════════════
+# ☱/☱  ARMONIA — "È pura risonanza, puro accordo?"
+# ═══════════════════════════════════════════════════════════════
+armonia	SIMILAR_TO	pace	0.88
+armonia	SIMILAR_TO	equilibrio	0.88
+armonia	SIMILAR_TO	bellezza	0.80
+pace	IS_A	armonia	0.90
+equilibrio	IS_A	armonia	0.90
+bellezza	IS_A	armonia	0.85
+grazia	IS_A	armonia	0.85
+accordo	IS_A	armonia	0.88
+benessere	IS_A	armonia	0.85
+armonia	OPPOSITE_OF	conflitto	0.90
+armonia	OPPOSITE_OF	dissonanza	0.90

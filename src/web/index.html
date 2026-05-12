@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PROMETEO</title>
+<script src="/campovasto/vendor/vis-network.min.js"></script>
 <style>
 :root {
   --bg:     #09091a;
@@ -63,31 +64,30 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 /* ── LAYOUT ── */
 .shell{display:flex;flex-direction:column;height:100vh;}
 
-/* header */
+/* header unificato: logo + tabs + stats su una sola riga */
 .hdr{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:0 18px;height:46px;flex-shrink:0;
+  display:flex;align-items:center;
+  padding:0 14px;height:48px;flex-shrink:0;gap:14px;
   background:var(--hdr-bg);border-bottom:1px solid var(--border);
 }
-.logo{font-size:17px;font-weight:700;letter-spacing:3px;
+.logo{font-size:16px;font-weight:700;letter-spacing:2.4px;flex-shrink:0;
   background:linear-gradient(120deg,var(--blue),var(--purple));
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.hdr-stats{display:flex;gap:20px;align-items:center;}
+.hdr-tabs{display:flex;flex:1;min-width:0;gap:1px;align-items:center;
+  overflow-x:auto;scrollbar-width:none;height:100%;}
+.hdr-tabs::-webkit-scrollbar{display:none;}
+.tab{padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;letter-spacing:0.8px;
+  color:var(--t2);border:1px solid transparent;background:none;transition:all 0.15s;white-space:nowrap;
+  font-family:inherit;}
+.tab:hover{color:var(--t1);background:rgba(255,255,255,0.04);}
+.tab.active{color:var(--t1);background:var(--bg3);border-color:var(--border);}
+.hdr-stats{display:flex;gap:14px;align-items:center;flex-shrink:0;}
 .hstat{display:flex;flex-direction:column;align-items:flex-end;gap:0px;}
-.hstat-lbl{font-size:13px;color:var(--t3);letter-spacing:1px;text-transform:uppercase;}
-.hstat-val{font-size:14px;color:var(--t1);}
+.hstat-lbl{font-size:10px;color:var(--t3);letter-spacing:0.8px;text-transform:uppercase;}
+.hstat-val{font-size:13px;color:var(--t1);font-family:'JetBrains Mono',monospace;}
 .hstat-val.hi{color:var(--green);}
 .ws-dot{width:7px;height:7px;border-radius:50%;background:var(--t3);}
 .ws-dot.ok{background:var(--green);box-shadow:0 0 5px var(--green);}
-
-/* tabs */
-.tabs{display:flex;gap:1px;padding:7px 18px 0;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
-.tabs::-webkit-scrollbar{display:none;}
-.tab{padding:8px 16px;border-radius:7px 7px 0 0;cursor:pointer;font-size:13px;letter-spacing:1px;
-  color:var(--t2);border:1px solid transparent;border-bottom:none;background:none;transition:all 0.15s;white-space:nowrap;}
-.tab:hover{color:var(--t1);}
-.tab.active{color:var(--t1);background:var(--bg3);border-color:var(--border);position:relative;}
-.tab.active::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:var(--bg3);}
 
 /* panels */
 .panels{flex:1;overflow:hidden;background:var(--bg3);}
@@ -164,6 +164,80 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
   padding:3px 9px;border-radius:10px;font-size:12px;font-weight:600;
   background:rgba(74,255,176,0.12);border:1px solid rgba(74,255,176,0.30);color:var(--green);
 }
+
+/* Pannello comprensione — in cima al tab Chat. Ospita il grafo animato
+   ripercorribile per step. La logica è quella di campovasto (vis-network),
+   ma con reveal progressivo: root → depth-1 → depth-2 → depth-3 →
+   convergenze → sillogismi → scelta dell'atto reciproco. */
+.comp-panel{
+  display:flex;flex-direction:column;
+  background:var(--card-bg);border:1px solid var(--border);border-radius:8px;
+  margin-bottom:8px;overflow:hidden;
+  flex:2 1 0;min-height:340px;
+}
+.comp-panel-head{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:7px 13px;border-bottom:1px solid var(--border);
+  flex-shrink:0;background:rgba(0,0,0,0.10);
+}
+.comp-panel-title{display:flex;align-items:center;gap:8px;font-size:12px;}
+.comp-panel-title .cp-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--blue);
+  box-shadow:0 0 6px rgba(74,138,255,0.6);
+}
+.comp-panel-title .cp-label{
+  color:var(--t3);text-transform:uppercase;letter-spacing:1.2px;font-size:10.5px;
+}
+.comp-panel-title .cp-input{
+  font-family:'JetBrains Mono',monospace;color:var(--t1);
+  padding:1px 8px;border-radius:4px;background:rgba(255,255,255,0.04);
+  font-size:11.5px;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.comp-panel-stats{font-size:10.5px;color:var(--t3);font-family:'JetBrains Mono',monospace;}
+.comp-panel-body{flex:1;min-height:0;position:relative;}
+.cp-empty{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--t3);font-size:12.5px;font-style:italic;
+}
+#cp-graph{position:absolute;inset:0;}
+.cp-narration{
+  position:absolute;left:9px;bottom:9px;right:9px;
+  background:rgba(0,0,0,0.55);border:1px solid rgba(74,138,255,0.30);
+  border-radius:6px;padding:7px 11px;
+  color:var(--t1);font-size:12px;line-height:1.5;
+  pointer-events:none;backdrop-filter:blur(3px);
+}
+.cp-narration .cn-step{color:var(--blue);font-weight:600;font-size:11px;letter-spacing:0.8px;
+  text-transform:uppercase;margin-right:6px;}
+.cp-narration .cn-action{color:var(--green);font-weight:600;}
+.comp-panel-controls{
+  display:flex;align-items:center;gap:7px;
+  padding:7px 12px;border-top:1px solid var(--border);
+  flex-shrink:0;background:rgba(0,0,0,0.06);
+}
+.cp-btn{
+  background:var(--input-bg);border:1px solid var(--border);
+  color:var(--t2);min-width:28px;height:24px;padding:0 6px;border-radius:5px;
+  font-size:11px;cursor:pointer;font-family:inherit;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:all 0.15s;
+}
+.cp-btn:hover{background:rgba(255,255,255,0.06);color:var(--t1);}
+.cp-btn-primary{
+  background:linear-gradient(135deg,var(--blue),rgba(74,138,255,0.5));
+  border-color:rgba(74,138,255,0.5);color:#fff;
+}
+.cp-btn-primary:hover{opacity:0.85;}
+.cp-step-bar{
+  flex:1;height:3px;background:var(--bar-bg);border-radius:2px;overflow:hidden;
+  margin:0 6px;
+}
+.cp-step-fill{
+  height:100%;background:linear-gradient(90deg,var(--blue),#bc8cff);
+  border-radius:2px;transition:width 0.3s;width:0%;
+}
+.cp-step-text{font-size:11px;color:var(--t3);font-family:'JetBrains Mono',monospace;
+  min-width:74px;text-align:right;}
 .chat-input-row{
   display:flex;gap:7px;padding-top:9px;
   border-top:1px solid var(--border);margin-top:6px;
@@ -395,91 +469,63 @@ body{font-family:'JetBrains Mono','Fira Code',monospace;background:var(--bg);col
 </style>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
 <div class="shell">
 
-<!-- ═══ HEADER ═══ -->
+<!-- ═══ HEADER UNIFICATO: logo + tabs + stats in un'unica fascia ═══ -->
 <div class="hdr">
-  <span class="logo">PROMETEO</span>
+  <span class="logo">UI-R1</span>
+  <div class="hdr-tabs">
+    <button class="tab active" onclick="showTab('chat')">💬 CHAT</button>
+    <button class="tab" onclick="showTab('campo')">🌌 CAMPO</button>
+    <button class="tab" onclick="showTab('frattali')">⚡ FRATTALI</button>
+    <button class="tab" onclick="showTab('volonta')">💫 VOLONTÀ</button>
+    <button class="tab" onclick="showTab('sogno')">🌙 SOGNO</button>
+    <button class="tab" onclick="showTab('pensieri')">🧭 NARRATIVA</button>
+    <button class="tab" onclick="showTab('identita')">🪪 IDENTITÀ</button>
+    <button class="tab" onclick="showTab('episodi')">📖 EPISODI</button>
+    <button class="tab" onclick="showTab('dialogo')">💬 DIALOGO</button>
+  </div>
   <div class="hdr-stats">
-    <div class="hstat" title="Numero di parole nel lessico di Prometeo"><span class="hstat-lbl">parole</span><span class="hstat-val hi" id="h-vocab">—</span></div>
+    <div class="hstat" title="Numero di parole nel lessico di UI-R1"><span class="hstat-lbl">parole</span><span class="hstat-val hi" id="h-vocab">—</span></div>
     <div class="hstat" title="Pattern semantici cristallizzati in memoria"><span class="hstat-lbl">simplessi</span><span class="hstat-val" id="h-simplex">—</span></div>
-    <div class="hstat" title="Numero di stimoli ricevuti dall'avvio"><span class="hstat-lbl">perturbazioni</span><span class="hstat-val" id="h-perturb">—</span></div>
+    <div class="hstat" title="Numero di stimoli ricevuti dall'avvio"><span class="hstat-lbl">perturb.</span><span class="hstat-val" id="h-perturb">—</span></div>
     <div class="hstat" title="Livello di attivazione del campo semantico corrente"><span class="hstat-lbl">energia</span><span class="hstat-val" id="h-energy">—</span></div>
     <div class="ws-dot" id="ws-dot" title="Connessione live al campo — verde: attivo, rosso: disconnesso"></div>
     <button class="btn-sm theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Cambia tema chiaro/scuro">&#9788;</button>
   </div>
 </div>
 
-<!-- ═══ TABS ═══ -->
-<div class="tabs">
-  <button class="tab active" onclick="showTab('mente')">🧠 MENTE</button>
-  <button class="tab" onclick="showTab('campo')">🌌 CAMPO</button>
-  <button class="tab" onclick="showTab('frattali')">⚡ FRATTALI</button>
-  <button class="tab" onclick="showTab('volonta')">💫 VOLONTÀ</button>
-  <button class="tab" onclick="showTab('sogno')">🌙 SOGNO</button>
-  <button class="tab" onclick="showTab('pensieri')">🧭 NARRATIVA</button>
-  <button class="tab" onclick="showTab('identita')">🪪 IDENTITÀ</button>
-  <button class="tab" onclick="showTab('episodi')">📖 EPISODI</button>
-  <button class="tab" onclick="showTab('dialogo')">💬 DIALOGO</button>
-</div>
-
 <!-- ═══ PANELS ═══ -->
 <div class="panels">
 
-<!-- ──────────── TAB 1 — MENTE ──────────── -->
-<div class="panel active" id="panel-mente">
+<!-- ──────────── TAB 1 — CHAT ──────────── -->
+<div class="panel active" id="panel-chat">
 
-  <!-- vitals strip -->
-  <div class="vitals-strip">
-    <div class="vcard">
-      <div class="vcard-lbl">Attivazione</div>
-      <div class="vcard-val" id="v-act" style="color:var(--green)">0.00</div>
-      <div class="vcard-bar"><div class="vcard-bar-fill" id="vb-act" style="width:0%;background:var(--green)"></div></div>
+  <!-- Pannello comprensione: animazione step-by-step del grafo che UI-r1
+       sta esplorando per capire l'input. Logica come campovasto, ma
+       ripercorribile per step (prev/play/next/restart). Niente header:
+       il grafo prende tutto lo spazio, l'input corrente è dentro la
+       narrazione overlay. -->
+  <div class="comp-panel" id="comp-panel">
+    <div class="comp-panel-body" id="cp-body">
+      <div class="cp-empty">scrivi qualcosa per vedere come UI-r1 esplora le relazioni</div>
     </div>
-    <div class="vcard">
-      <div class="vcard-lbl">Curiosità</div>
-      <div class="vcard-val" id="v-cur" style="color:var(--blue)">0.00</div>
-      <div class="vcard-bar"><div class="vcard-bar-fill" id="vb-cur" style="width:0%;background:var(--blue)"></div></div>
-    </div>
-    <div class="vcard">
-      <div class="vcard-lbl">Fatica</div>
-      <div class="vcard-val" id="v-fat" style="color:var(--orange)">0.00</div>
-      <div class="vcard-bar"><div class="vcard-bar-fill" id="vb-fat" style="width:0%;background:var(--orange)"></div></div>
-    </div>
-    <div class="vcard">
-      <div class="vcard-lbl">Tensione</div>
-      <div class="vcard-val" id="v-tension" style="color:var(--yellow)">Calm</div>
-      <div class="vcard-bar"><div class="vcard-bar-fill" id="vb-sat" style="width:0%;background:var(--yellow)"></div></div>
-    </div>
-  </div>
-
-  <!-- status bar: fase + intenzione + locus -->
-  <div class="status-bar">
-    <div class="sbar-item" title="Ciclo del sogno: Vigile → Veglia Onirica → Sonno Profondo → REM">
-      <div class="dream-dot WakefulDream" id="dream-dot"></div>
-      <span class="sbar-lbl">FASE</span>
-      <span class="sbar-val" id="dream-phase-txt">Veglia Onirica</span>
-    </div>
-    <div class="sbar-sep"></div>
-    <div class="sbar-item" title="Cosa vuole fare Prometeo in questo momento — il numero è l'intensità del drive (0–1)">
-      <span id="intention-icon" style="font-size:13px;">💭</span>
-      <span class="sbar-lbl">INTENZIONE</span>
-      <span class="sbar-val" style="color:var(--blue);" id="intention-txt">Sognare</span>
-      <span style="color:var(--t3);font-size:12px;margin-left:4px;" id="drive-txt">0.00</span>
-    </div>
-    <div class="sbar-sep"></div>
-    <div class="sbar-item" title="Il frattale più attivo nel campo — la regione semantica che orienta il pensiero corrente">
-      <span class="sbar-lbl">LOCUS</span>
-      <span class="sbar-val" style="color:var(--purple);" id="locus-txt">—</span>
+    <div class="comp-panel-controls" id="cp-controls" style="display:none">
+      <button class="cp-btn" id="cp-prev" title="Step precedente">◀</button>
+      <button class="cp-btn cp-btn-primary" id="cp-play" title="Riproduci">▶</button>
+      <button class="cp-btn" id="cp-next" title="Step successivo">▶|</button>
+      <button class="cp-btn" id="cp-restart" title="Ricomincia">↺</button>
+      <div class="cp-step-bar"><div class="cp-step-fill" id="cp-step-fill"></div></div>
+      <span class="cp-step-text" id="cp-step-text">—</span>
     </div>
   </div>
 
   <!-- chat — elemento dominante -->
   <div class="card chat-wrap" style="flex:1;min-height:0;">
     <div class="chat-msgs" id="chat-msgs">
-      <div class="msg system">Il campo è vivo prima che tu parli.</div>
     </div>
     <div class="chat-input-row">
       <input class="chat-input" id="chat-in" placeholder="scrivi qualcosa…" autocomplete="off" />
@@ -964,7 +1010,7 @@ const INTENTION_IT = {
 
 // ═══ TABS ═══
 function showTab(name) {
-  const names = ['mente','campo','frattali','volonta','sogno','pensieri','identita','episodi','dialogo'];
+  const names = ['chat','campo','frattali','volonta','sogno','pensieri','identita','episodi','dialogo'];
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-'+name));
   if (name === 'campo')    refreshWordField();
@@ -1014,15 +1060,20 @@ function updateFromSnapshot(s) {
   const tbar = document.getElementById('vb-sat');
   if(tbar){ const tpct = {Calm:10,Alert:40,Tense:70,Overloaded:100}[v.tension]||10; tbar.style.width=tpct+'%'; tbar.style.background=tcolor; }
 
-  // dream phase
+  // dream phase — gli elementi possono mancare nel tab Chat (rimossi dalla
+  // status bar). I `dcp-*` invece sono nel tab Sogno e sono sempre presenti.
   const PHASE_IT = {Awake:'Vigile', WakefulDream:'Veglia Onirica', LightSleep:'Sonno Leggero', DeepSleep:'Sonno Profondo', REM:'REM'};
   const phase = s.dream_phase;
   const dot = document.getElementById('dream-dot');
-  dot.className = 'dream-dot ' + phase;
+  if (dot) dot.className = 'dream-dot ' + phase;
   set('dream-phase-txt', PHASE_IT[phase] || phase);
   const phaseMap = {Awake:'wake',WakefulDream:'wdream',LightSleep:'wdream',DeepSleep:'deep',REM:'rem'};
-  ['wake','wdream','deep','rem'].forEach(p => document.getElementById('dcp-'+p).classList.remove('current'));
-  document.getElementById('dcp-'+(phaseMap[phase]||'wdream')).classList.add('current');
+  ['wake','wdream','deep','rem'].forEach(p => {
+    const el = document.getElementById('dcp-'+p);
+    if (el) el.classList.remove('current');
+  });
+  const cur = document.getElementById('dcp-'+(phaseMap[phase]||'wdream'));
+  if (cur) cur.classList.add('current');
 
   // locus
   if (s.locus) {
@@ -1066,6 +1117,7 @@ async function sendInput() {
     });
     const data = await r.json();
     updateFromSnapshot(data.state);
+    if (data.understanding) updateComprehensionPanel(text, data.understanding);
     appendEntityMsg(data.generated_text || '', data.keywords || []);
     // aggiorna header energia
     set('h-energy', (data.state?.vital?.activation||0).toFixed(3));
@@ -1087,25 +1139,453 @@ function appendMsg(type, text) {
   msgs.scrollTop = msgs.scrollHeight;
 }
 
-function appendEntityMsg(text, kws) {
+/* ═══════════════════════════════════════════════════════════════════════
+   COMPREHENSION ANIMATION — D3.js Force-Directed Graph
+   Left-to-Right Layout, Object Constancy, Curvilinear Edges & Motion Interpolation
+═══════════════════════════════════════════════════════════════════════ */
+
+const STEP_AUTOPLAY_MS = 1900;
+let compState = null;  // stato dell'animazione corrente
+
+function buildComprehensionSteps(u) {
+  const g = u.graph;
+  if (!g || !g.nodes || g.nodes.length === 0) return [];
+
+  const edgeIds = new Map();
+  g.edges.forEach((e, i) => edgeIds.set(e, 'e' + i));
+
+  const rootSet = new Set(g.roots);
+  const rootsLabel = '<strong>' + g.roots.join(', ') + '</strong>';
+  const steps = [];
+
+  // Step 0
+  steps.push({
+    label: 'cosa hai detto?',
+    narration: 'ricevo: ' + rootsLabel,
+    nodes: new Set(g.roots),
+    edges: new Set(),
+    highlight: null,
+  });
+
+  // Step 1
+  const isaEdges = g.edges.filter(e => e.depth === 0 && e.relation === 'IS_A');
+  if (isaEdges.length > 0) {
+    const ns = new Set(g.roots);
+    isaEdges.forEach(e => ns.add(e.to));
+    const targets = [...new Set(isaEdges.map(e => e.to))].slice(0, 6);
+    steps.push({
+      label: 'cosa è?',
+      narration: rootsLabel + ' è un\'istanza di: <strong>' + targets.join(', ') + '</strong>',
+      nodes: ns,
+      edges: new Set(isaEdges.map(e => edgeIds.get(e))),
+      highlight: 'isa',
+    });
+  }
+
+  // Step 2
+  const actEdges = g.edges.filter(e => e.depth === 0 &&
+    (e.relation === 'CAUSES' || e.relation === 'ENABLES' || e.relation === 'DOES'));
+  if (actEdges.length > 0) {
+    const ns = new Set(g.roots);
+    actEdges.forEach(e => ns.add(e.to));
+    const targets = [...new Set(actEdges.map(e => e.to))].slice(0, 6);
+    steps.push({
+      label: 'cosa produce?',
+      narration: rootsLabel + ' produce/fa: <strong>' + targets.join(', ') + '</strong>',
+      nodes: ns,
+      edges: new Set(actEdges.map(e => edgeIds.get(e))),
+      highlight: 'causes',
+    });
+  }
+
+  // Step 3
+  const reqEdges = g.edges.filter(e => e.depth === 0 &&
+    (e.relation === 'REQUIRES' || e.relation === 'USED_FOR'));
+  if (reqEdges.length > 0) {
+    const ns = new Set(g.roots);
+    reqEdges.forEach(e => ns.add(e.to));
+    const targets = [...new Set(reqEdges.map(e => e.to))].slice(0, 6);
+    steps.push({
+      label: 'cosa richiede?',
+      narration: rootsLabel + ' richiede / serve a: <strong>' + targets.join(', ') + '</strong>',
+      nodes: ns,
+      edges: new Set(reqEdges.map(e => edgeIds.get(e))),
+      highlight: 'requires',
+    });
+  }
+
+  // Step 4
+  const oppEdges = g.edges.filter(e => e.depth === 0 && e.relation === 'OPPOSITE_OF');
+  if (oppEdges.length > 0) {
+    const ns = new Set(g.roots);
+    oppEdges.forEach(e => ns.add(e.to));
+    const targets = [...new Set(oppEdges.map(e => e.to))].slice(0, 6);
+    steps.push({
+      label: 'a cosa si oppone?',
+      narration: rootsLabel + ' è opposto a: <strong>' + targets.join(', ') + '</strong>',
+      nodes: ns,
+      edges: new Set(oppEdges.map(e => edgeIds.get(e))),
+      highlight: 'opposite',
+    });
+  }
+
+  // Step 5
+  const simEdges = g.edges.filter(e => e.depth === 0 && e.relation === 'SIMILAR_TO');
+  if (simEdges.length > 0) {
+    const ns = new Set(g.roots);
+    simEdges.forEach(e => ns.add(e.to));
+    const targets = [...new Set(simEdges.map(e => e.to))].slice(0, 8);
+    steps.push({
+      label: 'cosa gli somiglia?',
+      narration: rootsLabel + ' è nella regione di: <strong>' + targets.join(', ') + '</strong>',
+      nodes: ns,
+      edges: new Set(simEdges.map(e => edgeIds.get(e))),
+      highlight: 'similar',
+    });
+  }
+
+  // Step 6
+  if (g.syllogisms && g.syllogisms.length > 0) {
+    const top = g.syllogisms.slice(0, 4);
+    const ns = new Set(g.roots);
+    const es = new Set();
+    top.forEach(s => {
+      ns.add(s.middle); ns.add(s.object);
+      g.edges.forEach(e => {
+        if ((e.from === s.subject && e.to === s.middle && e.relation === s.r1) ||
+            (e.from === s.middle && e.to === s.object && e.relation === s.r2)) {
+          es.add(edgeIds.get(e));
+        }
+      });
+    });
+    steps.push({
+      label: 'dove mi conduce?',
+      narration: top.map(s => s.summary).join('  ·  '),
+      nodes: ns, edges: es, highlight: 'syll',
+    });
+  }
+
+  // Step 7
+  if (g.convergences && g.convergences.length > 0) {
+    const ns = new Set(g.roots);
+    g.convergences.slice(0, 5).forEach(c => ns.add(c.concept));
+    const concepts = g.convergences.slice(0,3).map(c => c.concept);
+    steps.push({
+      label: 'cosa converge?',
+      narration: 'questi concetti emergono da tutte le radici: <strong>'
+        + concepts.join(', ') + '</strong>',
+      nodes: ns, edges: new Set(), highlight: 'converge',
+    });
+  }
+
+  return steps;
+}
+
+function updateComprehensionPanel(inputText, u) {
+  const body = document.getElementById('cp-body');
+  const ctrls = document.getElementById('cp-controls');
+  if (!body) return;
+
+  if (compState && compState.timer) clearInterval(compState.timer);
+  compState = null;
+
+  const g = u.graph;
+  if (!g || !g.nodes || g.nodes.length === 0) {
+    body.innerHTML = '<div class="cp-empty">nessuna esplorazione del KG per "'
+      + (inputText||'') + '"</div>';
+    if (ctrls) ctrls.style.display = 'none';
+    return;
+  }
+  body.innerHTML = '';
+  
+  const width = body.clientWidth || 800;
+  const height = body.clientHeight || 340;
+
+  const svg = d3.select(body).append("svg")
+    .attr("id", "cp-graph")
+    .attr("width", "100%")
+    .attr("height", "100%")
+    .attr("viewBox", [0, 0, width, height]);
+
+  // Defs per frecce e path morphing
+  const defs = svg.append("defs");
+  defs.append("marker")
+    .attr("id", "arrowhead")
+    .attr("viewBox", "0 -5 10 10")
+    .attr("refX", 20)
+    .attr("refY", 0)
+    .attr("orient", "auto")
+    .attr("markerWidth", 6)
+    .attr("markerHeight", 6)
+    .attr("xoverflow", "visible")
+    .append("path")
+    .attr("d", "M 0,-5 L 10,0 L 0,5")
+    .attr("fill", "rgba(255,255,255,0.4)");
+
+  const container = svg.append("g");
+
+  // Zoom
+  const zoom = d3.zoom()
+    .scaleExtent([0.1, 4])
+    .on("zoom", (e) => container.attr("transform", e.transform));
+  svg.call(zoom);
+
+  const linkGroup = container.append("g").attr("class", "links");
+  const nodeGroup = container.append("g").attr("class", "nodes");
+
+  // Prepara i dati completi con Object Constancy
+  const nodesData = g.nodes.map(n => ({
+    id: n.word,
+    label: n.word,
+    depth: n.depth,
+    isRoot: n.is_root,
+    isConv: n.root_witnesses && n.root_witnesses.length >= 2
+  }));
+  
+  const edgesData = g.edges.map((e, i) => ({
+    id: 'e' + i,
+    source: e.from,
+    target: e.to,
+    label: e.relation_label,
+    depth: e.depth
+  }));
+
+  // Layout Force-Directed gerarchico Left-to-Right
+  const simulation = d3.forceSimulation(nodesData)
+    .force("link", d3.forceLink(edgesData).id(d => d.id).distance(100))
+    .force("charge", d3.forceManyBody().strength(-300))
+    .force("x", d3.forceX(d => 100 + d.depth * 180).strength(1))
+    .force("y", d3.forceY(height / 2).strength(0.1))
+    .force("collide", d3.forceCollide().radius(30).iterations(2))
+    .alphaDecay(0.02);
+
+  const narration = document.createElement('div');
+  narration.className = 'cp-narration'; narration.id = 'cp-narration';
+  narration.innerHTML = '<span class="cn-step">step 0</span>—';
+  body.appendChild(narration);
+  if (ctrls) ctrls.style.display = '';
+
+  const steps = buildComprehensionSteps(u);
+  
+  compState = { 
+    svg, container, linkGroup, nodeGroup, simulation, zoom,
+    nodesData, edgesData, steps, current: -1, playing: false, timer: null, graph: g,
+    width, height
+  };
+
+  // Run simulation in background per stabilizzare il layout (Object Constancy posizionale)
+  for (let i = 0; i < 300; i++) simulation.tick();
+  simulation.stop();
+
+  applyComprehensionStep(0);
+  startComprehensionAutoplay();
+}
+
+function getLinkPath(d) {
+  const dx = d.target.x - d.source.x,
+        dy = d.target.y - d.source.y,
+        dr = Math.sqrt(dx * dx + dy * dy) * 1.2; // Curvilinear edges
+  return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
+}
+
+function applyComprehensionStep(idx) {
+  if (!compState) return;
+  const { linkGroup, nodeGroup, nodesData, edgesData, steps, svg, zoom, width, height } = compState;
+  if (idx < 0 || idx >= steps.length) return;
+  compState.current = idx;
+  const s = steps[idx];
+
+  const visibleNodes = s.nodes;
+  const visibleEdges = s.edges;
+
+  const currentNodes = nodesData.filter(n => visibleNodes.has(n.id));
+  const currentEdges = edgesData.filter(e => visibleEdges.has(e.id));
+
+  // --- ARCHI (Morphing & Curvilinear Edges) ---
+  // Aggiorniamo prima gli archi per farli apparire sotto i nodi
+  const linkSelection = linkGroup.selectAll(".link").data(currentEdges, d => d.id);
+  
+  const linkEnter = linkSelection.enter().append("g")
+    .attr("class", "link")
+    .attr("opacity", 0);
+
+  linkEnter.append("path")
+    .attr("class", "link-path")
+    .attr("id", d => "path-" + d.id)
+    .attr("fill", "none")
+    .attr("stroke-width", 1.2)
+    .attr("marker-end", "url(#arrowhead)")
+    .attr("stroke", d => d.depth === 0 ? "rgba(196,74,255,0.65)" : "rgba(255,255,255,0.18)")
+    .attr("d", d => getLinkPath(d));
+
+  // Morphing: Label transforms fluidly along the path
+  linkEnter.append("text")
+    .attr("dy", -3)
+    .attr("font-family", "JetBrains Mono, monospace")
+    .attr("font-size", "9px")
+    .attr("fill", "#8888a8")
+    .append("textPath")
+    .attr("href", d => "#path-" + d.id)
+    .attr("startOffset", "50%")
+    .attr("text-anchor", "middle")
+    .text(d => d.label);
+
+  const linkUpdate = linkEnter.merge(linkSelection);
+  linkUpdate.transition().duration(600).attr("opacity", 1);
+
+  linkSelection.exit().transition().duration(400)
+    .attr("opacity", 0).remove();
+
+  // --- NODI (Object Constancy & Motion Interpolation) ---
+  const nodeSelection = nodeGroup.selectAll(".node").data(currentNodes, d => d.id);
+  
+  const nodeEnter = nodeSelection.enter().append("g")
+    .attr("class", "node")
+    .attr("transform", d => `translate(${d.x},${d.y})`)
+    .attr("opacity", 0);
+
+  nodeEnter.append("rect")
+    .attr("rx", 5).attr("ry", 5)
+    .attr("x", -50).attr("y", -15)
+    .attr("width", 100).attr("height", 30)
+    .attr("stroke-width", d => d.isRoot ? 2 : 1);
+
+  nodeEnter.append("text")
+    .attr("text-anchor", "middle")
+    .attr("dominant-baseline", "central")
+    .attr("font-family", "JetBrains Mono, monospace")
+    .text(d => d.label);
+
+  const nodeUpdate = nodeEnter.merge(nodeSelection);
+  
+  nodeUpdate.transition().duration(600)
+    .attr("opacity", 1)
+    .attr("transform", d => `translate(${d.x},${d.y})`);
+  
+  nodeUpdate.select("rect").transition().duration(600)
+    .attr("fill", d => {
+      if (d.isRoot) return "rgba(74,138,255,0.85)";
+      if (s.highlight === 'isa') return "rgba(196,74,255,0.30)";
+      if (s.highlight === 'causes') return "rgba(255,140,74,0.30)";
+      if (s.highlight === 'requires') return "rgba(255,208,74,0.28)";
+      if (s.highlight === 'opposite') return "rgba(255,74,107,0.28)";
+      if (s.highlight === 'similar') return "rgba(74,255,176,0.22)";
+      if (s.highlight === 'syll') return "rgba(110,176,255,0.28)";
+      if (s.highlight === 'converge') return "rgba(74,255,176,0.32)";
+      return "rgba(255,255,255,0.05)";
+    })
+    .attr("stroke", d => {
+      if (d.isRoot) return "#cde0ff";
+      if (s.highlight === 'isa') return "#bc8cff";
+      if (s.highlight === 'causes') return "#ff8c4a";
+      if (s.highlight === 'requires') return "#ffd04a";
+      if (s.highlight === 'opposite') return "#ff4a6b";
+      if (s.highlight === 'similar') return "#4affb0";
+      if (s.highlight === 'syll') return "#6eb0ff";
+      if (s.highlight === 'converge') return "#4affb0";
+      return "rgba(255,255,255,0.25)";
+    });
+
+  nodeUpdate.select("text")
+    .attr("fill", d => d.isRoot ? "#ffffff" : "#f0f0ff")
+    .attr("font-size", d => d.isRoot ? "14px" : "12px");
+
+  nodeSelection.exit().transition().duration(400)
+    .attr("opacity", 0).remove();
+
+  // Narrazione e Step Bar
+  const narrEl = document.getElementById('cp-narration');
+  if (narrEl) narrEl.innerHTML = '<span class="cn-step">' + s.label + '</span>' + s.narration;
+  
+  const fillEl = document.getElementById('cp-step-fill');
+  if (fillEl) fillEl.style.width = (((idx+1)/steps.length)*100) + '%';
+  
+  const stepText = document.getElementById('cp-step-text');
+  if (stepText) stepText.textContent = (idx+1) + ' / ' + steps.length;
+
+  // Fit view (Zoom interpolation)
+  if (currentNodes.length > 0) {
+    const xExtent = d3.extent(currentNodes, d => d.x);
+    const yExtent = d3.extent(currentNodes, d => d.y);
+    
+    const dx = xExtent[1] - xExtent[0];
+    const dy = yExtent[1] - yExtent[0];
+    const x = (xExtent[0] + xExtent[1]) / 2;
+    const y = (yExtent[0] + yExtent[1]) / 2;
+    
+    const scale = Math.max(0.3, Math.min(1.5, 0.8 / Math.max(dx / width, dy / height)));
+    const translate = [width / 2 - scale * x, height / 2 - scale * y];
+
+    svg.transition().duration(800).call(
+      zoom.transform,
+      d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+    );
+  }
+}
+
+function startComprehensionAutoplay() {
+  if (!compState) return;
+  if (compState.timer) clearInterval(compState.timer);
+  compState.playing = true;
+  setCompPlayBtn('⏸');
+  compState.timer = setInterval(() => {
+    if (!compState) return;
+    if (compState.current >= compState.steps.length - 1) {
+      stopComprehensionAutoplay();
+      return;
+    }
+    applyComprehensionStep(compState.current + 1);
+  }, STEP_AUTOPLAY_MS);
+}
+
+function stopComprehensionAutoplay() {
+  if (!compState) return;
+  if (compState.timer) clearInterval(compState.timer);
+  compState.timer = null;
+  compState.playing = false;
+  setCompPlayBtn('▶');
+}
+
+function setCompPlayBtn(s) {
+  const b = document.getElementById('cp-play');
+  if (b) b.textContent = s;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const prev = document.getElementById('cp-prev');
+  const next = document.getElementById('cp-next');
+  const play = document.getElementById('cp-play');
+  const restart = document.getElementById('cp-restart');
+  if (prev) prev.onclick = () => {
+    stopComprehensionAutoplay();
+    if (compState && compState.current > 0) applyComprehensionStep(compState.current - 1);
+  };
+  if (next) next.onclick = () => {
+    stopComprehensionAutoplay();
+    if (compState && compState.current < compState.steps.length - 1)
+      applyComprehensionStep(compState.current + 1);
+  };
+  if (play) play.onclick = () => {
+    if (!compState) return;
+    if (compState.playing) stopComprehensionAutoplay();
+    else {
+      if (compState.current >= compState.steps.length - 1) applyComprehensionStep(0);
+      startComprehensionAutoplay();
+    }
+  };
+  if (restart) restart.onclick = () => {
+    stopComprehensionAutoplay();
+    if (compState) applyComprehensionStep(0);
+  };
+});
+
+function appendEntityMsg(text, _kws) {
+  // Le keywords (chips dei frattali) sono volutamente omesse: la chat
+  // resta pulita, il grafo di comprensione è sopra.
   const msgs = document.getElementById('chat-msgs');
   const div = document.createElement('div');
   div.className = 'msg entity';
   div.textContent = text || '…';
-  if (kws.length) {
-    const kd = document.createElement('div');
-    kd.className = 'kws';
-    kws.forEach(k => {
-      const s = document.createElement('span');
-      s.className='kw';
-      s.textContent=k;
-      s.style.cursor='pointer';
-      s.title=`Esplora ${k} nel campo frattali`;
-      s.onclick=()=>{ showTab('frattali'); setTimeout(()=>{ document.getElementById('universe-search-input').value=k; universeSearch(); },200); };
-      kd.appendChild(s);
-    });
-    div.appendChild(kd);
-  }
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
 }

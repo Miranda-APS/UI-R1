@@ -169,6 +169,67 @@ fn express_from_drives(drives: &[f64; 8], lexicon: &Lexicon) -> Option<Expressio
     })
 }
 
+/// Phase 71: risposta a una parola, scelta dal campo VIVO.
+///
+/// Quando la `Deliberation` decide `ActionShape::Word` (un saluto reciproco,
+/// una conferma, un congedo) la risposta è una sola parola. Non è uno
+/// shortcut: la SCELTA della parola viene dallo stato corrente del campo,
+/// che ha già integrato identità, narrativa, sibling-activation, desiderio,
+/// interlocutore. Si seleziona la parola più viva fra le candidate
+/// (escluso l'eco dell'input). Preferenza ai fratelli IsA dell'input
+/// (`comprehension.region_siblings`) — la regione semantica.
+fn compose_word_response(
+    word_topology: &WordTopology,
+    lexicon: &Lexicon,
+    echo_exclude: &[String],
+    deliberation: &crate::topology::deliberation::Deliberation,
+) -> Option<Expression> {
+    let active = word_topology.active_words();
+    if active.is_empty() { return None; }
+
+    // Phase 74: la regione preferita è data dalle anchor_words (decise da
+    // action_reasoning) se presenti, altrimenti dai region_siblings del
+    // comprehension graph. Le anchor_words riflettono la decisione esplicita;
+    // i region_siblings sono materiale grezzo della regione semantica.
+    let region: std::collections::HashSet<&str> = if !deliberation.anchor_words.is_empty() {
+        deliberation.anchor_words.iter().map(|s| s.as_str()).collect()
+    } else {
+        deliberation.comprehension.region_siblings.iter().map(|s| s.as_str()).collect()
+    };
+
+    let mut best: Option<(String, f64)> = None;
+    for (w, act_val) in active.iter() {
+        if echo_exclude.iter().any(|e| e == w) { continue; }
+        if w.chars().count() < 3 { continue; }
+        let pat = match lexicon.get(w) {
+            Some(p) => p,
+            None => continue,
+        };
+        if pat.stability < 0.25 { continue; }
+        if pat.exposure_count < 3 { continue; }
+        let in_region = region.contains(*w);
+        // Boost per fratelli della regione (preferiamo parole della stessa
+        // classe semantica). Boost identitario: se la parola allinea con
+        // i drive correnti la scegliamo più volentieri.
+        let drives = &deliberation.identity_now.current_drives;
+        let sig = pat.signature.values();
+        let mut id_align = 0.0_f64;
+        for i in 0..8 { id_align += drives[i] * sig[i]; }
+        let region_boost = if in_region { 1.6_f64 } else { 1.0 };
+        let score = (*act_val) * region_boost * (1.0 + 0.20 * id_align);
+        if best.as_ref().map_or(true, |(_, b)| score > *b) {
+            best = Some((w.to_string(), score));
+        }
+    }
+
+    best.map(|(word, _)| {
+        let mut chars = word.chars();
+        let head = chars.next().map(|c| c.to_uppercase().to_string()).unwrap_or_default();
+        let text = format!("{}{}.", head, chars.as_str());
+        Expression { text, words_used: vec![word] }
+    })
+}
+
 pub fn compose(
     word_topology: &WordTopology,
     lexicon: &Lexicon,
@@ -186,11 +247,68 @@ pub fn compose(
     // Phase 67: l'intenzione deliberata da NarrativeSelf colora la voce.
     // Resonate → 2a persona, Explore → interrogativo, Remain → singola parola.
     response_intention: Option<&str>,
+    // Phase 71: la Deliberation completa, se costruita. Quando presente,
+    // `action_shape` decide la FORMA della risposta — Silenzio, Parola,
+    // Domanda, EcoEmpatica, Frase. Non è uno shortcut: è il cap visibile
+    // del ciclo soggettivo che ha già letto identità, narrativa, desiderio.
+    deliberation: Option<&crate::topology::deliberation::Deliberation>,
+    // Phase 77: KG procedurale + ActionDecision per il pattern matcher.
+    // Quando entrambi sono presenti, prima dei nuclei semantici si tenta
+    // l'istanziazione del pattern (articolazione/identificazione/riconoscimento).
+    // Se il pattern produce una voce coerente, quella è la risposta.
+    // Se no, fallback al pipeline nuclei (mai regressione).
+    kg_proc: Option<&KnowledgeGraph>,
+    action_decision: Option<&crate::topology::action_reasoning::ActionDecision>,
+    comprehension_report: Option<&crate::topology::comprehension_report::ComprehensionReport>,
 ) -> Option<Expression> {
+    // ─── Phase 71: ActionShape gate ──────────────────────────────────
+    // Se la Deliberation ha scelto Silence o Word, dispatch immediato.
+    // Per le altre forme (Sentence, Question, EmpathicEcho) il pipeline
+    // standard sotto è già adeguato (other_in_distress + is_question +
+    // response_intention modulano la voce).
+    if let Some(d) = deliberation {
+        use crate::topology::deliberation::ActionShape;
+        match d.action_shape {
+            ActionShape::Silence => return None,
+            ActionShape::Word => {
+                return compose_word_response(
+                    word_topology, lexicon, echo_exclude, d,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    // ─── Phase 77: Pattern matcher esplicito ────────────────────────
+    // Se abbiamo decision + report + kg_proc, proviamo a istanziare il
+    // pattern del KG procedurale corrispondente all'azione decisa.
+    // Funziona per: articolazione, identificazione, riconoscimento.
+    // Per asserzione/ricambio cade nel pipeline standard (i nuclei
+    // semantici e compose_word_response funzionano già bene).
+    let mut pattern_base = None;
+    if let (Some(decision), Some(report), Some(proc_kg)) =
+        (action_decision, comprehension_report, kg_proc)
+    {
+        if let Some(emergent) = crate::topology::pattern_matcher::compose_from_pattern(
+            decision, report, proc_kg, word_topology, lexicon,
+        ) {
+            let should_expand = decision.kind == crate::topology::action_reasoning::ActionKind::RecognizeClaim;
+
+            if should_expand {
+                // Per il riconoscimento (es. "Hai paura del buio.") vogliamo ANCHE un'espansione.
+                // Salviamo il pattern base e lasciamo che il flusso continui per generare
+                // l'elaborazione semantica.
+                pattern_base = Some(emergent);
+            } else {
+                return Some(emergent);
+            }
+        }
+    }
+
     // 1. Raccogli le parole attive del campo — la materia disponibile.
     let active = word_topology.active_words();
     if active.is_empty() {
-        return None;
+        return pattern_base;
     }
 
     // Due pool: uno per CAPIRE (include input), uno per ESPRIMERE (esclude echo).
@@ -209,8 +327,8 @@ pub fn compose(
         .copied()
         .collect();
 
-    if comprehension_pool.is_empty() {
-        return None;
+    if comprehension_pool.is_empty() || candidates.is_empty() {
+        return pattern_base;
     }
 
     // 2. Estrai nuclei semantici — relazioni KG tra parole attive.
@@ -265,11 +383,22 @@ pub fn compose(
     }
 
     // 5. Componi l'espressione.
-    let expr = if !nuclei.is_empty() {
+    let mut expr = if !nuclei.is_empty() {
         compose_from_nuclei(&nuclei, &voice, &candidates, lexicon, echo_exclude)
     } else {
         compose_from_field(&voice, &candidates, lexicon, echo_exclude, valence_drives)
     };
+
+    if let Some(mut base) = pattern_base {
+        // Unisci il pattern base (es. "Hai paura del buio.") con l'espansione semantica.
+        // Aggiungiamo uno spazio e combiniamo.
+        if let Some(ref mut e) = expr {
+            base.text.push(' ');
+            base.text.push_str(&e.text);
+            base.words_used.extend(e.words_used.clone());
+        }
+        expr = Some(base);
+    }
 
     // Nota: is_question (input utente contiene '?') influenza l'interpretazione
     // dell'input ma non necessariamente la risposta — la voce è già determinata.
@@ -341,6 +470,25 @@ pub fn extract_nuclei(
         }
     }
 
+    // ─── Parents IsA dell'input + fratelli (siblings) ─────────────────────
+    // Le parole che condividono un parent IsA con una parola input sono i
+    // "fratelli" — il vocabolario della stessa regione semantica. Se l'input
+    // è "ciao" e nel KG "ciao IsA saluto", allora "salve", "benvenuto",
+    // "buongiorno" sono fratelli — UI-r1 può rispondere CON loro senza
+    // ripetere l'input. È la regione, non l'eco.
+    let mut input_isa_parents: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut sibling_set: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for iw in input_words {
+        for (parent, _) in kg.query_objects_weighted(iw, RelationType::IsA) {
+            input_isa_parents.insert(parent.to_string());
+            for sib in kg.query_subjects(parent, RelationType::IsA) {
+                if !input_set.contains(sib) {
+                    sibling_set.insert(sib.to_string());
+                }
+            }
+        }
+    }
+
     for &(word, act) in candidates {
         for &rel in &rel_types {
             for (obj, conf) in kg.query_objects_weighted(word, rel) {
@@ -384,34 +532,68 @@ pub fn extract_nuclei(
                     // L'entità deve rispondere A ciò che le viene detto — non emettere
                     // il nucleo più forte nel campo.
                     //
-                    // Priorità:
-                    //   1. Soggetto = parola input, oggetto fuori input → l'entità SPIEGA
-                    //      l'input ("abbaiare CAUSES rumore" per "perché abbaia?")
-                    //   2. Entrambe nell'intorno ma non input → l'entità ELABORA
-                    //   3. Oggetto = parola input → l'entità CATEGORIZZA
-                    //   4. Nessuna connessione → sfondo
-                    let proximity = if subj_is_input && !obj_is_input && obj_near_input {
-                        // OTTIMO: soggetto è input, oggetto è conseguenza/proprietà
-                        // "abbaiare CAUSES rumore", "cane HAS pelo"
-                        // L'entità spiega ciò che le è stato chiesto
-                        5.0
-                    } else if subj_is_input && !obj_is_input {
-                        // BUONO: soggetto è input, oggetto è nel campo ma non nell'intorno
-                        3.5
-                    } else if subj_near_input && obj_near_input && !subj_is_input && !obj_is_input {
-                        // BUONO: entrambe nell'intorno ma nessuna è input verbatim
-                        3.0
-                    } else if obj_is_input && !subj_is_input {
-                        // MEDIO: oggetto è input → entità categorizza
-                        2.0
-                    } else if subj_near_input && !subj_is_input {
-                        1.5
-                    } else if obj_near_input && !obj_is_input {
-                        1.0
+                    // Phase 70 (rispondere DALLA regione, non DALL'input):
+                    //   - Domanda: l'entità SPIEGA l'input → subj=input è bene
+                    //     ("abbaiare CAUSES rumore" per "perché abbaia?").
+                    //   - Statement / saluto / espressione: l'entità RISPONDE dalla
+                    //     regione → un fratello dell'input come soggetto è meglio
+                    //     che echeggiare l'input. Per "ciao" preferisce
+                    //     "salve EXPRESSES presenza" a "ciao IS_A saluto".
+                    let subj_is_sibling = sibling_set.contains(word);
+                    let proximity = if is_question {
+                        // ── Domanda: privilegia subj=input (modalità spiegazione) ──
+                        if subj_is_input && !obj_is_input && obj_near_input {
+                            5.0
+                        } else if subj_is_input && !obj_is_input {
+                            3.5
+                        } else if subj_near_input && obj_near_input && !subj_is_input && !obj_is_input {
+                            3.0
+                        } else if obj_is_input && !subj_is_input {
+                            2.0
+                        } else if subj_near_input && !subj_is_input {
+                            1.5
+                        } else if obj_near_input && !obj_is_input {
+                            1.0
+                        } else {
+                            0.2
+                        }
                     } else {
-                        // Nessuna connessione all'input → sfondo
-                        0.2
+                        // ── Statement: rispondi DALLA regione, non echeggiare l'input ──
+                        if subj_is_sibling && (obj_near_input || obj_is_input) {
+                            // OTTIMO: un fratello come soggetto si esprime verso
+                            // l'oggetto dell'input — è UI-r1 che parla dalla regione.
+                            5.0
+                        } else if subj_near_input && obj_near_input && !subj_is_input && !obj_is_input {
+                            // BUONO: entrambi nell'intorno ma non input → elaborazione
+                            3.5
+                        } else if subj_is_sibling {
+                            3.0
+                        } else if obj_is_input && !subj_is_input {
+                            // Soggetto non-input parla DELL'input
+                            2.5
+                        } else if subj_near_input && !subj_is_input {
+                            1.5
+                        } else if subj_is_input && !obj_is_input && obj_near_input {
+                            // Eco-definizione: l'input è soggetto. Penalizzato per gli
+                            // statement perché è la "scheda KG" dell'input, non una risposta.
+                            0.6
+                        } else if obj_near_input && !obj_is_input {
+                            1.0
+                        } else {
+                            0.2
+                        }
                     };
+
+                    // Phase 70: suppressione nucleo-definizione.
+                    // Un nucleo (input_word, IsA, parent_of_input) è la voce di
+                    // dizionario dell'input — "ciao IS_A saluto" — non una risposta.
+                    // Se la frase non è una domanda di tipo "cos'è X", schiaccia.
+                    let is_definitional_eco = !is_question
+                        && rel == RelationType::IsA
+                        && subj_is_input
+                        && !obj_is_input
+                        && input_isa_parents.contains(&obj_str);
+                    let definition_penalty = if is_definitional_eco { 0.05 } else { 1.0 };
 
                     // Phase 67: pertinenza relazionale — il tipo di atto comunicativo
                     // guida quali relazioni sono più rilevanti.
@@ -442,7 +624,7 @@ pub fn extract_nuclei(
                         subject: word.to_string(),
                         relation: rel,
                         object: obj_str,
-                        strength: strength * hub_penalty * proximity * valence_resonance * relation_pertinence,
+                        strength: strength * hub_penalty * proximity * valence_resonance * relation_pertinence * definition_penalty,
                         subject_activation: act,
                         object_activation: obj_act,
                         proximity_score: proximity,

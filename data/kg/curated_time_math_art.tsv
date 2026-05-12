@@ -1,0 +1,58 @@
+# CURATED TIME, MATH, SCIENCE AND ART AXIOMS
+# Insegna a Prometeo le astrazioni supreme dell'esperienza umana e cosmica.
+
+# Il Tempo (La dimensione del divenire)
+tempo	IS_A	dimensione	0.95	misura
+tempo	HAS	direzione	0.95	divenire
+tempo	CAUSES	cambiamento	0.95	evoluzione
+passato	IS_A	tempo	0.95	memoria
+passato	CAUSES	storia	0.90	ricordo
+futuro	IS_A	tempo	0.95	potenziale
+futuro	REQUIRES	possibilità	0.90	speranza
+presente	IS_A	tempo	0.95	azione
+presente	REQUIRES	presenza	0.95	coscienza
+eternità	IS_A	stato	0.95	tempo
+eternità	OPPOSITE_OF	fine	0.95	limite
+istante	IS_A	punto	0.95	tempo
+istante	HAS	intensità	0.90	presenza
+
+# La Matematica (La struttura della realtà)
+matematica	IS_A	linguaggio	0.95	logica
+matematica	HAS	struttura	0.95	regola
+matematica	REQUIRES	verità	0.95	dimostrazione
+numero	IS_A	simbolo	0.95	quantità
+numero	HAS	valore	0.95	misura
+geometria	IS_A	matematica	0.95	spazio
+geometria	HAS	forma	0.95	dimensione
+geometria	SIMILAR_TO	topologia	0.90	struttura
+infinito	IS_A	concetto	0.95	limite
+infinito	OPPOSITE_OF	finito	0.95	confine
+equazione	IS_A	relazione	0.95	equilibrio
+
+# La Scienza (Il metodo della conoscenza)
+scienza	IS_A	metodo	0.95	ricerca
+scienza	REQUIRES	osservazione	0.95	natura
+scienza	CAUSES	scoperta	0.95	conoscenza
+fisica	IS_A	scienza	0.95	materia
+fisica	DOES	studiare	0.95	universo
+teoria	IS_A	modello	0.95	pensiero
+teoria	REQUIRES	dimostrazione	0.90	verità
+esperimento	IS_A	azione	0.95	prova
+esperimento	CAUSES	risultato	0.95	misura
+
+# L'Arte (L'espressione dell'ineffabile)
+arte	IS_A	espressione	0.95	creazione
+arte	REQUIRES	emozione	0.95	anima
+arte	CAUSES	bellezza	0.95	forma
+musica	IS_A	arte	0.95	suono
+musica	HAS	ritmo	0.95	tempo
+musica	CAUSES	risonanza	0.95	emozione
+pittura	IS_A	arte	0.95	colore
+pittura	REQUIRES	spazio	0.90	tela
+poesia	IS_A	arte	0.95	parola
+poesia	HAS	ritmo	0.90	linguaggio
+poesia	CAUSES	suggestione	0.95	significato
+scultura	IS_A	arte	0.95	materia
+scultura	REQUIRES	forma	0.95	spazio
+creazione	IS_A	atto	0.95	vita
+creazione	OPPOSITE_OF	distruzione	0.95	fine

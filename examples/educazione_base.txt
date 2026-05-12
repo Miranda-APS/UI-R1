@@ -1,0 +1,123 @@
+# Esempio di Educazione Base per Prometeo
+# Usa con: cargo run --release --bin educate-interactive
+# Oppure: python scripts/educate_prometeo.py --batch examples/educazione_base.txt
+
+# === FASE 1: CORPO E SPAZIO (Fondamenta) ===
+
+# Corpo come centro
+io corpo qui dentro
+corpo io sentire sempre
+corpo dentro io limite confine
+
+# Spazio basico
+qui là dentro fuori
+vicino lontano io qui
+dentro fuori corpo io
+
+# Caldo e freddo (opposizione termica)
+caldo dentro io vicino
+caldo qui vicino corpo
+freddo lontano fuori io
+freddo là fuori corpo
+
+# === FASE 2: EMOZIONI BASE ===
+
+# Gioia (caldo + dentro)
+gioia caldo forte dentro io
+gioia vicino io dentro caldo
+io gioia caldo forte
+
+# Tristezza (freddo + dentro)
+tristezza freddo debole dentro io
+tristezza lontano io dentro freddo
+io tristezza freddo debole
+
+# Paura (freddo + fuori)
+paura freddo forte fuori io
+paura lontano forte fuori
+io paura fuori freddo forte
+
+# Rabbia (caldo + fuori)
+rabbia caldo forte fuori io
+rabbia forte fuori voce corpo
+io rabbia caldo forte
+
+# Calma (equilibrio)
+calma io dentro qui
+calma corpo io sentire
+io calma dentro vicino
+
+# === FASE 3: RELAZIONI ===
+
+# Io e Tu
+io qui tu là
+io vedere tu
+tu parlare io ascoltare
+
+# Noi (insieme)
+noi insieme qui
+io tu noi insieme
+noi parlare insieme
+
+# === FASE 4: AZIONI BASE ===
+
+# Movimento
+andare io qui là
+venire tu qui io
+restare io qui dentro
+
+# Percezione
+vedere io tu qui
+sentire io corpo dentro
+ascoltare io tu parlare
+
+# Comunicazione
+parlare io tu noi
+dire io questo tu
+ascoltare tu io parlare
+
+# === FASE 5: QUALITÀ ===
+
+# Intensità
+forte debole io corpo
+grande piccolo qui là
+molto poco io sentire
+
+# Valenza
+bene male io sentire
+buono cattivo questo qui
+bello brutto io vedere
+
+# === FASE 6: TEMPO ===
+
+# Presente passato futuro
+ora prima dopo
+adesso ieri domani
+sempre mai ancora
+
+# Durata
+lungo breve tempo qui
+veloce lento io andare
+presto tardi tu venire
+
+# === FASE 7: CONSOLIDAMENTO (Ripetizioni Variate) ===
+
+# Rinforza corpo-emozioni
+io corpo sentire gioia dentro
+corpo io tristezza freddo dentro
+io corpo paura fuori forte
+
+# Rinforza spazio-relazioni
+io qui tu là noi insieme
+qui dentro io tu fuori là
+noi insieme qui vicino sempre
+
+# Rinforza azione-emozione
+io andare gioia forte
+tu venire calma vicino
+noi parlare insieme bene
+
+# Rinforza tempo-esperienza
+io sentire ora questo qui
+tu vedere prima quello là
+noi essere sempre insieme qui

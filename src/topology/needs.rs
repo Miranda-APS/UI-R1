@@ -55,15 +55,16 @@ impl NeedLevel {
     }
 
     /// Dimensione 8D associata a questo livello (per keyword extraction dal campo).
+    /// Ordine I Ching canonico (post-Phase 68).
     pub fn associated_dim(&self) -> usize {
         match self {
-            Self::Sopravvivenza => 5, // Permanenza
-            Self::Coerenza      => 0, // Confine
-            Self::Espressione   => 6, // Agency
-            Self::Comprensione  => 3, // Definizione
-            Self::Connessione   => 1, // Valenza
-            Self::Crescita      => 4, // Complessità
-            Self::Trascendenza  => 2, // Intensità
+            Self::Sopravvivenza => 1, // Permanenza (☷ Terra)
+            Self::Coerenza      => 4, // Confine     (☶ Montagna)
+            Self::Espressione   => 0, // Agency      (☰ Cielo)
+            Self::Comprensione  => 6, // Definizione (☲ Fuoco)
+            Self::Connessione   => 7, // Valenza     (☱ Lago)
+            Self::Crescita      => 5, // Complessità (☴ Vento)
+            Self::Trascendenza  => 2, // Intensità   (☳ Tuono)
         }
     }
 

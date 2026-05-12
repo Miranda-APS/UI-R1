@@ -57,10 +57,16 @@ fn load_or_create_engine(bin_path: &Path) -> PrometeoTopologyEngine {
     engine.rebuild_pf_field();
     // Carica il KG da prometeo_kg.json (necessario per :kg, relazioni KG, expression nuclei)
     engine.load_kg_from_file(Path::new("prometeo_kg.json"));
+    // Phase 75: KG procedurale — pattern grammaticali per il pattern matcher
+    engine.load_kg_procedural_from_file(Path::new("prometeo_kg_procedurale.json"));
     // Verifica KG caricato (se "essere" ha relazioni, il KG è attivo)
     let kg_size = engine.kg.total_degree("essere");
     if kg_size > 0 {
         println!("  KG attivo (essere: {} relazioni)", kg_size);
+    }
+    let kg_proc_size = engine.kg_procedural.edge_count;
+    if kg_proc_size > 0 {
+        println!("  KG procedurale attivo ({} archi)", kg_proc_size);
     }
 
     engine
@@ -226,6 +232,64 @@ fn show_kg(kg: &KnowledgeGraph, word: &str) {
             shown += 1;
         }
     }
+}
+
+fn show_scene_understanding(engine: &PrometeoTopologyEngine) {
+    use prometeo::topology::understanding::SyntacticRole;
+    println!("{}", "═".repeat(60));
+    println!("  COMPRENSIONE DELLA SCENA");
+    println!("{}", "═".repeat(60));
+    let scene = match &engine.last_scene {
+        None => {
+            println!("  (nessuna scena disponibile — inserisci prima un input)");
+            println!("{}", "═".repeat(60));
+            return;
+        }
+        Some(s) => s,
+    };
+    let role = match scene.syntactic_role {
+        SyntacticRole::Statement   => "dichiarazione",
+        SyntacticRole::Question    => "domanda",
+        SyntacticRole::Exclamation => "esclamazione",
+    };
+    println!("  Ruolo sintattico:     {}", role);
+    println!("  Profondità compr.:    {} archi letti", scene.comprehension_depth);
+    if !scene.unknown_words.is_empty() {
+        println!("  Parole ignote al KG:  {}", scene.unknown_words.join(", "));
+    }
+
+    println!();
+    println!("  PER PAROLA (archi uscenti):");
+    for u in scene.per_word.iter() {
+        if u.arc_count() == 0 { continue; }
+        println!("    {} ({} archi uscenti, {} entranti)",
+            u.word,
+            u.forward.values().map(|v| v.len()).sum::<usize>(),
+            u.reverse.values().map(|v| v.len()).sum::<usize>());
+        for (_facet, edges) in u.forward.iter() {
+            for e in edges.iter() {
+                println!("        [{}] → {} ({:.2})",
+                    e.relation.as_str().to_lowercase(),
+                    e.target, e.confidence);
+            }
+        }
+    }
+
+    println!();
+    println!("  IPOTESI APERTE (concetti-perno sotto-definiti):");
+    if scene.open_hypotheses.is_empty() {
+        println!("    (nessuna)");
+    } else {
+        for h in scene.open_hypotheses.iter().take(6) {
+            let invoc = h.dominant_invocation
+                .map(|r| r.as_str().to_string())
+                .unwrap_or_else(|| "-".to_string());
+            let invokers = h.invoked_by.join(", ");
+            println!("    · {} [sal={} def={} via {}] richiamato da: {}",
+                h.concept, h.saliency, h.defining_arcs, invoc, invokers);
+        }
+    }
+    println!("{}", "═".repeat(60));
 }
 
 fn show_introspect(engine: &mut PrometeoTopologyEngine) {
@@ -411,8 +475,11 @@ fn main() {
                     }
                     println!("{}", "═".repeat(60));
                 }
+                ":understanding" | ":u" | ":scene" => {
+                    show_scene_understanding(&engine);
+                }
                 _ => {
-                    println!("Comando sconosciuto. Usa :quit, :field, :feelings, :narrative, :needs, :recall, :recurring, :introspect, :kg, :stats, :save");
+                    println!("Comando sconosciuto. Usa :quit, :field, :feelings, :narrative, :needs, :recall, :recurring, :introspect, :kg, :stats, :understanding, :save");
                 }
             }
             continue;
@@ -439,6 +506,27 @@ fn main() {
         // ─── Output principale ─────────────────────────────────────────────
         println!("\n[UI-r1] > {}", generated.text);
 
+        // ── Phase 77 debug: ActionDecision corrente (pattern matcher) ──
+        if let Some(d) = engine.last_action_decision.as_ref() {
+            let target_str = match &d.target {
+                prometeo::topology::action_reasoning::ActionTarget::Gap { signifier_missing, from } =>
+                    format!("Gap{{from={}, missing={}}}", from, signifier_missing),
+                prometeo::topology::action_reasoning::ActionTarget::OpenQuestion { question_text, .. } =>
+                    format!("OpenQ{{{}}}", question_text),
+                prometeo::topology::action_reasoning::ActionTarget::Claim { kind, predicate } =>
+                    format!("Claim{{{}={}}}", kind, predicate),
+                prometeo::topology::action_reasoning::ActionTarget::PhaticClass { class } =>
+                    format!("Phatic{{{}}}", class),
+                prometeo::topology::action_reasoning::ActionTarget::Signifier { word } =>
+                    format!("Signif{{{}}}", word),
+            };
+            println!("  ╰ DECISIONE: {} | {} | {} | anchors=[{}]",
+                d.kind.as_str(),
+                d.shape.as_str(),
+                target_str,
+                d.anchor_words.iter().take(6).cloned().collect::<Vec<_>>().join(", "));
+        }
+
         // Hint interno: stance + drives dominanti (formato compatto)
         let stance = engine.narrative_self.stance.as_str();
         let drives = &engine.narrative_self.valence.drives;
@@ -458,6 +546,35 @@ fn main() {
                 stance, intent_str,
                 dom_drives.iter().take(3).cloned().collect::<Vec<_>>().join(" "),
                 ep_window, ep_total);
+        }
+
+        // Comprensione dal KG (fatti strutturali, non narrazione)
+        if let Some(scene) = &engine.last_scene {
+            if !scene.per_word.is_empty() || !scene.open_hypotheses.is_empty() {
+                // Riassunto per-parola: archi uscenti più forti
+                for u in scene.per_word.iter().take(3) {
+                    if u.arc_count() == 0 { continue; }
+                    let mut highlights: Vec<String> = Vec::new();
+                    for (facet, edges) in u.forward.iter() {
+                        let _ = facet;
+                        for e in edges.iter().take(2) {
+                            highlights.push(format!("{}→{}({:.2})",
+                                e.relation.as_str().to_lowercase().replace('_', ""),
+                                e.target, e.confidence));
+                            if highlights.len() >= 4 { break; }
+                        }
+                        if highlights.len() >= 4 { break; }
+                    }
+                    if !highlights.is_empty() {
+                        println!("  ╰ {}: {}", u.word, highlights.join(" · "));
+                    }
+                }
+                let hyps: Vec<String> = scene.open_hypotheses.iter().take(2)
+                    .map(|h| format!("{}?[sal={} def={}]", h.concept, h.saliency, h.defining_arcs)).collect();
+                if !hyps.is_empty() {
+                    println!("  ╰ ipotesi: {}", hyps.join(" · "));
+                }
+            }
         }
 
         // Auto-save ogni 20 turni

@@ -1,0 +1,665 @@
+# Candidati HUB per la curazione manuale delle firme (Phase 70).
+# Top 80 parole del KG ordinate per grado decrescente (in + out).
+#
+# Per ogni hub trovi:
+#   - grado totale, frattale dominante (ID + nome + affinità)
+#   - firma 8D ATTUALE (Phase 63, da rivedere)
+#   - 4 archi rappresentativi del KG
+#
+# Workflow di curazione:
+#   1) leggi parola + archi rappresentativi
+#   2) decidi i valori 8D (0.0=Yin estremo, 1.0=Yang estremo, 0.5=neutro)
+#   3) copia la riga 'sig:' in data/anchors/hub_signatures.tsv con i nuovi valori
+#
+# Riferimento dimensioni:
+#   agency      = agisce o subisce (alto = agente)
+#   permanenza  = persiste o svanisce
+#   intensita   = movimento interno (alto = ardente)
+#   tempo       = futuro o passato
+#   confine     = grande o piccolo / netto o sfumato
+#   complessita = intricato o semplice
+#   definizione = preciso o vago
+#   valenza     = attrae (alto) o respinge (basso)
+#
+# === Lista hub === (80 candidati)
+
+## [1] azione — grado 5750 — frattale 54 (VERITÀ, aff 1.00)
+#   → CAUSES effetto (conf 1.00)
+#   → CAUSES conseguenza (conf 0.95)
+#   → REQUIRES intenzione (conf 0.90)
+#   → REQUIRES energia (conf 0.85)
+# sig attuale (Phase 63):
+#sig:	azione	0.07	0.85	0.70	0.89	0.15	0.95	0.70	1.00
+
+## [2] qualita — grado 3307 — frattale 27 (DIVENIRE, aff 0.85)
+#   → SIMILAR_TO qualità (conf 0.92)
+#   ← manchevole IS_A (conf 0.95)
+#   ← ipertere IS_A (conf 0.95)
+#   ← qualità SIMILAR_TO (conf 0.92)
+# sig attuale (Phase 63):
+#sig:	qualita	0.20	0.85	0.12	0.15	0.05	0.94	0.05	0.50
+
+## [3] oggetto — grado 1435 — frattale 45 (INTRECCIO, aff 0.86)
+#   → IS_A entità (conf 0.95)
+#   → REQUIRES spaziare (conf 0.95)
+#   → HAS peso (conf 0.90)
+#   → HAS formare (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	oggetto	0.20	0.85	0.12	0.15	0.05	0.84	0.05	0.50
+
+## [4] persona — grado 1302 — frattale 27 (DIVENIRE, aff 0.99)
+#   → REQUIRES relazione (conf 0.90)
+#   → OPPOSITE_OF oggetto (conf 0.95)
+#   → HAS identità (conf 0.95)
+#   → HAS emozione (conf 1.00)
+# sig attuale (Phase 63):
+#sig:	persona	0.95	0.85	0.24	0.29	0.15	0.82	0.55	0.50
+
+## [5] concetto — grado 1012 — frattale 27 (DIVENIRE, aff 0.99)
+#   → CAUSES chiarezza (conf 0.88)
+#   → CAUSES abstrazione (conf 0.95)
+#   → DOES rappresentare (conf 0.95)
+#   → REQUIRES pensiero (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	concetto	0.95	0.85	0.27	0.29	0.05	0.79	0.40	0.46
+
+## [6] stato — grado 801 — frattale 45 (INTRECCIO, aff 0.95)
+#   → DOES esistere (conf 0.95)
+#   → OPPOSITE_OF cambiamento (conf 0.90)
+#   → OPPOSITE_OF azione (conf 0.85)
+#   → HAS qualità (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	stato	0.20	0.85	0.12	0.15	0.05	0.75	0.25	0.50
+
+## [7] evento — grado 693 — frattale 45 (INTRECCIO, aff 0.95)
+#   → CAUSES memoria (conf 0.90)
+#   → IS_A fatto (conf 0.95)
+#   → IS_A accadimento (conf 0.95)
+#   → SIMILAR_TO caso (conf 0.75)
+# sig attuale (Phase 63):
+#sig:	evento	0.20	0.85	0.18	0.15	0.05	0.75	0.50	0.58
+
+## [8] processare — grado 568 — frattale 27 (DIVENIRE, aff 0.95)
+#   → OPPOSITE_OF fine (conf 0.70)
+#   → OPPOSITE_OF stasi (conf 0.95)
+#   → CAUSES cambiamento (conf 0.95)
+#   → CAUSES trasformazione (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	processare	0.50	0.35	0.12	0.35	0.80	0.05	0.05	0.50
+
+## [9] entita — grado 542 — frattale 45 (INTRECCIO, aff 0.97)
+#   → IS_A concetto (conf 0.95)
+#   → SIMILAR_TO entità (conf 0.99)
+#   ← caviglia IS_A (conf 0.95)
+#   ← entità SIMILAR_TO (conf 0.99)
+# sig attuale (Phase 63):
+#sig:	entita	0.20	0.85	0.12	0.15	0.05	0.73	0.25	0.50
+
+## [10] luogo — grado 392 — frattale 45 (INTRECCIO, aff 0.98)
+#   → IS_A posizione (conf 0.95)
+#   → IS_A spaziare (conf 0.85)
+#   → SIMILAR_TO posto (conf 0.75)
+#   → SIMILAR_TO luoghetto (conf 0.65)
+# sig attuale (Phase 63):
+#sig:	luogo	0.20	0.85	0.17	0.15	0.05	0.68	0.25	0.57
+
+## [11] strumentare — grado 318 — frattale 27 (DIVENIRE, aff 0.95)
+#   → USED_FOR azione (conf 1.00)
+#   → OPPOSITE_OF disarmare (conf 0.70)
+#   → IS_A azione (conf 0.95)
+#   → IS_A oggetto (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	strumentare	0.50	0.35	0.13	0.35	0.95	0.08	0.55	0.51
+
+## [12] emozione — grado 267 — frattale 18 (ARDORE, aff 0.98)
+#   → IS_A stato (conf 0.95)
+#   → DOES muovere (conf 0.95)
+#   → CAUSES espressione (conf 0.90)
+#   → CAUSES azione (conf 1.00)
+# sig attuale (Phase 63):
+#sig:	emozione	0.13	0.85	0.28	0.75	0.17	0.64	0.55	0.55
+
+## [13] tempo — grado 238 — frattale 45 (INTRECCIO, aff 1.00)
+#   → WONDERS_ABOUT scorrimento (conf 0.95)
+#   → WONDERS_ABOUT eternità (conf 0.85)
+#   → DOES scorrere (conf 0.95)
+#   → DOES trasformare (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	tempo	0.05	0.90	0.40	0.95	0.10	0.70	0.60	0.50
+
+## [14] relazione — grado 207 — frattale 18 (ARDORE, aff 0.92)
+#   → OPPOSITE_OF indifferenza (conf 0.89)
+#   → OPPOSITE_OF isolamento (conf 0.95)
+#   → SIMILAR_TO legame (conf 0.75)
+#   → SIMILAR_TO rapporti (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	relazione	0.20	0.85	0.38	0.80	0.18	0.61	0.87	0.55
+
+## [15] strutturare — grado 202 — frattale 27 (DIVENIRE, aff 0.95)
+#   → DOES organizzare (conf 0.95)
+#   → DOES contenere (conf 0.85)
+#   → PART_OF linguaggio (conf 0.90)
+#   → PART_OF sistema (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	strutturare	0.50	0.35	0.13	0.35	0.95	0.22	0.55	0.51
+
+## [16] movimentare — grado 196 — frattale 27 (DIVENIRE, aff 0.95)
+#   → REQUIRES corpo (conf 0.85)
+#   → REQUIRES spazio (conf 0.95)
+#   → OPPOSITE_OF immobilizzare (conf 0.70)
+#   → OPPOSITE_OF immobilità (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	movimentare	0.50	0.35	0.14	0.35	0.95	0.13	0.55	0.53
+
+## [17] vita — grado 152 — frattale 63 (ARMONIA, aff 0.95)
+#   → REQUIRES tempo (conf 0.95)
+#   → REQUIRES connessione (conf 0.90)
+#   → SIMILAR_TO emergenza (conf 0.90)
+#   → SIMILAR_TO esistenza (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	vita	0.60	0.70	0.65	0.50	0.40	0.80	0.50	0.75
+
+## [18] sostanza — grado 144 — frattale 54 (VERITÀ, aff 1.00)
+#   → HAS essenza (conf 0.85)
+#   → CAUSES presenza (conf 0.90)
+#   → SIMILAR_TO materia (conf 0.70)
+#   → SIMILAR_TO essenza (conf 0.75)
+# sig attuale (Phase 63):
+#sig:	sostanza	0.95	0.85	0.36	0.17	0.19	0.57	0.70	0.24
+
+## [19] parte — grado 142 — frattale 45 (INTRECCIO, aff 0.87)
+#   → IS_A entita (conf 0.95)
+#   ← componente SIMILAR_TO (conf 0.65)
+#   ← contingente SIMILAR_TO (conf 0.65)
+#   ← componente OPPOSITE_OF (conf 0.70)
+# sig attuale (Phase 63):
+#sig:	parte	0.20	0.85	0.43	0.15	0.05	0.57	0.25	0.11
+
+## [20] calmare — grado 119 — frattale 18 (ARDORE, aff 0.99)
+#   → IS_A emozione (conf 0.99)
+#   → IS_A stato (conf 0.95)
+#   → CAUSES respiro (conf 0.90)
+#   → CAUSES spazio (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	calmare	0.50	0.35	0.29	0.35	0.95	0.39	0.30	0.29
+
+## [21] presenza — grado 119 — frattale 54 (VERITÀ, aff 1.00)
+#   → HAS attenzione (conf 0.95)
+#   → HAS corpo (conf 0.85)
+#   → PART_OF coscienza (conf 0.90)
+#   → REQUIRES corpo (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	presenza	0.36	0.37	0.66	0.63	0.73	0.54	0.70	0.97
+
+## [22] sistemare — grado 117 — frattale 27 (DIVENIRE, aff 0.95)
+#   → HAS relazione (conf 1.00)
+#   → HAS regola (conf 0.95)
+#   → OPPOSITE_OF disorganizzare (conf 0.70)
+#   → OPPOSITE_OF disordine (conf 0.70)
+# sig attuale (Phase 63):
+#sig:	sistemare	0.50	0.35	0.15	0.35	0.95	0.29	0.30	0.54
+
+## [23] energia — grado 117 — frattale 63 (ARMONIA, aff 1.00)
+#   → REQUIRES nutrimento (conf 0.90)
+#   → REQUIRES fonte (conf 0.90)
+#   → SIMILAR_TO potenza (conf 0.72)
+#   → SIMILAR_TO vitalità (conf 0.85)
+# sig attuale (Phase 63):
+#sig:	energia	0.80	0.50	0.90	0.60	0.25	0.45	0.50	0.70
+
+## [24] intelligenza — grado 114 — frattale 0 (POTERE, aff 0.95)
+#   → DOES risolvere (conf 0.95)
+#   → DOES imparare (conf 1.00)
+#   → TRANSFORMS_INTO saggezza (conf 0.80)
+#   → CAUSES comprensione (conf 1.00)
+# sig attuale (Phase 63):
+#sig:	intelligenza	0.95	0.20	0.45	0.64	0.95	0.54	0.87	0.50
+
+## [25] finire — grado 113 — frattale 27 (DIVENIRE, aff 0.95)
+#   → SIMILAR_TO concludere (conf 0.85)
+#   → SIMILAR_TO cessare (conf 0.78)
+#   → IS_A azione (conf 1.00)
+#   → IS_A qualita (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	finire	0.50	0.35	0.22	0.35	0.95	0.33	0.30	0.37
+
+## [26] animalire — grado 112 — frattale 27 (DIVENIRE, aff 0.95)
+#   → IS_A azione (conf 0.95)
+#   → IS_A essere (conf 0.95)
+#   → CAUSES vita (conf 0.95)
+#   → CAUSES movimento (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	animalire	0.50	0.35	0.13	0.35	0.80	0.08	0.25	0.51
+
+## [27] spaziare — grado 110 — frattale 27 (DIVENIRE, aff 0.95)
+#   → FEELS_AS apertura (conf 0.90)
+#   → FEELS_AS distanza (conf 0.85)
+#   → WONDERS_ABOUT confine (conf 0.90)
+#   → CAUSES presenza (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	spaziare	0.50	0.35	0.12	0.35	0.95	0.13	0.30	0.50
+
+## [28] coscienza — grado 108 — frattale 18 (ARDORE, aff 0.92)
+#   → DOES percepire (conf 0.95)
+#   → DOES riflettere (conf 0.90)
+#   → FEELS_AS presenza (conf 0.95)
+#   → FEELS_AS lucere (conf 0.85)
+# sig attuale (Phase 63):
+#sig:	coscienza	0.50	0.40	0.38	0.67	0.65	0.52	0.87	0.51
+
+## [29] qualità — grado 106 — frattale 36 (SPAZIO, aff 0.93)
+#   → REQUIRES osservazione (conf 0.85)
+#   → OPPOSITE_OF mancanza (conf 0.70)
+#   → OPPOSITE_OF quantità (conf 0.90)
+#   → SIMILAR_TO qualita (conf 0.92)
+# sig attuale (Phase 63):
+#sig:	qualità	0.05	0.85	0.12	0.17	0.23	0.50	0.55	0.50
+
+## [30] curare — grado 106 — frattale 27 (DIVENIRE, aff 0.95)
+#   → OPPOSITE_OF maltrattare (conf 0.70)
+#   → OPPOSITE_OF trascuratezza (conf 0.90)
+#   → SIMILAR_TO assolvere (conf 0.55)
+#   → SIMILAR_TO assistere (conf 0.65)
+# sig attuale (Phase 63):
+#sig:	curare	0.50	0.35	0.47	0.35	0.95	0.37	0.55	0.93
+
+## [31] silenziare — grado 104 — frattale 27 (DIVENIRE, aff 0.95)
+#   → CONTEXT_OF meditazione (conf 0.95)
+#   → DOES accogliere (conf 0.85)
+#   → USED_FOR riflessione (conf 0.95)
+#   → USED_FOR ascolto (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	silenziare	0.50	0.35	0.13	0.35	0.95	0.22	0.55	0.51
+
+## [32] ordine — grado 104 — frattale 54 (VERITÀ, aff 0.90)
+#   → SIMILAR_TO disposizione (conf 0.78)
+#   → SIMILAR_TO comare (conf 0.85)
+#   → OPPOSITE_OF disordine (conf 0.95)
+#   → OPPOSITE_OF caos (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	ordine	0.18	0.40	0.40	0.81	0.90	0.49	0.80	0.58
+
+## [33] regolare — grado 100 — frattale 27 (DIVENIRE, aff 0.95)
+#   → CAUSES ordine (conf 0.90)
+#   → CAUSES sicurezza (conf 0.85)
+#   → HAS ritmare (conf 0.95)
+#   → HAS limite (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	regolare	0.50	0.35	0.12	0.35	0.95	0.39	0.55	0.50
+
+## [34] corpo — grado 99 — frattale 54 (VERITÀ, aff 0.95)
+#   → IS_A organismo (conf 0.95)
+#   → IS_A materia (conf 0.85)
+#   → REQUIRES nutrimento (conf 0.95)
+#   → REQUIRES energia (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	corpo	0.55	0.70	0.60	0.40	0.80	0.60	0.75	0.55
+
+## [35] cambiamento — grado 98 — frattale 45 (INTRECCIO, aff 1.00)
+#   → DOES trasformare (conf 0.95)
+#   → FEELS_AS vertigine (conf 0.85)
+#   → OPPOSITE_OF stasi (conf 0.95)
+#   → OPPOSITE_OF stabilità (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	cambiamento	0.65	0.25	0.65	0.70	0.25	0.70	0.45	0.55
+
+## [36] accordare — grado 98 — frattale 27 (DIVENIRE, aff 0.99)
+#   → REQUIRES dialogo (conf 0.95)
+#   → REQUIRES comprensione (conf 0.95)
+#   → IS_A azione (conf 0.95)
+#   → IS_A patto (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	accordare	0.95	0.35	0.64	0.29	0.95	0.37	0.55	1.00
+
+## [37] forzare — grado 96 — frattale 27 (DIVENIRE, aff 0.95)
+#   → SIMILAR_TO capacità (conf 0.68)
+#   → SIMILAR_TO potere (conf 0.70)
+#   → FEELS_AS tensione (conf 0.90)
+#   → PART_OF vita (conf 0.85)
+# sig attuale (Phase 63):
+#sig:	forzare	0.50	0.35	0.12	0.35	0.80	0.05	0.05	0.50
+
+## [38] comunicazione — grado 95 — frattale 18 (ARDORE, aff 0.97)
+#   → HAS ambiguità (conf 0.87)
+#   → HAS verità (conf 0.90)
+#   → REQUIRES linguaggio (conf 0.95)
+#   → REQUIRES alterità (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	comunicazione	0.50	0.85	0.27	0.44	0.22	0.52	0.55	0.53
+
+## [39] fermare — grado 93 — frattale 27 (DIVENIRE, aff 0.95)
+#   → IS_A azione (conf 0.95)
+#   → IS_A stato (conf 0.95)
+#   → OPPOSITE_OF muovere (conf 1.00)
+#   → OPPOSITE_OF avviare (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	fermare	0.50	0.35	0.41	0.35	0.95	0.42	0.55	0.13
+
+## [40] iniziare — grado 93 — frattale 27 (DIVENIRE, aff 0.95)
+#   → IS_A iniziativa (conf 0.92)
+#   → IS_A punto (conf 0.85)
+#   → PART_OF esistenza (conf 0.90)
+#   → PART_OF processo (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	iniziare	0.50	0.35	0.22	0.35	0.95	0.37	0.55	0.37
+
+## [41] connessione — grado 91 — frattale 54 (VERITÀ, aff 0.90)
+#   → SIMILAR_TO collegamento (conf 0.90)
+#   → SIMILAR_TO legame (conf 0.60)
+#   → IS_A relazione (conf 0.95)
+#   → IS_A legame (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	connessione	0.05	0.40	0.15	0.83	0.71	0.48	0.80	0.54
+
+## [42] formare — grado 91 — frattale 27 (DIVENIRE, aff 0.95)
+#   → OPPOSITE_OF informe (conf 0.95)
+#   → OPPOSITE_OF caos (conf 0.85)
+#   → HAS confine (conf 0.95)
+#   → SIMILAR_TO costruire (conf 0.75)
+# sig attuale (Phase 63):
+#sig:	formare	0.50	0.35	0.22	0.35	0.80	0.29	0.05	0.37
+
+## [43] artificiale — grado 91 — frattale 0 (POTERE, aff 0.95)
+#   → EXPRESSES scopo (conf 0.90)
+#   → SYMBOLIZES tecnologia (conf 0.80)
+#   → SYMBOLIZES futuro (conf 0.75)
+#   → EXCLUDES spontaneità (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	artificiale	0.95	0.20	0.61	0.62	0.95	0.51	0.87	0.28
+
+## [44] libertà — grado 90 — frattale 54 (VERITÀ, aff 1.00)
+#   → COEXISTS rischio (conf 0.90)
+#   → FEELS_AS apertura (conf 0.90)
+#   → FEELS_AS respirare (conf 0.95)
+#   → IMPLIES scelta (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	libertà	0.27	0.35	0.70	0.69	0.95	0.49	0.70	0.00
+
+## [45] verità — grado 89 — frattale 45 (INTRECCIO, aff 0.78)
+#   → CAUSES chiarezza (conf 0.90)
+#   → CAUSES dolore (conf 0.90)
+#   → COEXISTS dolore (conf 0.80)
+#   → WONDERS_ABOUT accessibilità (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	verità	0.56	0.40	0.78	0.64	0.78	0.48	0.93	0.00
+
+## [46] unire — grado 89 — frattale 27 (DIVENIRE, aff 0.99)
+#   → PART_OF relazione (conf 0.90)
+#   → CAUSES relazione (conf 0.95)
+#   → CAUSES forzare (conf 0.85)
+#   → DOES connettere (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	unire	0.95	0.35	0.34	0.29	0.95	0.48	0.55	0.37
+
+## [47] liberare — grado 87 — frattale 18 (ARDORE, aff 0.96)
+#   → REQUIRES indipendenza (conf 0.95)
+#   → SIMILAR_TO sciogliere (conf 0.82)
+#   → SIMILAR_TO assolvere (conf 0.75)
+#   → IS_A azione (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	liberare	0.50	0.35	0.26	0.35	0.80	0.43	0.25	0.33
+
+## [48] vuoto — grado 84 — frattale 27 (DIVENIRE, aff 1.00)
+#   → SIMILAR_TO abisso (conf 0.90)
+#   → FEELS_AS vertigine (conf 0.85)
+#   → REQUIRES spaziare (conf 0.95)
+#   → CAUSES paura (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	vuoto	0.05	0.60	0.15	0.30	0.20	0.30	0.65	0.25
+
+## [49] memoria — grado 84 — frattale 54 (VERITÀ, aff 0.85)
+#   → IS_A capacità (conf 0.90)
+#   → IS_A facoltà (conf 0.95)
+#   → CAUSES consapevolezza (conf 0.88)
+#   → CAUSES ripetizione (conf 0.82)
+# sig attuale (Phase 63):
+#sig:	memoria	0.35	0.40	0.46	0.77	0.71	0.48	0.55	0.42
+
+## [50] comprensione — grado 84 — frattale 54 (VERITÀ, aff 1.00)
+#   → REQUIRES tempo (conf 0.85)
+#   → REQUIRES ascoltare (conf 0.95)
+#   → DOES connettere (conf 0.85)
+#   → DOES unire (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	comprensione	0.11	0.40	0.36	0.88	0.71	0.49	0.70	0.47
+
+## [51] conoscenza — grado 83 — frattale 54 (VERITÀ, aff 1.00)
+#   → SIMILAR_TO sapere (conf 0.65)
+#   → SIMILAR_TO intelligenza (conf 0.55)
+#   → HAS concetto (conf 0.95)
+#   → HAS comprensione (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	conoscenza	0.12	0.65	0.37	0.83	0.44	0.49	0.70	0.58
+
+## [52] abbandonare — grado 80 — frattale 54 (VERITÀ, aff 1.00)
+#   → CAUSES sofferenza (conf 0.90)
+#   → CAUSES solitudine (conf 0.85)
+#   → SIMILAR_TO lasciare (conf 0.85)
+#   → SIMILAR_TO rinunciare (conf 0.75)
+# sig attuale (Phase 63):
+#sig:	abbandonare	0.95	0.20	0.63	0.44	0.95	0.41	0.70	0.86
+
+## [53] resistenza — grado 79 — frattale 54 (VERITÀ, aff 1.00)
+#   → FEELS_AS tensione (conf 0.95)
+#   → FEELS_AS sforzare (conf 0.90)
+#   → OPPOSITE_OF debolezza (conf 1.00)
+#   → OPPOSITE_OF accettazione (conf 0.85)
+# sig attuale (Phase 63):
+#sig:	resistenza	0.29	0.40	0.64	0.58	0.71	0.45	0.70	0.00
+
+## [54] percezione — grado 78 — frattale 36 (SPAZIO, aff 1.00)
+#   → REQUIRES differenza (conf 0.90)
+#   → REQUIRES corpo (conf 0.90)
+#   → DOES connettere (conf 0.80)
+#   → DOES sentire (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	percezione	0.43	0.65	0.32	0.58	0.30	0.49	0.55	0.48
+
+## [55] paura — grado 78 — frattale 45 (INTRECCIO, aff 0.85)
+#   → IS_A emozione (conf 0.95)
+#   → IS_A istinto (conf 0.95)
+#   → SIMILAR_TO timore (conf 0.90)
+#   → SIMILAR_TO spaventare (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	paura	0.10	0.50	0.90	0.65	0.80	0.55	0.40	0.05
+
+## [56] gioia — grado 78 — frattale 36 (SPAZIO, aff 0.95)
+#   → PART_OF vita (conf 0.90)
+#   → OPPOSITE_OF tristezza (conf 0.95)
+#   → OPPOSITE_OF dolore (conf 0.90)
+#   → CAUSES soddisfazione (conf 0.92)
+# sig attuale (Phase 63):
+#sig:	gioia	0.55	0.30	0.80	0.60	0.25	0.35	0.55	0.95
+
+## [57] dolore — grado 78 — frattale 54 (VERITÀ, aff 1.00)
+#   → CAUSES attenzione (conf 0.95)
+#   → CAUSES crescita (conf 0.80)
+#   → DOES segnalare (conf 0.95)
+#   → DOES trasformare (conf 0.80)
+# sig attuale (Phase 63):
+#sig:	dolore	0.10	0.55	0.90	0.35	0.70	0.40	0.70	0.05
+
+## [58] passare — grado 77 — frattale 27 (DIVENIRE, aff 0.95)
+#   → PART_OF vita (conf 0.95)
+#   → IMPLIES memoria (conf 0.95)
+#   → EXCLUDES futuro (conf 0.95)
+#   → COEXISTS presente (conf 0.80)
+# sig attuale (Phase 63):
+#sig:	passare	0.50	0.35	0.12	0.35	0.80	0.33	0.57	0.50
+
+## [59] equilibrio — grado 77 — frattale 54 (VERITÀ, aff 0.90)
+#   → CAUSES armonia (conf 0.90)
+#   → CAUSES pace (conf 0.90)
+#   → FEELS_AS centratura (conf 0.90)
+#   → REQUIRES opposto (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	equilibrio	0.18	0.40	0.64	0.69	0.90	0.46	0.80	1.00
+
+## [60] disprezzare — grado 76 — frattale 27 (DIVENIRE, aff 0.95)
+#   → SIMILAR_TO sdegnare (conf 0.85)
+#   → SIMILAR_TO dispregiare (conf 0.92)
+#   → IS_A azione (conf 0.95)
+#   → IS_A sentimento (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	disprezzare	0.50	0.35	0.52	0.35	0.95	0.41	0.55	0.00
+
+## [61] apertura — grado 76 — frattale 54 (VERITÀ, aff 1.00)
+#   → FEELS_AS respirare (conf 0.95)
+#   → HAS possibilità (conf 0.95)
+#   → HAS espansione (conf 0.95)
+#   → DOES accogliere (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	apertura	0.05	0.40	0.16	0.29	0.90	0.46	0.70	0.55
+
+## [62] caos — grado 76 — frattale 54 (VERITÀ, aff 0.85)
+#   → COEXISTS energia (conf 0.90)
+#   → COEXISTS possibilità (conf 0.85)
+#   → IS_A stato (conf 0.90)
+#   → CAUSES confusione (conf 1.00)
+# sig attuale (Phase 63):
+#sig:	caos	0.36	0.40	0.78	0.74	0.78	0.46	0.55	0.00
+
+## [63] crescita — grado 75 — frattale 54 (VERITÀ, aff 0.90)
+#   → DOES trasformare (conf 0.90)
+#   → DOES espandere (conf 0.95)
+#   → SIMILAR_TO crescimento (conf 0.92)
+#   → SIMILAR_TO crescere (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	crescita	0.17	0.40	0.80	0.88	0.90	0.48	0.80	1.00
+
+## [64] domandare — grado 73 — frattale 27 (DIVENIRE, aff 0.95)
+#   → PART_OF dialogo (conf 0.95)
+#   → HAS ricerca (conf 0.90)
+#   → HAS apertura (conf 0.95)
+#   → REQUIRES curiosita (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	domandare	0.50	0.35	0.12	0.35	0.95	0.28	0.55	0.50
+
+## [65] misurare — grado 72 — frattale 27 (DIVENIRE, aff 0.95)
+#   → SIMILAR_TO valutare (conf 0.80)
+#   → SIMILAR_TO stimare (conf 0.75)
+#   → IS_A azione (conf 1.00)
+#   → IS_A misura (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	misurare	0.50	0.35	0.14	0.35	0.80	0.31	0.25	0.53
+
+## [66] attenzione — grado 72 — frattale 54 (VERITÀ, aff 0.90)
+#   → REQUIRES presenza (conf 0.90)
+#   → REQUIRES interesse (conf 0.85)
+#   → DOES orientare (conf 0.90)
+#   → DOES ricevere (conf 0.85)
+# sig attuale (Phase 63):
+#sig:	attenzione	0.17	0.40	0.64	0.71	0.90	0.47	0.80	0.00
+
+## [67] ostacolare — grado 71 — frattale 27 (DIVENIRE, aff 0.95)
+#   → CAUSES rallentamento (conf 1.00)
+#   → CAUSES fatica (conf 0.90)
+#   → REQUIRES percorso (conf 0.90)
+#   → IS_A azione (conf 1.00)
+# sig attuale (Phase 63):
+#sig:	ostacolare	0.50	0.35	0.13	0.35	0.95	0.33	0.55	0.51
+
+## [68] riposare — grado 70 — frattale 27 (DIVENIRE, aff 0.95)
+#   → IS_A azione (conf 0.95)
+#   → IS_A stato (conf 0.95)
+#   → FEELS_AS leggerezza (conf 0.85)
+#   → FEELS_AS abbandono (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	riposare	0.50	0.35	0.13	0.35	0.95	0.26	0.55	0.51
+
+## [69] separazione — grado 70 — frattale 18 (ARDORE, aff 0.90)
+#   → OPPOSITE_OF unione (conf 0.94)
+#   → HAS profondità (conf 0.82)
+#   → IS_A rottura (conf 0.95)
+#   → IS_A esperienza (conf 0.92)
+# sig attuale (Phase 63):
+#sig:	separazione	0.33	0.40	0.40	0.71	0.90	0.44	0.80	0.43
+
+## [70] bloccare — grado 69 — frattale 27 (DIVENIRE, aff 0.95)
+#   → IS_A azione (conf 0.95)
+#   → IS_A oggetto (conf 0.95)
+#   → SIMILAR_TO fermare (conf 0.70)
+#   → SIMILAR_TO arrestare (conf 0.72)
+# sig attuale (Phase 63):
+#sig:	bloccare	0.50	0.35	0.13	0.35	0.80	0.36	0.25	0.51
+
+## [71] lucere — grado 68 — frattale 27 (DIVENIRE, aff 0.95)
+#   → DOES orientare (conf 0.85)
+#   → DOES illuminare (conf 0.95)
+#   → FEELS_AS risveglio (conf 0.90)
+#   → CAUSES vita (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	lucere	0.50	0.35	0.13	0.35	0.95	0.18	0.30	0.49
+
+## [72] freddare — grado 68 — frattale 27 (DIVENIRE, aff 0.95)
+#   → SIMILAR_TO rinfrescare (conf 0.55)
+#   → SIMILAR_TO gelido (conf 0.88)
+#   → IS_A stato (conf 1.00)
+#   → IS_A qualità (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	freddare	0.50	0.35	0.12	0.35	0.95	0.13	0.30	0.50
+
+## [73] identità — grado 68 — frattale 54 (VERITÀ, aff 0.85)
+#   → HAS valori (conf 0.90)
+#   → HAS storia (conf 0.85)
+#   → SIMILAR_TO sé (conf 0.90)
+#   → SIMILAR_TO essere (conf 0.85)
+# sig attuale (Phase 63):
+#sig:	identità	0.10	0.40	0.48	0.67	0.78	0.42	0.55	0.91
+
+## [74] conflitto — grado 67 — frattale 54 (VERITÀ, aff 0.83)
+#   → DOES separare (conf 0.90)
+#   → DOES distruggere (conf 0.90)
+#   → REQUIRES risoluzione (conf 0.90)
+#   → REQUIRES differenza (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	conflitto	0.33	0.40	0.78	0.75	0.65	0.47	0.87	0.00
+
+## [75] confine — grado 67 — frattale 18 (ARDORE, aff 0.96)
+#   → HAS permeabilità (conf 0.82)
+#   → HAS ambiguità (conf 0.79)
+#   → SIMILAR_TO limite (conf 0.85)
+#   → SIMILAR_TO frontiera (conf 0.82)
+# sig attuale (Phase 63):
+#sig:	confine	0.75	0.40	0.34	0.44	0.90	0.46	0.93	0.55
+
+## [76] consapevolezza — grado 67 — frattale 54 (VERITÀ, aff 0.90)
+#   → DOES illuminare (conf 0.90)
+#   → CAUSES scelta (conf 0.90)
+#   → FEELS_AS risvegliare (conf 0.90)
+#   → REQUIRES attenzione (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	consapevolezza	0.05	0.40	0.52	0.89	0.90	0.47	0.80	0.00
+
+## [77] amore — grado 67 — frattale 45 (INTRECCIO, aff 1.00)
+#   → PART_OF esistenza (conf 0.96)
+#   → PART_OF relazione (conf 0.95)
+#   → OPPOSITE_OF indifferenza (conf 0.90)
+#   → OPPOSITE_OF odiare (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	amore	0.60	0.80	0.75	0.40	0.15	0.70	0.50	0.95
+
+## [78] ascoltare — grado 67 — frattale 62 (ETICA, aff 0.90)
+#   → HAS attenzione (conf 0.95)
+#   → HAS silenzio (conf 0.95)
+#   → PART_OF dialogo (conf 0.95)
+#   → REQUIRES silenziare (conf 0.85)
+# sig attuale (Phase 63):
+#sig:	ascoltare	0.50	0.30	0.55	0.50	0.20	0.45	0.60	0.60
+
+## [79] fiducia — grado 66 — frattale 54 (VERITÀ, aff 0.85)
+#   → REQUIRES tempo (conf 0.90)
+#   → REQUIRES coerenza (conf 0.95)
+#   → IS_A emozione (conf 1.00)
+#   → IS_A sentimento (conf 0.95)
+# sig attuale (Phase 63):
+#sig:	fiducia	0.27	0.40	0.74	0.75	0.90	0.46	0.55	1.00
+
+## [80] controllare — grado 66 — frattale 27 (DIVENIRE, aff 0.95)
+#   → IS_A azione (conf 1.00)
+#   → IS_A potere (conf 0.95)
+#   → CAUSES ordine (conf 1.00)
+#   → CAUSES sicurezza (conf 0.90)
+# sig attuale (Phase 63):
+#sig:	controllare	0.50	0.35	0.13	0.35	0.95	0.34	0.55	0.51
+

@@ -594,7 +594,7 @@ fn infer_tense(active_words: &[(&str, f64)], lexicon: &Lexicon) -> grammar::Tens
     let mut total_act = 0.0_f64;
     for (word, activation) in active_words.iter().take(10) {
         if let Some(pat) = lexicon.get(word) {
-            tempo_sum += pat.signature.values()[7] * activation;
+            tempo_sum += pat.signature.values()[3] * activation; // Tempo (I Ching: ☵ Acqua = dim 3)
             total_act += activation;
         }
     }

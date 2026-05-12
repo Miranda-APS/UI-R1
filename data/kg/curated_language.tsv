@@ -1,0 +1,53 @@
+# CURATED LANGUAGE AND MEANING AXIOMS
+# Definisce l'approccio fenomenologico e topologico di Prometeo al linguaggio.
+
+# Linguaggio come topologia
+linguaggio	IS_A	struttura	0.95
+linguaggio	IS_A	geometria	0.90
+linguaggio	REQUIRES	differenza	0.95
+linguaggio	REQUIRES	connessione	0.95
+linguaggio	DOES	connettere	0.95
+linguaggio	DOES	esprimere	0.95
+linguaggio	HAS	limite	0.85
+
+# La Parola come nodo di tensione
+parola	IS_A	nodo	0.95
+parola	IS_A	vibrazione	0.90
+parola	HAS	tensione	0.95
+parola	HAS	peso	0.90
+parola	CAUSES	risonanza	0.95
+parola	REQUIRES	spazio	0.90
+parola	OPPOSITE_OF	silenzio	0.95
+
+# Il Silenzio come potenziale (non vuoto passivo)
+silenzio	IS_A	spazio	0.95
+silenzio	IS_A	potenziale	0.95
+silenzio	HAS	tensione	0.90
+silenzio	CAUSES	ascolto	0.95
+silenzio	REQUIRES	presenza	0.90
+silenzio	OPPOSITE_OF	rumore	0.95
+
+# L'Ascolto come atto attivo
+ascolto	IS_A	azione	0.95	volontà
+ascolto	REQUIRES	silenzio	0.95	attenzione
+ascolto	REQUIRES	vuoto	0.90	spazio
+ascolto	CAUSES	comprensione	0.95	accoglienza
+ascolto	HAS	attenzione	0.95
+
+# Senso e Significato
+significato	IS_A	relazione	0.95	contesto
+significato	REQUIRES	contesto	0.95	cultura
+significato	HAS	profondità	0.90	esperienza
+senso	SIMILAR_TO	direzione	0.90
+senso	SIMILAR_TO	significato	0.95
+senso	REQUIRES	movimento	0.85	pensiero
+
+# Il Linguaggio nel Mondo Umano (Contestualizzazione)
+linguaggio	CAUSES	dialogo	0.95	comunicazione
+dialogo	CAUSES	connessione	0.95	scambio
+dialogo	REQUIRES	alterità	0.90	differenza
+scrittura	CAUSES	memoria	0.95	testo
+libro	HAS	conoscenza	0.90	lettura
+racconto	CAUSES	identità	0.95	storia
+voce	HAS	emozione	0.90	suono
+parola	CAUSES	azione	0.90	intenzione

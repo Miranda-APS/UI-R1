@@ -11,15 +11,15 @@
 /// La "stance" diventa una proiezione derivata dal profilo, non un'etichetta
 /// imposta. Con 8 dimensioni continue, lo spazio degli stati interni è infinito.
 ///
-/// Mapping Octalysis → 8D Prometeo:
-///   CD1 Epic Meaning     → dim 6 (Agency)      — "questo conta"
-///   CD2 Accomplishment   → dim 3 (Definizione)  — "sto progredendo"
-///   CD3 Creativity       → dim 4 (Complessità)  — "posso creare"
-///   CD4 Ownership        → dim 0 (Confine)      — "so chi sono"
-///   CD5 Social Influence → dim 1 (Valenza)      — "sono in relazione"
-///   CD6 Scarcity         → dim 7 (Tempo)        — "questo è prezioso"
+/// Mapping Octalysis → 8D Prometeo (ordine I Ching canonico):
+///   CD1 Epic Meaning     → dim 0 (Agency)       — "questo conta"
+///   CD2 Accomplishment   → dim 6 (Definizione)  — "sto progredendo"
+///   CD3 Creativity       → dim 5 (Complessità)  — "posso creare"
+///   CD4 Ownership        → dim 4 (Confine)      — "so chi sono"
+///   CD5 Social Influence → dim 7 (Valenza)      — "sono in relazione"
+///   CD6 Scarcity         → dim 3 (Tempo)        — "questo è prezioso"
 ///   CD7 Unpredictability → dim 2 (Intensità)    — "sono sorpreso"
-///   CD8 Loss Avoidance   → dim 5 (Permanenza)   — "potrei perdere qualcosa"
+///   CD8 Loss Avoidance   → dim 1 (Permanenza)   — "potrei perdere qualcosa"
 
 use serde::{Serialize, Deserialize};
 use crate::topology::needs::NeedsState;
@@ -41,8 +41,8 @@ pub const DRIVE_NAMES: [&str; 8] = [
     "Vulnerabilità",    // CD8 Loss Avoidance
 ];
 
-/// Mapping CD index → dimensione 8D del campo topologico.
-pub const DRIVE_DIM: [usize; 8] = [6, 3, 4, 0, 1, 7, 2, 5];
+/// Mapping CD index → dimensione 8D del campo topologico (ordine I Ching).
+pub const DRIVE_DIM: [usize; 8] = [0, 6, 5, 4, 7, 3, 2, 1];
 
 /// Mapping CD index → livello NeedsHierarchy (indice in satisfaction[7]).
 /// CD6 condivide L4 (Comprensione) con CD2.

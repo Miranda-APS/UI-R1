@@ -1,0 +1,46 @@
+# CURATED NATURE AND PHYSICS AXIOMS
+# Insegna a Prometeo le categorie macroscopiche dell'universo fisico e organico.
+
+# L'Universo e le Forze Fisiche
+universo	IS_A	spazio	0.95	totalità
+universo	HAS	materia	0.95	sostanza
+universo	HAS	energia	0.95	movimento
+energia	CAUSES	movimento	0.95	forza
+energia	CAUSES	calore	0.90	trasformazione
+forza	CAUSES	cambiamento	0.95	energia
+gravità	IS_A	forza	0.95	attrazione
+gravità	REQUIRES	materia	0.90	massa
+
+# Spazio e Materia
+materia	HAS	forma	0.95	struttura
+materia	REQUIRES	spazio	0.95	presenza
+materia	OPPOSITE_OF	vuoto	0.95	assenza
+vuoto	IS_A	spazio	0.95	potenziale
+forma	REQUIRES	limite	0.90	confine
+luce	IS_A	energia	0.95	onda
+luce	OPPOSITE_OF	buio	0.95	assenza
+ombra	REQUIRES	luce	0.90	ostacolo
+
+# Il Cosmo e il Microcosmo
+stella	IS_A	corpo	0.90	cosmo
+stella	CAUSES	luce	0.95	calore
+sole	IS_A	stella	0.95	centro
+sole	CAUSES	vita	0.95	energia
+terra	IS_A	pianeta	0.95	mondo
+terra	HAS	natura	0.95	vita
+atomo	IS_A	struttura	0.95	materia
+atomo	PART_OF	materia	0.95	fondamento
+
+# Il Dominio Biologico (Radici della vita organica)
+natura	HAS	ecosistema	0.95	equilibrio
+animale	IS_A	essere	0.95	vita
+animale	HAS	istinto	0.90	sopravvivenza
+animale	REQUIRES	nutrimento	0.95	energia
+pianta	IS_A	essere	0.95	vita
+pianta	REQUIRES	luce	0.95	sole
+sangue	HAS	vita	0.90	energia
+sangue	PART_OF	corpo	0.95	animale
+cellula	IS_A	struttura	0.95	vita
+cellula	PART_OF	animale	0.95	pianta
+nascita	CAUSES	vita	0.95	inizio
+nascita	OPPOSITE_OF	morte	0.95	fine

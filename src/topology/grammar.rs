@@ -489,6 +489,55 @@ pub fn lemmatize(word: &str) -> Option<LemmaResult> {
         }
     }
 
+    // 3b. Presente regolare (-iamo, -ate, -ete, -ite, -ano, -ono, -o, -i, -a, -e)
+    // Usiamo una priorità cauta e limitiamo ai suffissi lunghi per non sovrascrivere troppo.
+    // L'italiano ha molte ambiguità qui (es. "mani" -> nome plurale o tu mani?)
+    // Pertanto, applichiamo solo per radici abbastanza lunghe (>= 3 chars).
+    for (suf, person, end_vowel) in &[
+        ("iamo", FirstPlural, "a"), ("iamo", FirstPlural, "e"), ("iamo", FirstPlural, "i"),
+        ("ate", SecondPlural, "a"), ("ete", SecondPlural, "e"), ("ite", SecondPlural, "i"),
+        ("ano", ThirdPlural, "a"), ("ono", ThirdPlural, "e"), ("ono", ThirdPlural, "i"),
+    ] {
+        if let Some(stem) = w.strip_suffix(suf) {
+            if stem.len() >= 2 {
+                return Some(LemmaResult {
+                    infinitive: format!("{}re", format!("{}{}", stem, end_vowel)),
+                    person: *person,
+                    tense: Present,
+                });
+            }
+        }
+    }
+    
+    // Per "vivi", "ami", "senti" (2a persona)
+    if let Some(stem) = w.strip_suffix("i") {
+        if stem.len() >= 3 {
+            // È un'euristica grezza: proviamo -are, -ere, -ire in ordine
+            // L'ideale sarebbe controllare il lessico, ma qui non abbiamo accesso
+            // Restituiamo una forma fittizia o preferiamo "ere"/"ire" se finisce con certe lettere.
+            // Semplifichiamo per i verbi più comuni come "vivere".
+            if stem.ends_with("iv") { // vivi -> vivere
+                return Some(LemmaResult {
+                    infinitive: format!("{}ere", stem),
+                    person: Second,
+                    tense: Present,
+                });
+            } else if stem.ends_with("am") { // ami -> amare
+                return Some(LemmaResult {
+                    infinitive: format!("{}are", stem),
+                    person: Second,
+                    tense: Present,
+                });
+            }
+            // Fallback generico
+            return Some(LemmaResult {
+                infinitive: format!("{}are", stem), // Assumiamo 1a coniugazione per default
+                person: Second,
+                tense: Present,
+            });
+        }
+    }
+
     // 4. Condizionale -ire (irei/iresti/irebbe/iremmo/ireste/irebbero — distintivo)
     for (suf, person) in &[
         ("irebbero", ThirdPlural), ("ireste", SecondPlural), ("iremmo", FirstPlural),

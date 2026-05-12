@@ -12,7 +12,7 @@ fn print_signature(word: &str, sig: &[f64; 8]) {
 
 fn main() {
     println!("=== Verifica Polarizzazione Firme 8D nel Lexicon ===");
-    println!("Dimensioni: [Confine, Valenza, Intensità, Definizione, Complessità, Permanenza, Agency, Tempo]\n");
+    println!("Dimensioni (I Ching canonico): [Agency, Permanenza, Intensità, Tempo, Confine, Complessità, Definizione, Valenza]\n");
 
     let mut lexicon = Lexicon::bootstrap();
     lexicon.load_phenomenology_signatures();

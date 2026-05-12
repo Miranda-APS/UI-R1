@@ -559,6 +559,7 @@ impl KnowledgeGraph {
         word: &str,
         max_degree: usize,
         valence_scores: &std::collections::HashMap<String, f64>,
+        temporal_scores: &std::collections::HashMap<String, f64>,
     ) -> Option<[f64; 8]> {
         if !self.contains(word) { return None; }
 
@@ -566,25 +567,21 @@ impl KnowledgeGraph {
 
         // Contatori strutturali
         let causes_out = self.query_objects(word, crate::topology::relation::RelationType::Causes).len();
-        let causes_in  = self.query_subjects(word, crate::topology::relation::RelationType::Causes).len();
         let isa_parents = self.query_objects(word, crate::topology::relation::RelationType::IsA).len();
         let isa_children = self.query_subjects(word, crate::topology::relation::RelationType::IsA).len();
         let has_opposite = !self.query_objects(word, crate::topology::relation::RelationType::OppositeOf).is_empty();
         let total_deg = self.total_degree(word);
+        let out_deg = self.out_degree(word);
+        let in_deg = self.in_degree(word);
 
         // ── Dim 0: Agency (☰ Cielo) ──────────────────────────────────────────
         // Quanto questa parola è AGENTE di cambiamento vs. passiva ricevente?
-        // CAUSES outgoing = la parola produce effetti nel mondo → alto Agency
-        // CAUSES incoming = la parola è effetto di altro → basso Agency
-        // Le pure categorie (animale, qualità) hanno agency media — non causano, non sono causate
-        let causes_total = causes_out + causes_in;
-        sig[0] = if causes_total > 0 {
-            (causes_out as f64 / causes_total as f64).clamp(0.05, 0.95)
-        } else if isa_children > 5 {
-            0.20  // categoria astratta con molti figli: permanente, non agente
-        } else {
-            0.50  // parola senza relazioni causali: agency neutra
-        };
+        // ASIMMETRIA SOGGETTO/OGGETTO su tutte le 20 relazioni:
+        //   - subject-heavy (verbi, agenti, cause) → Agency alta
+        //   - object-heavy (parti del corpo, ricettori, effetti) → Agency bassa
+        // Smoothing Beta(1,1): nodi con poco grado tendono a 0.5 (neutro), evita estremi spuri.
+        // (Smussa l'estremismo dei leaf con 1 solo arco rispetto al puro out/(out+in).)
+        sig[0] = ((out_deg as f64 + 1.0) / (out_deg as f64 + in_deg as f64 + 2.0)).clamp(0.05, 0.95);
 
         // ── Dim 1: Permanenza (☷ Terra) ──────────────────────────────────────
         // Quanto questo concetto è stabile/immutabile nel mondo?
@@ -615,17 +612,14 @@ impl KnowledgeGraph {
         let emotional_intensity = (valence - 0.5).abs() * 2.0; // 0=neutro, 1=carico
         sig[2] = (intensity_from_causes * 0.6 + emotional_intensity * 0.4).clamp(0.05, 0.95);
 
-        // ── Dim 3: Tempo (☵ Acqua) ────────────────────────────────────────────
-        // Quanto questa parola è radicata in processi/flussi temporali?
-        // Parole in catene causali (sia source che target) → alto Tempo
-        // Categorie pure (IS_A hierarchy) → basso Tempo
-        sig[3] = if causes_total > 0 {
-            ((causes_total as f64) / (causes_total as f64 + 5.0)).min(0.9)
-        } else if isa_children > 20 {
-            0.15  // categoria statica: fuori dal tempo
-        } else {
-            0.35  // concetto con poca storia causale
-        };
+        // ── Dim 3: Tempo (☵ Acqua) — DIVENIRE ────────────────────────────────
+        // Proiettività al futuro vs. radicamento nel passato.
+        //   0 = passato/conservativo, 0.5 = atemporale/presente, 1 = futuro/proiettivo
+        // BFS dalle ancore temporali (futuro+/passato-): le parole prossime
+        // a "futuro/domani/avvenire" tendono a 1, prossime a "passato/ieri/antico"
+        // tendono a 0. Le parole non raggiunte restano a 0.5 (atemporali).
+        // Stesso pattern della Valenza — propagazione semantica, non struttura locale.
+        sig[3] = temporal_scores.get(word).copied().unwrap_or(0.5);
 
         // ── Dim 4: Confine (☶ Montagna) ───────────────────────────────────────
         // Quanto questo concetto è preciso/delimitato?
@@ -787,6 +781,122 @@ impl KnowledgeGraph {
             let avg = (total / n).clamp(-1.0, 1.0);
             // Mappa [-1, +1] → [0, 1]
             result.insert(word.clone(), (avg + 1.0) / 2.0);
+        }
+
+        result
+    }
+
+    /// Propagazione BFS della carica temporale dal KG.
+    ///
+    /// Stesso pattern di `compute_valence_scores`, ma con ancore temporali:
+    /// futuro+ (proiettività) vs passato- (radicamento). Le parole nel KG
+    /// ereditano una posizione su [0,1] dalla loro distanza dalle ancore.
+    ///   0.0 = passato/conservativo
+    ///   0.5 = atemporale/presente
+    ///   1.0 = futuro/proiettivo
+    /// Le parole non raggiunte non compaiono nella mappa (default 0.5 nel chiamante).
+    pub fn compute_temporal_scores(&self) -> std::collections::HashMap<String, f64> {
+        use std::collections::{HashMap, VecDeque};
+
+        // Ancore future (carica positiva → proiettività)
+        const FUTURE_ROOTS: &[(&str, f64)] = &[
+            ("futuro", 1.0), ("avvenire", 0.95), ("domani", 0.90),
+            ("dopo", 0.70), ("presto", 0.70), ("nuovo", 0.60),
+            ("moderno", 0.65), ("prossimo", 0.65), ("imminente", 0.80),
+            ("iniziare", 0.65), ("nascere", 0.70), ("cominciare", 0.65),
+        ];
+        // Ancore passate (carica negativa → radicamento)
+        const PAST_ROOTS: &[(&str, f64)] = &[
+            ("passato", -1.0), ("ieri", -0.90), ("antico", -0.85),
+            ("prima", -0.55), ("vecchio", -0.65), ("anticamente", -0.85),
+            ("storia", -0.50), ("ricordo", -0.55), ("memoria", -0.45),
+            ("origine", -0.55), ("finire", -0.45), ("morire", -0.50),
+        ];
+
+        const SIMILAR_DECAY: f64 = 0.85;
+        const ISA_DECAY:     f64 = 0.60;
+        const CAUSES_DECAY:  f64 = 0.40;
+        const MAX_HOPS: usize = 4;
+
+        let mut scores: HashMap<String, f64> = HashMap::new();
+        let mut counts: HashMap<String, usize> = HashMap::new();
+
+        let all_roots: Vec<(&str, f64)> = FUTURE_ROOTS.iter().chain(PAST_ROOTS.iter())
+            .map(|&(w, v)| (w, v))
+            .collect();
+
+        for (root, charge) in &all_roots {
+            let mut queue: VecDeque<(String, f64, usize)> = VecDeque::new();
+            let mut visited: HashMap<String, f64> = HashMap::new();
+
+            queue.push_back((root.to_string(), *charge, 0));
+            visited.insert(root.to_string(), *charge);
+
+            while let Some((word, current_charge, hop)) = queue.pop_front() {
+                *scores.entry(word.clone()).or_insert(0.0) += current_charge;
+                *counts.entry(word.clone()).or_insert(0) += 1;
+
+                if hop >= MAX_HOPS { continue; }
+
+                for neighbor in self.query_objects(&word, crate::topology::relation::RelationType::SimilarTo) {
+                    let new_charge = current_charge * SIMILAR_DECAY;
+                    if new_charge.abs() < 0.05 { continue; }
+                    if !visited.contains_key(neighbor) {
+                        visited.insert(neighbor.to_string(), new_charge);
+                        queue.push_back((neighbor.to_string(), new_charge, hop + 1));
+                    }
+                }
+                for neighbor in self.query_subjects(&word, crate::topology::relation::RelationType::SimilarTo) {
+                    let new_charge = current_charge * SIMILAR_DECAY;
+                    if new_charge.abs() < 0.05 { continue; }
+                    if !visited.contains_key(neighbor) {
+                        visited.insert(neighbor.to_string(), new_charge);
+                        queue.push_back((neighbor.to_string(), new_charge, hop + 1));
+                    }
+                }
+
+                for child in self.query_subjects(&word, crate::topology::relation::RelationType::IsA) {
+                    let new_charge = current_charge * ISA_DECAY;
+                    if new_charge.abs() < 0.05 { continue; }
+                    if !visited.contains_key(child) {
+                        visited.insert(child.to_string(), new_charge);
+                        queue.push_back((child.to_string(), new_charge, hop + 1));
+                    }
+                }
+
+                for effect in self.query_objects(&word, crate::topology::relation::RelationType::Causes) {
+                    let new_charge = current_charge * CAUSES_DECAY;
+                    if new_charge.abs() < 0.05 { continue; }
+                    if !visited.contains_key(effect) {
+                        visited.insert(effect.to_string(), new_charge);
+                        queue.push_back((effect.to_string(), new_charge, hop + 1));
+                    }
+                }
+            }
+        }
+
+        // NB: niente OPPOSITE_OF flip per il temporal — le coppie passato↔futuro,
+        // ieri↔domani, sempre↔mai sono già coperte dalle ancore in entrambe le
+        // polarità. Il flip post-hoc creerebbe oscillazioni instabili.
+
+        // Normalizza: SOMMA NETTA (non media) con squashing tanh.
+        // Con la media, parole raggiunte da molti cammini opposti collassano a 0.5
+        // perché futuro/passato sono centrali nel KG e si toccano sulle stesse
+        // parole. La somma preserva il segnale netto: una parola con +0.6 da 3
+        // cammini futuro e -0.4 da 1 cammino passato resta a +0.2 (proiettiva).
+        // tanh con scale=2.0 evita saturazione: somme deboli rimangono vicino a 0.5.
+        let _ = counts; // counts non più usato (era per la media)
+        let mut result = HashMap::new();
+        for (word, total) in &scores {
+            let squashed = (total / 2.0).tanh();
+            result.insert(word.clone(), (squashed + 1.0) / 2.0);
+        }
+
+        // Le ancore mantengono il loro valore canonico (no drift da altri BFS).
+        for (root, charge) in &all_roots {
+            if self.contains(root) {
+                result.insert(root.to_string(), (*charge + 1.0) / 2.0);
+            }
         }
 
         result

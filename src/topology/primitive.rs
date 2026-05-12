@@ -8,23 +8,29 @@ use std::fmt;
 /// Indici delle 8 dimensioni primitive.
 /// Usati per accesso posizionale e per identificare quali dimensioni
 /// sono fisse vs libere in un frattale.
+///
+/// Ordine I Ching canonico (Cielo→Lago). Consistente con:
+///   - `Trigram::ALL` (Cielo=0, Terra=1, ..., Lago=7)
+///   - `KnowledgeGraph::derive_8d_from_kg` (Phase 63)
+///   - `phenomenology.tsv` (header)
+///   - `valence.rs::DRIVE_DIM` (mappatura Octalysis→dim)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Dim {
-    Confine = 0,      // Esterno ↔ Interno/Io
-    Valenza = 1,      // Repulsione ↔ Attrazione
-    Intensita = 2,    // Debole ↔ Forte
-    Definizione = 3,  // Vago ↔ Netto
-    Complessita = 4,  // Semplice ↔ Composto
-    Permanenza = 5,   // Transitorio ↔ Stabile
-    Agency = 6,       // Paziente ↔ Agente
-    Tempo = 7,        // Passato ↔ Futuro
+    Agency = 0,       // ☰ Cielo     — Paziente ↔ Agente
+    Permanenza = 1,   // ☷ Terra     — Transitorio ↔ Stabile
+    Intensita = 2,    // ☳ Tuono     — Debole ↔ Forte
+    Tempo = 3,        // ☵ Acqua     — Passato ↔ Futuro
+    Confine = 4,      // ☶ Montagna  — Esterno ↔ Interno/Io
+    Complessita = 5,  // ☴ Vento     — Semplice ↔ Composto
+    Definizione = 6,  // ☲ Fuoco     — Vago ↔ Netto
+    Valenza = 7,      // ☱ Lago      — Repulsione ↔ Attrazione
 }
 
 impl Dim {
     pub const ALL: [Dim; 8] = [
-        Dim::Confine, Dim::Valenza, Dim::Intensita, Dim::Definizione,
-        Dim::Complessita, Dim::Permanenza, Dim::Agency, Dim::Tempo,
+        Dim::Agency, Dim::Permanenza, Dim::Intensita, Dim::Tempo,
+        Dim::Confine, Dim::Complessita, Dim::Definizione, Dim::Valenza,
     ];
 
     pub fn index(self) -> usize {
@@ -34,15 +40,15 @@ impl Dim {
     /// Ricostruisce un Dim dal suo indice [0..7].
     pub fn from_index(idx: usize) -> Dim {
         match idx {
-            0 => Dim::Confine,
-            1 => Dim::Valenza,
+            0 => Dim::Agency,
+            1 => Dim::Permanenza,
             2 => Dim::Intensita,
-            3 => Dim::Definizione,
-            4 => Dim::Complessita,
-            5 => Dim::Permanenza,
-            6 => Dim::Agency,
-            7 => Dim::Tempo,
-            _ => Dim::Confine, // fallback
+            3 => Dim::Tempo,
+            4 => Dim::Confine,
+            5 => Dim::Complessita,
+            6 => Dim::Definizione,
+            7 => Dim::Valenza,
+            _ => Dim::Agency, // fallback
         }
     }
 
@@ -237,9 +243,10 @@ mod tests {
 
     #[test]
     fn test_clamp() {
+        // Ordine I Ching: [Agency, Permanenza, Intensita, Tempo, Confine, Complessita, Definizione, Valenza]
         let core = PrimitiveCore::new([1.5, -0.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]);
-        assert!((core.get(Dim::Confine) - 1.0).abs() < f64::EPSILON);
-        assert!((core.get(Dim::Valenza) - 0.0).abs() < f64::EPSILON);
+        assert!((core.get(Dim::Agency) - 1.0).abs() < f64::EPSILON);       // clamp superiore: 1.5 → 1.0
+        assert!((core.get(Dim::Permanenza) - 0.0).abs() < f64::EPSILON);  // clamp inferiore: -0.3 → 0.0
     }
 
     #[test]

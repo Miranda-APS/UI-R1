@@ -78,13 +78,16 @@ pub mod interlocutor;
 pub mod humor;
 pub mod valence;
 pub mod expression;
-
-// LLM Substrate (feature-gated)
-#[cfg(feature = "llm-substrate")]
-pub mod llm_substrate;
-
-#[cfg(feature = "llm-substrate")]
-pub mod llm_substrate_qwen35;
+pub mod events;
+pub mod understanding;
+pub mod comprehension_graph;
+pub mod deliberation;
+pub mod speaker_profile;
+pub mod comprehension_report;
+pub mod action_reasoning;
+pub mod pattern_matcher;
+pub mod self_profile;
+pub mod kg_proc_field;
 
 pub use primitive::{PrimitiveCore, Dim};
 pub use fractal::{

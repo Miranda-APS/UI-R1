@@ -245,6 +245,12 @@ select.form-input option{background:#0e0e1e}
       <option value="stab_asc">stabilità (bassa → alta)</option>
     </select>
   </div>
+  <div id="sort-bar" style="padding:0 12px 8px">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal;text-transform:none;letter-spacing:0;color:#aabcff">
+      <input type="checkbox" id="only-kg" checked style="width:16px;height:16px;flex-shrink:0;accent-color:#6a8fff">
+      <span style="font-size:12px">Solo parole nel KG (no forme flesse)</span>
+    </label>
+  </div>
   <div id="list-info">caricamento...</div>
   <div id="word-list"></div>
   <div id="pagination">
@@ -566,12 +572,18 @@ document.querySelectorAll('.tab').forEach(t => {
 async function loadList() {
   const off = st.page * PAGE;
   const q = encodeURIComponent(st.query);
-  const r = await fetch(`/api/cura/parole?q=${q}&offset=${off}&limit=${PAGE}&sort=${st.sort}`);
+  const onlyKg = document.getElementById('only-kg').checked ? 'true' : 'false';
+  const r = await fetch(`/api/cura/parole?q=${q}&offset=${off}&limit=${PAGE}&sort=${st.sort}&only_kg=${onlyKg}`);
   const d = await r.json();
   st.total = d.total;
   renderList(d.words);
   updatePag();
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const cb = document.getElementById('only-kg');
+  if(cb) cb.onchange = () => { st.page = 0; loadList(); };
+});
 
 function renderList(words) {
   const el = document.getElementById('word-list');

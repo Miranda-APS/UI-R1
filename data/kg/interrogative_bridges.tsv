@@ -1,0 +1,62 @@
+# Ponti grammaticali-semantici per interrogativi
+#
+# Gli interrogativi italiani (come, chi, dove, ...) non sono nodi nel KG:
+# sono indicatori di DIREZIONE della domanda. Ciascuno punta a una categoria
+# semantica che diventa il "cosa si chiede".
+#
+# "come stai?" → come IS_A modalità + stare Has stato → domanda sulla modalità dello stare
+# "chi sei?"   → chi IS_A identità  + essere        → domanda sull'identità dell'entità
+# "dove sei?"  → dove IS_A luogo    + essere        → domanda sulla collocazione
+#
+# Le parole sono lemmi italiani reali — non nodi artificiali.
+
+# ── Modalità: "come" chiede il modo/qualità ────────────────────────────────
+come	IS_A	modalità	0.85
+come	UsedFor	domanda	0.80
+come	Expresses	ricerca	0.70
+
+# ── Identità: "chi" chiede la persona/entità ───────────────────────────────
+chi	IS_A	identità	0.90
+chi	UsedFor	domanda	0.85
+chi	Requires	presenza	0.75
+
+# ── Entità: "cosa" e "che" chiedono l'oggetto/contenuto ────────────────────
+cosa	IS_A	entità	0.80
+cosa	UsedFor	domanda	0.80
+che	UsedFor	domanda	0.75
+
+# ── Luogo: "dove" chiede la collocazione ───────────────────────────────────
+dove	IS_A	luogo	0.90
+dove	UsedFor	domanda	0.85
+dove	Requires	spazio	0.80
+
+# ── Tempo: "quando" chiede il momento ──────────────────────────────────────
+quando	IS_A	tempo	0.90
+quando	UsedFor	domanda	0.85
+quando	Requires	durata	0.70
+
+# ── Causa: "perché" chiede il motivo ───────────────────────────────────────
+perché	IS_A	causa	0.90
+perché	UsedFor	domanda	0.85
+perché	Expresses	indagine	0.80
+
+# ── Quantità: "quanto" chiede la misura ────────────────────────────────────
+quanto	IS_A	quantità	0.85
+quanto	UsedFor	domanda	0.80
+
+# ── Scelta: "quale" chiede la discriminazione ──────────────────────────────
+quale	IS_A	discriminazione	0.80
+quale	UsedFor	domanda	0.80
+quale	Requires	alternativa	0.75
+
+# ── Relazioni tra categorie interrogative e stati del parlante ─────────────
+# Chi fa una domanda RICHIEDE curiosità (già presente in domanda Requires curiosità)
+# Ma la domanda SUL MODO ha una specificità: cerca descrizione qualitativa.
+
+modalità	IS_A	qualità	0.80
+modalità	SimilarTo	maniera	0.85
+identità	Requires	coscienza	0.75
+identità	IS_A	essenza	0.80
+luogo	IS_A	spazio	0.85
+causa	Causes	comprensione	0.80
+causa	SimilarTo	motivo	0.85

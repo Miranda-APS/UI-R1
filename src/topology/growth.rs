@@ -338,10 +338,11 @@ mod tests {
         let mut tracker = GrowthTracker::new();
         tracker.novelty_threshold = 0.75; // Soglia alta per il test
 
-        // Firma lontana da tutti i 64 esagrammi (nessuna dim fissa vicina)
-        // Confine=0.03(dist 0.27 da 0.30), Valenza=0.1, Intensita=0.0, Definizione=0.0,
-        // Complessita=0.1, Permanenza=0.85(dist 0.75 da 0.10), Agency=0.3, Tempo=0.0
-        let novel = PrimitiveCore::new([0.03, 0.1, 0.0, 0.0, 0.1, 0.85, 0.3, 0.0]);
+        // Ordine I Ching: [Agency, Perm, Intens, Tempo, Confine, Compl, Defin, Valenza]
+        // Firma lontana da tutti i 64 esagrammi (nessuna dim fissa vicina).
+        // Agency=0.3, Perm=0.85 (lontano da 0.10), Intens=0.0, Tempo=0.0,
+        // Confine=0.03 (lontano da 0.30), Compl=0.1, Defin=0.0, Val=0.1
+        let novel = PrimitiveCore::new([0.3, 0.85, 0.0, 0.0, 0.03, 0.1, 0.0, 0.1]);
         tracker.observe(&novel, "concetto strano", &reg);
 
         assert!(tracker.pending_candidates() > 0,
@@ -353,8 +354,8 @@ mod tests {
         let (reg, _, _) = setup();
         let mut tracker = GrowthTracker::new();
 
-        // Firma vicina a SPAZIO (confine alto)
-        let familiar = PrimitiveCore::new([0.9, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]);
+        // Ordine I Ching: Confine=4. Firma vicina a SPAZIO (Confine alto).
+        let familiar = PrimitiveCore::new([0.5, 0.5, 0.5, 0.5, 0.9, 0.5, 0.5, 0.5]);
         tracker.observe(&familiar, "qualcosa di spaziale", &reg);
 
         // Non dovrebbe diventare candidato (troppo simile a SPAZIO)
@@ -369,7 +370,8 @@ mod tests {
         tracker.min_observations = 3; // Soglia bassa per il test
         tracker.novelty_threshold = 0.75; // Soglia alta per il test
 
-        let novel = PrimitiveCore::new([0.03, 0.1, 0.0, 0.0, 0.1, 0.85, 0.3, 0.0]);
+        // Ordine I Ching — stessa firma lontana del test sopra.
+        let novel = PrimitiveCore::new([0.3, 0.85, 0.0, 0.0, 0.03, 0.1, 0.0, 0.1]);
 
         // Osserva lo stesso concetto molte volte
         for i in 0..5 {

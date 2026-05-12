@@ -7,7 +7,9 @@
 **/*.rs.bk
 
 # --- Binary state backup files ---
-# Il file principale prometeo_topology_state.bin viene tracciato
+# Il file principale prometeo_topology_state.bin NON viene tracciato (17MB, generato da bootstrap).
+# Chi clona deve rigenerarlo con i binari di rebuild (vedi README).
+prometeo_topology_state.bin
 *.bin.bak*
 *.bin.corpus_mixed_backup
 *.bin.pre_*
@@ -15,6 +17,11 @@
 *_OLD_*.bin
 *_REBUILD_OLD.bin
 *_backup_*.bin
+.merge_backup_*/
+
+# --- KG backups locali ---
+prometeo_kg.json.pre_*
+prometeo_kg.json.bak*
 
 # --- Logs ---
 *.log
@@ -77,3 +84,133 @@ prometeo_topology_state_BACKUP_*.json
 # --- Transient output files ---
 stderr.txt
 stdout.txt
+
+# --- Script di curation monouso (scratch) ---
+apply_*.py
+analyze_*.py
+clean_*.py
+compare_*.py
+curate_*_temp.py
+curation_*.py
+debug_*.py
+extract_*.py
+explore_*.py
+find_*.py
+inspect_*.py
+recover_*.py
+rename_*.py
+read_books.py
+build_prometeo_brain.py
+generate_obsidian_vault.py
+chat_test*.py
+temp_*.py
+diffraction_api.py
+export_to_diffraction.py
+deploy_test*.sh
+deploy_test*.ps1
+bench_remote.sh
+build_remote.sh
+
+# --- Log di curation ---
+curation_*_log.txt
+curation_*.txt
+context_curation_queue.tsv
+concept_preview_*.md
+*_log.txt
+
+# --- Backups vari ---
+*.tsv.bak
+*.tsv.bak2
+
+# --- Script remote / debug / test ad-hoc ---
+*_remote.sh
+find_*.sh
+kill_*.sh
+start_*.sh
+verify_*.sh
+inspect_*.sh
+fix_*.py
+generate_quality_report.py
+generate_*.py
+!generate_obsidian_vault.py   # già escluso sopra
+propose_*.py
+simulate_*.py
+morphological_*.py
+smart_*.py
+restore_*.py
+test_api*.py
+test_expansion.py
+test_*.py
+
+# --- Script di educazione ad-hoc ---
+scripts/
+
+# --- KG outputs scratch ---
+simulate_*.md
+kg_quality_*.json
+kg_quality_*.txt
+migration_*.tsv
+pruning_*.tsv
+proposed_*.tsv
+*_preview.md
+*_prototype.py
+mockup-*.html
+ita_dict.json
+*.post_kaikki_attempt
+*.bin.safety
+prometeo_topology_state.json
+prometeo_state_*.json
+temp_list.txt
+ui_r1_diffraction.json
+skills-lock.json
+
+# --- Cartelle non-progetto (backup, fork esterni, scratch) ---
+Server_Backup_Ieri/
+UI-r!/
+UI-R1-frontend/
+Semantic-Diffraction-in-Conceptual-Graphs-main/
+Structural-Coherence-Audit-main/
+campovasto_phase70_backup/
+campovasto-cy/
+campovasto?UI/
+campovasto.pre_merge_collega/
+.merge_backup_*/
+IA?di?quarteire/
+
+# --- KG data: backup / progress / batch temporanei ---
+data/kg/*.excluded
+data/kg/*_progress.txt
+data/kg/current_batch.tsv
+data/kg/dizionario_italiano.txt
+data/kg/curated_deleted_words.txt
+data/kg/*.pre_*
+data/kg/suspicious_nodes.json
+data/kg/topdown_relations_batch.json
+
+# --- File scratch root ---
+comunita_*.bin
+*.bin.backup_*
+context_curation_queue.tsv
+conversations.json
+recover_topology.py
+sessione*.json
+
+# --- Output transienti ---
+graphify-out/
+report_kg*.md
+conversations.json
+kg_phrase_output.txt
+temp_check.py
+_server.err
+_server.log
+
+# --- AI agent local install (skills installate localmente, ricostruibili) ---
+.agents/
+
+# --- Claude Code project state ---
+.claude/
+.claude.json
+.gitnexus/
+.gitnexusignore
+.lbdb/
+.scratch/

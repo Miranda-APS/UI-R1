@@ -26,6 +26,7 @@ static BIENNALE_HTML: &str = include_str!("biennale/index.html");
 static BIENNALE_HOME_HTML: &str = include_str!("biennale/home.html");
 static DIALOGO_HTML: &str = include_str!("biennale/dialogo.html");
 static CURAZIONE_HTML: &str = include_str!("biennale/curazione.html");
+static CURA_MOBILE_HTML: &str = include_str!("biennale/cura_mobile.html");
 static UI_R1_HTML: &str = include_str!("biennale/uir1.html");
 static DIFFRAZIONE_HTML: &str = include_str!("biennale/diffrazione.html");
 
@@ -59,6 +60,166 @@ pub async fn dialogo_index() -> Html<&'static str> {
 
 pub async fn curazione_index() -> Html<&'static str> {
     Html(CURAZIONE_HTML)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// /cura-mobile — App offline per curazione (PWA)
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn cura_mobile_index() -> Html<&'static str> {
+    Html(CURA_MOBILE_HTML)
+}
+
+/// GET /cura-mobile/kg.json — serve il file kg.json corrente.
+pub async fn cura_mobile_kg() -> impl axum::response::IntoResponse {
+    let path = std::path::Path::new("prometeo_kg.json");
+    match std::fs::read_to_string(path) {
+        Ok(s) => ([(axum::http::header::CONTENT_TYPE, "application/json")], s).into_response(),
+        Err(e) => (axum::http::StatusCode::NOT_FOUND, format!("kg.json non trovato: {}", e)).into_response(),
+    }
+}
+
+/// GET /cura-mobile/firme.tsv — serve hub_signatures.tsv (solo gli hub curati a mano).
+pub async fn cura_mobile_firme() -> impl axum::response::IntoResponse {
+    let path = std::path::Path::new("data/anchors/hub_signatures.tsv");
+    match std::fs::read_to_string(path) {
+        Ok(s) => ([(axum::http::header::CONTENT_TYPE, "text/tab-separated-values; charset=utf-8")], s).into_response(),
+        Err(e) => (axum::http::StatusCode::NOT_FOUND, format!("firme.tsv non trovato: {}", e)).into_response(),
+    }
+}
+
+/// GET /cura-mobile/standalone.html — HTML autosufficiente con TUTTI i dati
+/// incorporati. Da scaricare una volta (online), salvare sul telefono, aprire
+/// come file qualsiasi. Funziona da `file://` senza server.
+pub async fn cura_mobile_standalone(State(state): State<AppState>) -> impl axum::response::IntoResponse {
+    // 1. Leggi kg.json
+    let kg_text = match std::fs::read_to_string("prometeo_kg.json") {
+        Ok(s) => s,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("kg.json non trovato: {}", e)).into_response(),
+    };
+    let kg: serde_json::Value = match serde_json::from_str(&kg_text) {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("kg.json invalido: {}", e)).into_response(),
+    };
+    let edges_json = serde_json::to_string(&kg["edges"]).unwrap_or_else(|_| "[]".into());
+
+    // 2. Prendi tutte le firme dal motore
+    let (tx, rx) = oneshot::channel();
+    if state.cmd_tx.send(EngineCommand::GetAllFirme { reply: tx }).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "engine offline").into_response();
+    }
+    let firme = match rx.await {
+        Ok(v) => v,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "no reply").into_response(),
+    };
+    let firme_json: String = {
+        let pairs: Vec<serde_json::Value> = firme.into_iter()
+            .map(|(w, sig)| {
+                let arr: Vec<f64> = sig.iter().map(|v| (v * 1000.0).round() / 1000.0).collect();
+                serde_json::json!([w, arr])
+            })
+            .collect();
+        serde_json::to_string(&pairs).unwrap_or_else(|_| "[]".into())
+    };
+
+    // 3. Inietta lo <script id="bundled-data"> nell'HTML
+    let bundled_script = format!(
+        r##"<script id="bundled-data" type="application/json">{{"edges":{},"firme":{}}}</script>"##,
+        edges_json, firme_json
+    );
+    let html = CURA_MOBILE_HTML.replace("</body>", &format!("{}\n</body>", bundled_script));
+
+    ([(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response()
+}
+
+/// GET /cura-mobile/all_firme.tsv — esporta TUTTE le firme dal `.bin` corrente.
+/// Include sia gli hub curati che le 17.384 propagate da Phase 70 v4.
+pub async fn cura_mobile_all_firme(State(state): State<AppState>) -> impl axum::response::IntoResponse {
+    let (tx, rx) = oneshot::channel();
+    if state.cmd_tx.send(EngineCommand::GetAllFirme { reply: tx }).await.is_err() {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "engine offline").into_response();
+    }
+    let firme = match rx.await {
+        Ok(v) => v,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "no reply").into_response(),
+    };
+    let mut body = String::with_capacity(firme.len() * 80);
+    body.push_str("word\tagency\tpermanenza\tintensita\ttempo\tconfine\tcomplessita\tdefinizione\tvalenza\n");
+    for (w, sig) in firme {
+        body.push_str(&w);
+        for v in sig.iter() {
+            body.push('\t');
+            body.push_str(&format!("{:.3}", v));
+        }
+        body.push('\n');
+    }
+    ([(axum::http::header::CONTENT_TYPE, "text/tab-separated-values; charset=utf-8")], body).into_response()
+}
+
+/// GET /cura-mobile/manifest.json — PWA manifest minimo.
+pub async fn cura_mobile_manifest() -> impl axum::response::IntoResponse {
+    // start_url e scope con trailing slash: il service worker copre tutto sotto.
+    let body = r##"{
+  "name": "Cura KG · Prometeo",
+  "short_name": "Cura",
+  "start_url": "/cura-mobile/",
+  "scope": "/cura-mobile/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a14",
+  "theme_color": "#0a0a14",
+  "icons": [
+    {"src": "/cura-mobile/icon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}"##;
+    ([(axum::http::header::CONTENT_TYPE, "application/manifest+json")], body).into_response()
+}
+
+/// GET /cura-mobile/sw.js — service worker minimo (cache statica + navigate fallback).
+pub async fn cura_mobile_sw() -> impl axum::response::IntoResponse {
+    let body = r#"// Service worker: cache shell offline + navigate fallback per qualunque /cura-mobile/*.
+const CACHE = 'cura-shell-v4';
+const SHELL = ['/cura-mobile/', '/cura-mobile/manifest.json', '/cura-mobile/icon.svg'];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))));
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  const u = new URL(req.url);
+
+  // Navigate (apertura PWA o reload): serve la shell cached, anche offline.
+  if(req.mode === 'navigate' && u.pathname.startsWith('/cura-mobile')){
+    e.respondWith(
+      caches.match('/cura-mobile/').then(cached => cached || fetch(req).catch(() => caches.match('/cura-mobile/')))
+    );
+    return;
+  }
+
+  // Asset statici della shell: cache-first.
+  if(SHELL.includes(u.pathname)){
+    e.respondWith(caches.match(req).then(r => r || fetch(req)));
+    return;
+  }
+
+  // kg.json e all_firme.tsv: network-first con fallback. L'app salva in IndexedDB
+  // dopo il primo fetch — quindi non serve cacharli qui (sarebbe spreco di MB).
+});
+"#;
+    ([(axum::http::header::CONTENT_TYPE, "application/javascript")], body).into_response()
+}
+
+/// GET /cura-mobile/icon.svg — icona SVG per PWA.
+pub async fn cura_mobile_icon() -> impl axum::response::IntoResponse {
+    let body = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#0a0a14"/><circle cx="256" cy="256" r="170" fill="none" stroke="#6a8fff" stroke-width="14"/><circle cx="256" cy="256" r="60" fill="#b07cff"/><circle cx="256" cy="120" r="22" fill="#80ff9a"/><circle cx="256" cy="392" r="22" fill="#ffb060"/><circle cx="120" cy="256" r="22" fill="#ff7878"/><circle cx="392" cy="256" r="22" fill="#5AAFE8"/><line x1="256" y1="142" x2="256" y2="196" stroke="#6a8fff" stroke-width="6"/><line x1="256" y1="316" x2="256" y2="370" stroke="#6a8fff" stroke-width="6"/><line x1="142" y1="256" x2="196" y2="256" stroke="#6a8fff" stroke-width="6"/><line x1="316" y1="256" x2="370" y2="256" stroke="#6a8fff" stroke-width="6"/></svg>"##;
+    ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], body).into_response()
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -110,6 +271,11 @@ pub async fn post_input(
             valence_label: "aperto".to_string(),
             intention: "Express".to_string(),
             topic_continuity: 0.5,
+            understanding: None,
+            deliberation: None,
+            speaker_profile: None,
+            comprehension_report: None,
+            action_decision: None,
         }),
     }
 }
@@ -629,6 +795,7 @@ pub struct WordListQuery {
     pub offset: Option<usize>,
     pub limit: Option<usize>,
     pub sort: Option<String>,
+    pub only_kg: Option<bool>,
 }
 
 pub async fn get_word_list(
@@ -641,6 +808,7 @@ pub async fn get_word_list(
         offset: params.offset.unwrap_or(0),
         limit: params.limit.unwrap_or(50),
         sort: params.sort.unwrap_or_else(|| "alpha_asc".to_string()),
+        only_kg: params.only_kg.unwrap_or(true),  // default ON: niente forme flesse del lessico
         reply: tx,
     }).await;
     Json(rx.await.unwrap_or_default())
@@ -970,6 +1138,26 @@ pub async fn post_community_validate(
     Json(rx.await.unwrap_or(false))
 }
 
+/// POST /api/community/transmit_batch — trasmissione batch dal campo nuovo
+/// al KG. Insegna molte parole + impone firme + aggiunge molti archi in
+/// UN solo comando engine. Drasticamente più veloce del flusso 1-by-1.
+pub async fn post_community_transmit_batch(
+    State(state): State<AppState>,
+    Json(req): Json<crate::web::state::TransmitBatchRequest>,
+) -> Json<crate::web::state::TransmitBatchDto> {
+    let user_id = req.user_id.unwrap_or_else(|| "anonimo".to_string());
+    let user_name = req.user_name.unwrap_or_else(|| "Anonimo".to_string());
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::TransmitBatch {
+        words: req.words,
+        edges: req.edges,
+        user_id,
+        user_name,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
 /// GET /api/community/session — stato sessione corrente
 pub async fn get_community_session(State(state): State<AppState>) -> Json<SessionStateDto> {
     let (tx, rx) = oneshot::channel();
@@ -1242,6 +1430,340 @@ pub async fn get_biennale_journey(
 // GET /api/biennale/circuit?w1=X&w2=Y — Circuito di attivazione
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// GET /api/understanding?sentence=... — Comprensione di una frase
+// ═══════════════════════════════════════════════════════════════
+//
+// Legge il KG per ogni parola della frase (read-only, non muta il lessico).
+// Restituisce attribuzioni al parlante, ipotesi aperte, catene inferenziali
+// 2-hop. Pensato per community: guida la curazione mostrando cosa l'entità
+// deduce e cosa resta sotto-definito.
+
+#[derive(serde::Deserialize)]
+pub struct UnderstandingQuery {
+    pub sentence: String,
+}
+
+pub async fn get_understanding(
+    State(state): State<AppState>,
+    Query(params): Query<UnderstandingQuery>,
+) -> Json<super::state::SceneUnderstandingDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetUnderstanding {
+        sentence: params.sentence,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_else(|_| super::state::SceneUnderstandingDto {
+        syntactic_role: "Statement".to_string(),
+        lemmas: vec![],
+        unknown_words: vec![],
+        comprehension_depth: 0,
+        summary: String::new(),
+        proposed_edges: vec![],
+        words: vec![],
+        open_hypotheses: vec![],
+        inferential_chains: vec![],
+        syntactic_edges: vec![],
+        graph: None,
+    }))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/kg/confirm_edge + /api/kg/reject_edge
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct EdgeProposal {
+    pub subject: String,
+    pub relation: String,
+    pub object: String,
+    #[serde(default)]
+    pub confidence: Option<f32>,
+}
+
+pub async fn post_confirm_edge(
+    State(state): State<AppState>,
+    Json(body): Json<EdgeProposal>,
+) -> Json<super::state::ConfirmEdgeResultDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::ConfirmEdge {
+        subject: body.subject,
+        relation: body.relation,
+        object: body.object,
+        confidence: body.confidence.unwrap_or(0.7),
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Save/Load collective fields (campo nuovo / campo medio)
+// ═══════════════════════════════════════════════════════════════
+//
+// Il gruppo può salvare un campo sul server per ripenderlo poi. Ogni save
+// ha un nome visibile (e uno slug derivato) + una password. Il payload è
+// qualsiasi JSON (la UI salva l'output di Field.toJSON()).
+//
+// Storage: data/saved_fields/<slug>.json. Non-cryptographic: hash SHA-256
+// della password + salt fisso (sufficiente per l'uso community, non per
+// contesti ad alta sicurezza).
+
+use sha2::{Sha256, Digest};
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct SavedFieldEntry {
+    pub slug: String,
+    pub name: String,
+    pub field_id: String,
+    pub created_at: u64,
+    pub password_hash: String,
+    pub data: serde_json::Value,
+}
+
+#[derive(serde::Serialize)]
+pub struct SavedFieldMeta {
+    pub slug: String,
+    pub name: String,
+    pub field_id: String,
+    pub created_at: u64,
+}
+
+fn password_hash(password: &str) -> String {
+    let salt = "uir1-community-2026";
+    let mut h = Sha256::new();
+    h.update(salt.as_bytes());
+    h.update(password.as_bytes());
+    format!("{:x}", h.finalize())
+}
+
+fn slugify(name: &str) -> String {
+    let mut s = String::new();
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() { s.push(c.to_ascii_lowercase()); }
+        else if c == ' ' || c == '-' || c == '_' { s.push('_'); }
+    }
+    let s = s.trim_matches('_').to_string();
+    if s.is_empty() { "campo".to_string() } else { s }
+}
+
+fn saved_fields_dir() -> std::path::PathBuf {
+    let p = std::path::PathBuf::from("data/saved_fields");
+    let _ = std::fs::create_dir_all(&p);
+    p
+}
+
+#[derive(serde::Deserialize)]
+pub struct SaveFieldRequest {
+    pub name: String,
+    pub password: String,
+    pub field_id: String,
+    pub data: serde_json::Value,
+}
+
+#[derive(serde::Serialize)]
+pub struct SaveFieldResponse {
+    pub ok: bool,
+    pub message: String,
+    pub slug: Option<String>,
+}
+
+pub async fn post_save_field(Json(body): Json<SaveFieldRequest>) -> Json<SaveFieldResponse> {
+    if body.name.trim().is_empty() || body.password.is_empty() {
+        return Json(SaveFieldResponse {
+            ok: false,
+            message: "nome e password sono obbligatori".to_string(),
+            slug: None,
+        });
+    }
+    // Slug univoco: se esiste già, incrementa suffisso numerico
+    let base_slug = slugify(&body.name);
+    let dir = saved_fields_dir();
+    let mut slug = base_slug.clone();
+    let mut n = 2;
+    while dir.join(format!("{}.json", slug)).exists() {
+        slug = format!("{}-{}", base_slug, n);
+        n += 1;
+        if n > 999 {
+            return Json(SaveFieldResponse {
+                ok: false,
+                message: "troppi campi con nome simile".to_string(),
+                slug: None,
+            });
+        }
+    }
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let entry = SavedFieldEntry {
+        slug: slug.clone(),
+        name: body.name.trim().to_string(),
+        field_id: body.field_id,
+        created_at: ts,
+        password_hash: password_hash(&body.password),
+        data: body.data,
+    };
+    let path = dir.join(format!("{}.json", slug));
+    match serde_json::to_vec_pretty(&entry).and_then(|v| { std::fs::write(&path, &v).map_err(|e| serde_json::Error::io(e)) }) {
+        Ok(_) => Json(SaveFieldResponse {
+            ok: true,
+            message: format!("campo salvato come '{}'", slug),
+            slug: Some(slug),
+        }),
+        Err(e) => Json(SaveFieldResponse {
+            ok: false,
+            message: format!("errore salvataggio: {}", e),
+            slug: None,
+        }),
+    }
+}
+
+pub async fn get_saved_fields_list() -> Json<Vec<SavedFieldMeta>> {
+    let dir = saved_fields_dir();
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("json") { continue; }
+            if let Ok(bytes) = std::fs::read(&p) {
+                if let Ok(entry) = serde_json::from_slice::<SavedFieldEntry>(&bytes) {
+                    out.push(SavedFieldMeta {
+                        slug: entry.slug,
+                        name: entry.name,
+                        field_id: entry.field_id,
+                        created_at: entry.created_at,
+                    });
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Json(out)
+}
+
+#[derive(serde::Deserialize)]
+pub struct LoadFieldRequest {
+    pub slug: String,
+    pub password: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct LoadFieldResponse {
+    pub ok: bool,
+    pub message: String,
+    pub name: Option<String>,
+    pub field_id: Option<String>,
+    pub data: Option<serde_json::Value>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct DeleteFieldRequest {
+    pub slug: String,
+    pub password: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct DeleteFieldResponse {
+    pub ok: bool,
+    pub message: String,
+}
+
+pub async fn post_delete_field(Json(body): Json<DeleteFieldRequest>) -> Json<DeleteFieldResponse> {
+    let dir = saved_fields_dir();
+    let path = dir.join(format!("{}.json", body.slug));
+    let bytes = match std::fs::read(&path) {
+        Ok(b) => b,
+        Err(_) => return Json(DeleteFieldResponse {
+            ok: false, message: "campo non trovato".to_string(),
+        }),
+    };
+    let entry: SavedFieldEntry = match serde_json::from_slice(&bytes) {
+        Ok(e) => e,
+        Err(_) => return Json(DeleteFieldResponse {
+            ok: false, message: "errore lettura campo".to_string(),
+        }),
+    };
+    if entry.password_hash != password_hash(&body.password) {
+        return Json(DeleteFieldResponse {
+            ok: false, message: "password errata".to_string(),
+        });
+    }
+    match std::fs::remove_file(&path) {
+        Ok(_) => Json(DeleteFieldResponse {
+            ok: true, message: format!("campo '{}' eliminato", entry.name),
+        }),
+        Err(e) => Json(DeleteFieldResponse {
+            ok: false, message: format!("errore eliminazione: {}", e),
+        }),
+    }
+}
+
+pub async fn post_load_field(Json(body): Json<LoadFieldRequest>) -> Json<LoadFieldResponse> {
+    let dir = saved_fields_dir();
+    let path = dir.join(format!("{}.json", body.slug));
+    let bytes = match std::fs::read(&path) {
+        Ok(b) => b,
+        Err(_) => return Json(LoadFieldResponse {
+            ok: false, message: "campo non trovato".to_string(),
+            name: None, field_id: None, data: None,
+        }),
+    };
+    let entry: SavedFieldEntry = match serde_json::from_slice(&bytes) {
+        Ok(e) => e,
+        Err(e) => return Json(LoadFieldResponse {
+            ok: false, message: format!("errore lettura: {}", e),
+            name: None, field_id: None, data: None,
+        }),
+    };
+    if entry.password_hash != password_hash(&body.password) {
+        return Json(LoadFieldResponse {
+            ok: false, message: "password errata".to_string(),
+            name: None, field_id: None, data: None,
+        });
+    }
+    Json(LoadFieldResponse {
+        ok: true,
+        message: "campo caricato".to_string(),
+        name: Some(entry.name),
+        field_id: Some(entry.field_id),
+        data: Some(entry.data),
+    })
+}
+
+pub async fn post_reject_edge(
+    State(state): State<AppState>,
+    Json(body): Json<EdgeProposal>,
+) -> Json<super::state::ConfirmEdgeResultDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::RejectEdge {
+        subject: body.subject,
+        relation: body.relation,
+        object: body.object,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/medio?sentence=... — Dati completi per il campo medio
+// ═══════════════════════════════════════════════════════════════
+//
+// Per ogni lemma della frase restituisce firma 8D + TUTTI gli archi KG
+// (nessun cap, nessun filtro vasto) con firme dei target. Usato dalla
+// frontend buildMedio per costruire un campo medio completo, non parziale.
+
+pub async fn get_medio_data(
+    State(state): State<AppState>,
+    Query(params): Query<UnderstandingQuery>,
+) -> Json<super::state::MedioDataDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetMedioData {
+        sentence: params.sentence,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
 pub async fn get_biennale_circuit(
     State(state): State<AppState>,
     Query(params): Query<BiennaleCircuitQuery>,
@@ -1332,5 +1854,75 @@ pub async fn get_diffraction(
                 err.to_string(),
             ).into_response()
         }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase 69 — endpoint di osservazione del tempo proprio dell'entità
+// ═══════════════════════════════════════════════════════════════════
+
+/// GET /api/admin/events/stats
+///
+/// Statistiche aggregate: quanti eventi sono entrati nella vita interna,
+/// quanti sono stati ignorati come simili (debounced), quanti dimenticati
+/// (sotto soglia), il materiale in digestione, i ricordi accumulati,
+/// lo stato della finestra di riflessività.
+pub async fn get_events_stats(State(state): State<AppState>) -> Json<EventsStatsDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetEventsStats { reply: tx }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(EventsStatsDto {
+            emitted_count: 0,
+            debounced_count: 0,
+            forgotten_count: 0,
+            pending_digestion_count: 0,
+            semantic_episodes_count: 0,
+            notices_in_window: 0,
+            notices_max_per_window: 5,
+            is_overloaded: false,
+        }),
+    }
+}
+
+/// GET /api/admin/events/pending
+///
+/// La coda di digestione corrente (fino a 32 eventi medio-salienti
+/// in attesa di essere consolidati in REM).
+pub async fn get_pending_digestion(State(state): State<AppState>) -> Json<PendingDigestionDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetPendingDigestion { reply: tx }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(PendingDigestionDto {
+            events: Vec::new(),
+            capacity: 32,
+        }),
+    }
+}
+
+/// GET /api/admin/events/recent_episodes?limit=10
+///
+/// Gli ultimi N ricordi semantici dell'entità. Ciascuno con sintesi,
+/// concetti chiave, stato emotivo e frattali dominanti al momento
+/// della formazione del ricordo.
+#[derive(serde::Deserialize)]
+pub struct RecentEpisodesQuery {
+    pub limit: Option<usize>,
+}
+
+pub async fn get_recent_episodes(
+    State(state): State<AppState>,
+    axum::extract::Query(q): axum::extract::Query<RecentEpisodesQuery>,
+) -> Json<RecentEpisodesDto> {
+    let (tx, rx) = oneshot::channel();
+    let limit = q.limit.unwrap_or(10).min(50);
+    let _ = state.cmd_tx.send(EngineCommand::GetRecentEpisodes { limit, reply: tx }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(RecentEpisodesDto {
+            episodes: Vec::new(),
+            total_count: 0,
+        }),
     }
 }

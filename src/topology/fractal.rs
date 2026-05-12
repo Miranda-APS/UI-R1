@@ -773,8 +773,8 @@ mod tests {
     #[test]
     fn test_fractal_affinity_potere() {
         let reg = bootstrap_fractals();
-        // Punto con Agency=0.90 deve avere affinita 1.0 con POTERE
-        let agency_point = PrimitiveCore::new([0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.90, 0.5]);
+        // Ordine I Ching: Agency=0. Punto con Agency=0.90 → affinita 1.0 con POTERE.
+        let agency_point = PrimitiveCore::new([0.90, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]);
         let potere = reg.get(POTERE).unwrap();
         let aff = potere.affinity(&agency_point);
         assert!((aff - 1.0).abs() < 1e-9, "Agency=0.90 → affinita POTERE = 1.0, got {}", aff);
@@ -783,8 +783,8 @@ mod tests {
     #[test]
     fn test_fractal_affinity_spazio() {
         let reg = bootstrap_fractals();
-        // Punto con Confine=0.30 deve avere affinita 1.0 con SPAZIO (☶☶)
-        let point = PrimitiveCore::new([0.30, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]);
+        // Ordine I Ching: Confine=4. Punto con Confine=0.30 → affinita 1.0 con SPAZIO (☶☶).
+        let point = PrimitiveCore::new([0.5, 0.5, 0.5, 0.5, 0.30, 0.5, 0.5, 0.5]);
         let spazio = reg.get(SPAZIO).unwrap();
         let aff = spazio.affinity(&point);
         assert!((aff - 1.0).abs() < 1e-9, "Confine=0.30 → affinita SPAZIO = 1.0, got {}", aff);
@@ -793,8 +793,8 @@ mod tests {
     #[test]
     fn test_nearest_fractal_agency() {
         let reg = bootstrap_fractals();
-        // Punto con Agency=0.90 → POTERE (solo 1 dim fissa: Agency=0.90)
-        let point = PrimitiveCore::new([0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.90, 0.5]);
+        // Ordine I Ching: Agency=0. Punto con Agency=0.90 → POTERE.
+        let point = PrimitiveCore::new([0.90, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]);
         let nearest = reg.nearest(&point).unwrap();
         let name = &reg.get(nearest).unwrap().name;
         assert_eq!(name, "POTERE", "Punto Agency=0.90 vicino a POTERE, trovato: {}", name);
@@ -803,8 +803,8 @@ mod tests {
     #[test]
     fn test_nearest_fractal_valenza() {
         let reg = bootstrap_fractals();
-        // Punto con Valenza=0.70 → ARMONIA (☱☱, solo Valenza=0.70 fissa)
-        let point = PrimitiveCore::new([0.5, 0.70, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]);
+        // Ordine I Ching: Valenza=7. Punto con Valenza=0.70 → ARMONIA (☱☱).
+        let point = PrimitiveCore::new([0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.70]);
         let nearest = reg.nearest(&point).unwrap();
         let name = &reg.get(nearest).unwrap().name;
         assert_eq!(name, "ARMONIA", "Punto Valenza=0.70 vicino a ARMONIA, trovato: {}", name);

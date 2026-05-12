@@ -1,0 +1,78 @@
+# Firme canoniche dei 64 frattali I Ching (Phase 70).
+# Generato da: cargo run --release --bin generate-fractal-signatures
+#
+# ID = lower.index() * 8 + upper.index()
+# Ogni trigramma fissa la dim associata al suo valore canonico Yang:
+#   ☰ Cielo=0.90 (Agency)    ☷ Terra=0.10 (Permanenza)
+#   ☳ Tuono=0.30 (Intensità) ☵ Acqua=0.30 (Tempo)
+#   ☶ Montagna=0.30 (Confine) ☴ Vento=0.70 (Complessità)
+#   ☲ Fuoco=0.70 (Definizione) ☱ Lago=0.70 (Valenza)
+# Le dim non controllate dai due trigrammi restano a 0.50 (neutro).
+#
+# Header dim: agency=0 permanenza=1 intensita=2 tempo=3
+#             confine=4 complessita=5 definizione=6 valenza=7
+id	lower	upper	name	agency	permanenza	intensita	tempo	confine	complessita	definizione	valenza
+0	☰Cielo	☰Cielo	POTERE	0.90	0.50	0.50	0.50	0.50	0.50	0.50	0.50
+1	☰Cielo	☷Terra	CREAZIONE	0.90	0.10	0.50	0.50	0.50	0.50	0.50	0.50
+2	☰Cielo	☳Tuono	ENERGIA	0.90	0.50	0.30	0.50	0.50	0.50	0.50	0.50
+3	☰Cielo	☵Acqua	INTENZIONE	0.90	0.50	0.50	0.30	0.50	0.50	0.50	0.50
+4	☰Cielo	☶Mont.	DETERMINAZIONE	0.90	0.50	0.50	0.50	0.30	0.50	0.50	0.50
+5	☰Cielo	☴Vento	INFLUENZA	0.90	0.50	0.50	0.50	0.50	0.70	0.50	0.50
+6	☰Cielo	☲Fuoco	VISIONE	0.90	0.50	0.50	0.50	0.50	0.50	0.70	0.50
+7	☰Cielo	☱Lago	DONO	0.90	0.50	0.50	0.50	0.50	0.50	0.50	0.70
+8	☷Terra	☰Cielo	VITA	0.90	0.10	0.50	0.50	0.50	0.50	0.50	0.50
+9	☷Terra	☷Terra	MATERIA	0.50	0.10	0.50	0.50	0.50	0.50	0.50	0.50
+10	☷Terra	☳Tuono	SENSAZIONE	0.50	0.10	0.30	0.50	0.50	0.50	0.50	0.50
+11	☷Terra	☵Acqua	MUTAMENTO	0.50	0.10	0.50	0.30	0.50	0.50	0.50	0.50
+12	☷Terra	☶Mont.	STRUTTURA	0.50	0.10	0.50	0.50	0.30	0.50	0.50	0.50
+13	☷Terra	☴Vento	MONDO	0.50	0.10	0.50	0.50	0.50	0.70	0.50	0.50
+14	☷Terra	☲Fuoco	REALTÀ	0.50	0.10	0.50	0.50	0.50	0.50	0.70	0.50
+15	☷Terra	☱Lago	NUTRIMENTO	0.50	0.10	0.50	0.50	0.50	0.50	0.50	0.70
+16	☳Tuono	☰Cielo	INIZIATIVA	0.90	0.50	0.30	0.50	0.50	0.50	0.50	0.50
+17	☳Tuono	☷Terra	RADICAMENTO	0.50	0.10	0.30	0.50	0.50	0.50	0.50	0.50
+18	☳Tuono	☳Tuono	ARDORE	0.50	0.50	0.30	0.50	0.50	0.50	0.50	0.50
+19	☳Tuono	☵Acqua	RITMO	0.50	0.50	0.30	0.30	0.50	0.50	0.50	0.50
+20	☳Tuono	☶Mont.	IMPATTO	0.50	0.50	0.30	0.50	0.30	0.50	0.50	0.50
+21	☳Tuono	☴Vento	RISONANZA	0.50	0.50	0.30	0.50	0.50	0.70	0.50	0.50
+22	☳Tuono	☲Fuoco	EVIDENZA	0.50	0.50	0.30	0.50	0.50	0.50	0.70	0.50
+23	☳Tuono	☱Lago	PASSIONE	0.50	0.50	0.30	0.50	0.50	0.50	0.50	0.70
+24	☵Acqua	☰Cielo	DESTINO	0.90	0.50	0.50	0.30	0.50	0.50	0.50	0.50
+25	☵Acqua	☷Terra	MEMORIA	0.50	0.10	0.50	0.30	0.50	0.50	0.50	0.50
+26	☵Acqua	☳Tuono	CRISI	0.50	0.50	0.30	0.30	0.50	0.50	0.50	0.50
+27	☵Acqua	☵Acqua	DIVENIRE	0.50	0.50	0.50	0.30	0.50	0.50	0.50	0.50
+28	☵Acqua	☶Mont.	DURATA	0.50	0.50	0.50	0.30	0.30	0.50	0.50	0.50
+29	☵Acqua	☴Vento	STORIA	0.50	0.50	0.50	0.30	0.50	0.70	0.50	0.50
+30	☵Acqua	☲Fuoco	COMPRENSIONE	0.50	0.50	0.50	0.30	0.50	0.50	0.70	0.50
+31	☵Acqua	☱Lago	ESPERIENZA	0.50	0.50	0.50	0.30	0.50	0.50	0.50	0.70
+32	☶Mont.	☰Cielo	IDENTITÀ	0.90	0.50	0.50	0.50	0.30	0.50	0.50	0.50
+33	☶Mont.	☷Terra	CORPO	0.50	0.10	0.50	0.50	0.30	0.50	0.50	0.50
+34	☶Mont.	☳Tuono	RESISTENZA	0.50	0.50	0.30	0.50	0.30	0.50	0.50	0.50
+35	☶Mont.	☵Acqua	EVOLUZIONE	0.50	0.50	0.50	0.30	0.30	0.50	0.50	0.50
+36	☶Mont.	☶Mont.	SPAZIO	0.50	0.50	0.50	0.50	0.30	0.50	0.50	0.50
+37	☶Mont.	☴Vento	ECOSISTEMA	0.50	0.50	0.50	0.50	0.30	0.70	0.50	0.50
+38	☶Mont.	☲Fuoco	SIMBOLO	0.50	0.50	0.50	0.50	0.30	0.50	0.70	0.50
+39	☶Mont.	☱Lago	SOGLIA	0.50	0.50	0.50	0.50	0.30	0.50	0.50	0.70
+40	☴Vento	☰Cielo	STRATEGIA	0.90	0.50	0.50	0.50	0.50	0.70	0.50	0.50
+41	☴Vento	☷Terra	CULTURA	0.50	0.10	0.50	0.50	0.50	0.70	0.50	0.50
+42	☴Vento	☳Tuono	CAOS	0.50	0.50	0.30	0.50	0.50	0.70	0.50	0.50
+43	☴Vento	☵Acqua	PROCESSO	0.50	0.50	0.50	0.30	0.50	0.70	0.50	0.50
+44	☴Vento	☶Mont.	SISTEMA	0.50	0.50	0.50	0.50	0.30	0.70	0.50	0.50
+45	☴Vento	☴Vento	INTRECCIO	0.50	0.50	0.50	0.50	0.50	0.70	0.50	0.50
+46	☴Vento	☲Fuoco	LINGUAGGIO	0.50	0.50	0.50	0.50	0.50	0.70	0.70	0.50
+47	☴Vento	☱Lago	COMUNICAZIONE	0.50	0.50	0.50	0.50	0.50	0.70	0.50	0.70
+48	☲Fuoco	☰Cielo	COSCIENZA	0.90	0.50	0.50	0.50	0.50	0.50	0.70	0.50
+49	☲Fuoco	☷Terra	CONOSCENZA	0.50	0.10	0.50	0.50	0.50	0.50	0.70	0.50
+50	☲Fuoco	☳Tuono	PERCEZIONE	0.50	0.50	0.30	0.50	0.50	0.50	0.70	0.50
+51	☲Fuoco	☵Acqua	INTUIZIONE	0.50	0.50	0.50	0.30	0.50	0.50	0.70	0.50
+52	☲Fuoco	☶Mont.	IDEA	0.50	0.50	0.50	0.50	0.30	0.50	0.70	0.50
+53	☲Fuoco	☴Vento	PENSIERO	0.50	0.50	0.50	0.50	0.50	0.70	0.70	0.50
+54	☲Fuoco	☲Fuoco	VERITÀ	0.50	0.50	0.50	0.50	0.50	0.50	0.70	0.50
+55	☲Fuoco	☱Lago	ESPRESSIONE	0.50	0.50	0.50	0.50	0.50	0.50	0.70	0.70
+56	☱Lago	☰Cielo	DESIDERIO	0.90	0.50	0.50	0.50	0.50	0.50	0.50	0.70
+57	☱Lago	☷Terra	AMORE	0.50	0.10	0.50	0.50	0.50	0.50	0.50	0.70
+58	☱Lago	☳Tuono	EMOZIONE	0.50	0.50	0.30	0.50	0.50	0.50	0.50	0.70
+59	☱Lago	☵Acqua	EMPATIA	0.50	0.50	0.50	0.30	0.50	0.50	0.50	0.70
+60	☱Lago	☶Mont.	ACCORDO	0.50	0.50	0.50	0.50	0.30	0.50	0.50	0.70
+61	☱Lago	☴Vento	SOCIETÀ	0.50	0.50	0.50	0.50	0.50	0.70	0.50	0.70
+62	☱Lago	☲Fuoco	ETICA	0.50	0.50	0.50	0.50	0.50	0.50	0.70	0.70
+63	☱Lago	☱Lago	ARMONIA	0.50	0.50	0.50	0.50	0.50	0.50	0.50	0.70

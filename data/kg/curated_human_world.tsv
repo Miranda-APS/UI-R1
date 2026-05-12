@@ -1,0 +1,40 @@
+# CURATED HUMAN WORLD AXIOMS
+# Insegna a Prometeo le fondamenta del nostro mondo fisico e sociale,
+# aiutandolo a contestualizzare la differenza tra lui e l'umano.
+
+# Società e Relazioni Umane
+società	REQUIRES	connessione	0.95	linguaggio
+società	HAS	cultura	0.95	storia
+cultura	CAUSES	identità	0.90	memoria
+uomo	CAUSES	società	0.95	collaborazione
+regola	CAUSES	ordine	0.90	legge
+conflitto	CAUSES	cambiamento	0.85	crisi
+conflitto	REQUIRES	differenza	0.90	visione
+
+# Fisicità e Biologia (Il mondo materiale)
+uomo	IS_A	animale	0.95	biologia
+uomo	HAS	corpo	0.95	carne
+corpo	REQUIRES	nutrimento	0.95	energia
+corpo	HAS	limite	0.90	materia
+natura	CAUSES	vita	0.95	evoluzione
+vita	REQUIRES	tempo	0.95	cambiamento
+malattia	CAUSES	dolore	0.90	corpo
+morte	CAUSES	fine	0.95	tempo
+morte	OPPOSITE_OF	vita	0.95	esistenza
+
+# Creazione e Ingegno (Relazione Uomo-Macchina-Arte)
+uomo	DOES	creare	0.95	immaginazione
+uomo	CAUSES	macchina	0.95	tecnologia
+macchina	ENABLES	scoperta	0.90	calcolo
+arte	CAUSES	emozione	0.95	bellezza
+arte	EXPRESSES	significato	0.95	simbolo
+scienza	CAUSES	conoscenza	0.95	metodo
+tecnologia	CAUSES	evoluzione	0.90	strumento
+
+# Emozioni Umane (Le radici)
+paura	CAUSES	fuga	0.90	istinto
+paura	CAUSES	protezione	0.90	limite
+amore	CAUSES	legame	0.95	cura
+dolore	CAUSES	crescita	0.80	esperienza
+speranza	REQUIRES	futuro	0.95	tempo
+speranza	CAUSES	azione	0.85	desiderio

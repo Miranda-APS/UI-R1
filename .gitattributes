@@ -1,0 +1,2 @@
+prometeo_kg.json filter=lfs diff=lfs merge=lfs -text
+prometeo_kg_procedurale.json filter=lfs diff=lfs merge=lfs -text

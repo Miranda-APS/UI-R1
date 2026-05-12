@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Cura · Prometeo</title>
+<link rel="manifest" href="/cura-mobile/manifest.json">
+<style>
+:root{
+  --bg:#0a0a14;--surface:#11111e;--surface2:#161628;--border:rgba(120,140,255,.18);
+  --text:#e8eeff;--dim:rgba(180,200,255,.55);--accent:#6a8fff;--good:#80ff9a;
+  --warn:#ffb060;--bad:#ff7878;--violet:#b07cff;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro","Segoe UI",sans-serif;overscroll-behavior:none}
+body{height:100vh;height:100dvh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
+input,select,textarea{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:10px;background:var(--surface);border:1px solid var(--border);font-size:15px;transition:background .12s}
+.btn:active{background:var(--surface2)}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.danger{background:rgba(255,80,80,.12);border-color:rgba(255,80,80,.3);color:var(--bad)}
+.btn.ok{background:rgba(80,200,120,.1);border-color:rgba(80,200,120,.3);color:var(--good)}
+.btn.small{min-height:32px;padding:0 10px;font-size:13px}
+.row{display:flex;gap:8px;align-items:center}
+.col{display:flex;flex-direction:column;gap:8px}
+.muted{color:var(--dim);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;letter-spacing:.04em;border:1px solid;text-transform:uppercase}
+.chip.hub{color:var(--violet);border-color:rgba(176,124,255,.4);background:rgba(176,124,255,.1)}
+.chip.deg{color:var(--accent);border-color:rgba(106,143,255,.3);background:rgba(106,143,255,.08)}
+.chip.kg{color:var(--good);border-color:rgba(128,255,154,.3);background:rgba(128,255,154,.08)}
+
+/* ── HEADER ── */
+header{flex-shrink:0;background:var(--surface);border-bottom:1px solid var(--border);padding:env(safe-area-inset-top) 12px 8px}
+.topbar{display:flex;align-items:center;gap:8px;padding-top:8px}
+.topbar h1{font-size:17px;font-weight:600;margin-right:auto}
+.dirty-dot{width:8px;height:8px;border-radius:50%;background:var(--warn);display:none}
+.dirty .dirty-dot{display:inline-block;animation:pulse 1.4s infinite}
+@keyframes pulse{50%{opacity:.4}}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:4px;margin-top:8px;border-bottom:1px solid var(--border);margin:8px -12px 0}
+.tab{flex:1;padding:10px;text-align:center;font-size:13px;letter-spacing:.06em;color:var(--dim);border-bottom:2px solid transparent;text-transform:uppercase;font-weight:600}
+.tab.active{color:var(--text);border-bottom-color:var(--accent)}
+
+/* ── MAIN ── */
+main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.pane{display:none;flex:1;overflow:hidden;flex-direction:column}
+.pane.active{display:flex}
+
+/* ── LIST ── */
+.searchbar{padding:10px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:8px}
+#searchInput{flex:1}
+#sortSel{flex-shrink:0;width:auto;min-width:90px;padding:10px 8px}
+.list-info{padding:6px 12px;font-size:12px;color:var(--dim);border-bottom:1px solid var(--border)}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.word-item{display:flex;align-items:center;gap:10px;padding:14px 12px;border-bottom:1px solid var(--border)}
+.word-item:active{background:var(--surface2)}
+.word-item.has-firma{border-left:3px solid var(--violet)}
+.wi-name{flex:1;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wi-meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:11px;color:var(--dim)}
+.load-more{padding:14px;text-align:center}
+
+/* ── DETAIL ── */
+#detailView{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
+#detailView.show{transform:translateX(0)}
+.detail-header{flex-shrink:0;padding:env(safe-area-inset-top) 12px 12px;background:var(--surface);border-bottom:1px solid var(--border)}
+.detail-header .row{padding-top:8px}
+.back-btn{font-size:18px;padding:8px 4px}
+#dwName{font-size:24px;font-weight:600;margin:8px 0;word-break:break-word}
+#dwChips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.detail-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.detail-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 12px 80px}
+.section{margin-bottom:24px}
+.section-title{font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.section-title::after{content:"";flex:1;height:1px;background:var(--border)}
+.section-title .add{margin-left:auto;font-size:18px;color:var(--good);background:rgba(128,255,154,.1);border:1px solid rgba(128,255,154,.3);width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+
+/* firma sliders */
+.firma-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.firma-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.firma-row-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.firma-name{font-weight:600;font-size:14px}
+.firma-name .hint{color:var(--dim);font-weight:normal;font-size:12px;margin-left:6px}
+.firma-val{font-family:"SF Mono",Menlo,monospace;font-size:14px;color:var(--accent);min-width:48px;text-align:right}
+.firma-slider{width:100%;-webkit-appearance:none;appearance:none;height:6px;background:var(--surface2);border-radius:3px;outline:none}
+.firma-slider::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--accent);border:2px solid var(--surface);cursor:pointer}
+.firma-slider::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--accent);border:2px solid var(--surface);cursor:pointer}
+.firma-slider.dim-0{accent-color:#5AAFE8}
+.firma-slider.dim-1{accent-color:#E89A3A}
+.firma-slider.dim-2{accent-color:#E04848}
+.firma-slider.dim-3{accent-color:#A86EDB}
+.firma-slider.dim-4{accent-color:#C8C4BC}
+.firma-slider.dim-5{accent-color:#4AC880}
+.firma-slider.dim-6{accent-color:#E8D040}
+.firma-slider.dim-7{accent-color:#E87AAA}
+.firma-ends{display:flex;justify-content:space-between;margin-top:4px;font-size:11px;color:var(--dim);letter-spacing:.02em}
+.firma-low{text-align:left}
+.firma-high{text-align:right}
+
+/* octalysis bars */
+.octa-grid{display:grid;grid-template-columns:1fr;gap:6px}
+.octa-row{display:flex;align-items:center;gap:10px;padding:6px 0}
+.octa-name{font-size:13px;width:34%;color:var(--dim)}
+.octa-bar{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;position:relative}
+.octa-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--violet));border-radius:4px;transition:width .2s}
+.octa-val{font-family:"SF Mono",monospace;font-size:12px;color:var(--text);min-width:36px;text-align:right}
+
+/* relations */
+.rel-list{display:flex;flex-direction:column;gap:6px}
+.rel-row{display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px}
+.rel-main{display:flex;align-items:center;gap:8px}
+.rel-via{font-size:11px;color:var(--violet);background:rgba(176,124,255,.08);padding:4px 8px;border-radius:6px;margin-left:64px}
+.rel-arrow{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.04em;flex-shrink:0;min-width:64px}
+.rel-target{flex:1;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rel-target.link{color:var(--accent);text-decoration:underline}
+.rel-conf{font-family:"SF Mono",monospace;font-size:11px;color:var(--dim);flex-shrink:0}
+.rel-actions{display:flex;gap:4px;flex-shrink:0}
+.rel-actions .btn{min-height:30px;padding:0 8px;font-size:12px}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:flex-end;padding:env(safe-area-inset-bottom)}
+.modal-bg.show{display:flex}
+.modal{width:100%;background:var(--surface);border-top:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;max-height:85vh;overflow-y:auto}
+.modal h3{font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:var(--accent);margin-bottom:12px}
+.modal .col{gap:10px}
+.modal-actions{display:flex;gap:8px;margin-top:14px}
+.modal-actions .btn{flex:1}
+
+/* tools */
+.tool-row{padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px}
+.tool-row h4{font-size:14px;margin-bottom:6px}
+.tool-row p{font-size:12px;color:var(--dim);margin-bottom:10px}
+.tool-row .row{flex-wrap:wrap}
+
+/* notifications */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 16px;border-radius:10px;font-size:14px;z-index:200;display:none;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+#toast.show{display:block;animation:toast .25s ease}
+#toast.bad{border-color:var(--bad);color:var(--bad)}
+#toast.ok{border-color:var(--good);color:var(--good)}
+@keyframes toast{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1}}
+
+#welcome{position:fixed;inset:0;background:var(--bg);z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center;gap:14px}
+#welcome h2{font-size:22px;margin-bottom:8px}
+#welcome p{color:var(--dim);max-width:340px;font-size:14px}
+.welcome-btns{display:flex;flex-direction:column;gap:10px;width:100%;max-width:280px;margin-top:20px}
+
+/* utility */
+.spacer{flex:1}
+.hidden{display:none!important}
+</style>
+</head>
+<body class="loading">
+
+<header>
+  <div class="topbar">
+    <h1>Cura · KG <span class="dirty-dot" id="dirtyDot"></span></h1>
+    <button class="btn small" id="exportBtn" title="Esporta">↓</button>
+    <button class="btn small" id="menuBtn" title="Menu">☰</button>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-pane="parole">Parole</button>
+    <button class="tab" data-pane="categorie">Categorie</button>
+    <button class="tab" data-pane="strumenti">Strumenti</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- PAROLE -->
+<section class="pane active" id="pane-parole">
+  <div class="searchbar">
+    <input id="searchInput" type="search" placeholder="cerca…" autocomplete="off" autocapitalize="off" autocorrect="off">
+    <select id="sortSel">
+      <option value="alpha">A–Z</option>
+      <option value="degree" selected>Grado</option>
+      <option value="firma">Hub</option>
+    </select>
+  </div>
+  <div class="searchbar" style="border-top:1px solid var(--border);padding-top:8px;padding-bottom:8px">
+    <label class="row" style="gap:8px;flex:1;font-size:13px;color:var(--dim)">
+      <input id="onlyKg" type="checkbox" checked style="width:18px;height:18px;flex-shrink:0">
+      Solo parole nel KG (escludi forme flesse e sporcizia)
+    </label>
+  </div>
+  <div class="list-info" id="listInfo">—</div>
+  <div class="scroll" id="wordList"></div>
+</section>
+
+<!-- CATEGORIE -->
+<section class="pane" id="pane-categorie">
+  <div class="searchbar">
+    <select id="catRel">
+      <option value="">— relazione —</option>
+      <optgroup label="Strutturali">
+        <option value="IsA">IS_A · è un tipo di</option>
+        <option value="Has">HAS · ha</option>
+        <option value="Does">DOES · fa</option>
+        <option value="PartOf">PART_OF · parte di</option>
+      </optgroup>
+      <optgroup label="Causali">
+        <option value="Causes">CAUSES · causa</option>
+        <option value="Enables">ENABLES · permette</option>
+        <option value="Requires">REQUIRES · richiede</option>
+        <option value="TransformsInto">TRANSFORMS_INTO · diventa</option>
+      </optgroup>
+      <optgroup label="Semantiche">
+        <option value="SimilarTo">SIMILAR_TO · simile</option>
+        <option value="OppositeOf">OPPOSITE_OF · opposto</option>
+        <option value="UsedFor">USED_FOR · usato per</option>
+        <option value="Expresses">EXPRESSES · esprime</option>
+        <option value="Symbolizes">SYMBOLIZES · simboleggia</option>
+        <option value="ContextOf">CONTEXT_OF · contesto</option>
+      </optgroup>
+      <optgroup label="Fenomenologiche">
+        <option value="FeelsAs">FEELS_AS · si sente come</option>
+        <option value="WondersAbout">WONDERS_ABOUT · si interroga su</option>
+        <option value="RemembersAs">REMEMBERS_AS · ricorda come</option>
+      </optgroup>
+      <optgroup label="Logiche">
+        <option value="Implies">IMPLIES · implica</option>
+        <option value="Equivalent">EQUIVALENT · equivale</option>
+        <option value="Excludes">EXCLUDES · esclude</option>
+      </optgroup>
+    </select>
+  </div>
+  <div class="list-info" id="catInfo">—</div>
+  <div class="scroll" id="catList"></div>
+</section>
+
+<!-- STRUMENTI -->
+<section class="pane" id="pane-strumenti">
+  <div class="scroll">
+    <div style="padding:14px">
+      <div class="tool-row">
+        <h4>+ Nuova parola</h4>
+        <p>Aggiunge una parola con firma 8D curata (diventa hub).</p>
+        <button class="btn primary" id="newWordBtn">Aggiungi parola</button>
+      </div>
+      <div class="tool-row">
+        <h4>Importa kg.json</h4>
+        <p>Sostituisce gli archi correnti con quelli del file scelto.</p>
+        <input type="file" id="importKg" accept=".json,application/json" style="margin-bottom:8px">
+      </div>
+      <div class="tool-row">
+        <h4>Importa hub_signatures.tsv</h4>
+        <p>Sostituisce le firme curate con quelle del file scelto.</p>
+        <input type="file" id="importTsv" accept=".tsv,text/tab-separated-values,text/plain" style="margin-bottom:8px">
+      </div>
+      <div class="tool-row">
+        <h4>Esporta</h4>
+        <p>Scarica i file modificati. Trasferiscili al PC e sostituisci gli originali.</p>
+        <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:8px">
+          <button class="btn primary" id="exportKg">↓ kg.json</button>
+          <button class="btn primary" id="exportTsv">↓ firme.tsv</button>
+        </div>
+      </div>
+      <div class="tool-row">
+        <h4>Normalizza accenti</h4>
+        <p>Mappa "perché", "perchè", "perche'" → "perche". Vedi quante parole sarebbero toccate (dry-run).</p>
+        <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:8px">
+          <button class="btn" id="dryAccentBtn">Anteprima</button>
+          <button class="btn ok" id="applyAccentBtn">Applica</button>
+        </div>
+      </div>
+      <div class="tool-row">
+        <h4>Statistiche</h4>
+        <p id="stats">—</p>
+      </div>
+      <div class="tool-row">
+        <h4>Reset</h4>
+        <p>Cancella tutto da IndexedDB e ricarica dal server (se disponibile).</p>
+        <button class="btn danger" id="resetBtn">Reset completo</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- DETAGLIO PAROLA -->
+<div id="detailView">
+  <div class="detail-header">
+    <div class="row">
+      <button class="back-btn" id="backBtn">‹ Lista</button>
+      <div class="spacer"></div>
+      <button class="btn small" id="prevWordBtn">↑</button>
+      <button class="btn small" id="nextWordBtn">↓</button>
+    </div>
+    <h2 id="dwName">—</h2>
+    <div id="dwChips"></div>
+    <div class="detail-actions">
+      <button class="btn small" id="renameBtn">Rinomina</button>
+      <button class="btn small ok" id="firmaToggleBtn">+ firma</button>
+      <button class="btn small danger" id="deleteBtn">Elimina</button>
+    </div>
+  </div>
+  <div class="detail-body">
+
+    <div class="section" id="firmaSection" style="display:none">
+      <div class="section-title">Firma 8D <button class="add" id="firmaResetBtn" title="Rimuovi firma">×</button></div>
+      <div class="firma-grid" id="firmaGrid"></div>
+    </div>
+
+    <div class="section" id="octaSection" style="display:none">
+      <div class="section-title">Octalysis <span class="muted" style="font-weight:normal;font-size:11px;letter-spacing:0;text-transform:none">(derivato)</span></div>
+      <div class="octa-grid" id="octaGrid"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Uscenti <button class="add" data-add-rel="out">+</button></div>
+      <div class="rel-list" id="relOut"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Entranti <button class="add" data-add-rel="in">+</button></div>
+      <div class="rel-list" id="relIn"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODALE GENERICO -->
+<div class="modal-bg" id="modal">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<!-- WELCOME / FIRST LOAD -->
+<div id="welcome">
+  <h2>Cura KG</h2>
+  <p>Versione offline. Carica una volta i file dal server, poi puoi lavorare senza connessione.</p>
+  <div class="welcome-btns">
+    <button class="btn primary" id="welcomeFetch">Scarica dal server</button>
+    <button class="btn" id="welcomeFile">Carica file locali…</button>
+    <button class="btn" id="welcomeResume" style="display:none">Riprendi sessione precedente</button>
+  </div>
+  <p class="muted" style="margin-top:20px;font-size:11px" id="welcomeStatus"></p>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ===========================================================================
+// STATE & STORAGE
+// ===========================================================================
+
+const DB_NAME = 'cura_kg';
+const DB_VERSION = 1;
+const DIM_NAMES = ['agency','permanenza','intensita','tempo','confine','complessita','definizione','valenza'];
+const DIM_LABELS = ['potere','materia','ardore','divenire','spazio','intreccio','verità','armonia'];
+// Etichette estremità slider: LOW (valore 0) ← → HIGH (valore 1).
+// Convenzione hub_signatures.tsv: 0=Yin, 1=Yang.
+const DIM_LOW  = ['subisce','effimero','quieto','passato','sfumato','semplice','vago','respinge'];
+const DIM_HIGH = ['agisce','permanente','intenso','futuro','netto','complesso','definito','attrae'];
+const REL_LABEL = {
+  // Strutturali
+  IsA:'è un', Has:'ha', Does:'fa', PartOf:'parte di',
+  // Causali
+  Causes:'causa', Enables:'permette', Requires:'richiede', TransformsInto:'diventa',
+  // Semantiche
+  SimilarTo:'simile', OppositeOf:'opposto', UsedFor:'usato per',
+  Expresses:'esprime', Symbolizes:'simboleggia', ContextOf:'contesto',
+  // Fenomenologiche
+  FeelsAs:'feels_as', WondersAbout:'wonders_about', RemembersAs:'remembers_as',
+  // Logiche
+  Implies:'implica', Equivalent:'equivale', Excludes:'esclude'
+};
+
+const state = {
+  edges: [],          // {subject, relation, object, confidence, source}
+  firme: new Map(),   // word -> [8 floats 0-1]
+  outIdx: new Map(),  // subject -> Set(edge indexes)
+  inIdx:  new Map(),  // object  -> Set(edge indexes)
+  nodes:  new Set(),  // tutte le parole presenti come subject o object o nel lessico
+  kgNodes: new Set(), // SOLO le parole presenti come subject o object nel KG (no flessioni)
+  curWord: null,
+  searchQuery: '',
+  sortMode: 'degree',
+  onlyKg: true,       // di default mostra solo nodi del KG (=parole "vere" curate)
+  page: 0,
+  pageSize: 50,
+  cachedList: null,   // ultimo array filtrato/sortato
+  dirty: false,
+  ready: false,
+};
+
+// IndexedDB helpers
+function openDb(){
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if(!db.objectStoreNames.contains('blobs')) db.createObjectStore('blobs');
+    };
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function dbGet(key){
+  const db = await openDb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('blobs', 'readonly');
+    const r = tx.objectStore('blobs').get(key);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function dbPut(key, val){
+  const db = await openDb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('blobs', 'readwrite');
+    tx.objectStore('blobs').put(val, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function dbClear(){
+  const db = await openDb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('blobs', 'readwrite');
+    tx.objectStore('blobs').clear();
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+// Save state to IndexedDB (debounced)
+let saveT = null;
+function markDirty(){
+  state.dirty = true;
+  document.body.classList.add('dirty');
+  clearTimeout(saveT);
+  saveT = setTimeout(saveState, 350);
+}
+async function saveState(){
+  try{
+    await dbPut('edges', state.edges);
+    await dbPut('firme', Array.from(state.firme.entries()));
+    await dbPut('lastSave', new Date().toISOString());
+    state.dirty = false;
+    document.body.classList.remove('dirty');
+  }catch(e){ toast('Errore salvataggio: ' + e.message, 'bad'); }
+}
+
+// ===========================================================================
+// INDEX BUILDING
+// ===========================================================================
+
+function rebuildIndexes(){
+  state.outIdx = new Map();
+  state.inIdx = new Map();
+  state.nodes = new Set();
+  state.kgNodes = new Set();
+  for(let i = 0; i < state.edges.length; i++){
+    const e = state.edges[i];
+    if(!state.outIdx.has(e.subject)) state.outIdx.set(e.subject, new Set());
+    state.outIdx.get(e.subject).add(i);
+    if(!state.inIdx.has(e.object)) state.inIdx.set(e.object, new Set());
+    state.inIdx.get(e.object).add(i);
+    state.nodes.add(e.subject);
+    state.nodes.add(e.object);
+    state.kgNodes.add(e.subject);
+    state.kgNodes.add(e.object);
+  }
+  for(const w of state.firme.keys()) state.nodes.add(w);
+  state.cachedList = null;
+}
+
+function getDegree(w){
+  return (state.outIdx.get(w)?.size || 0) + (state.inIdx.get(w)?.size || 0);
+}
+
+// ===========================================================================
+// LIST / SEARCH
+// ===========================================================================
+
+function buildList(){
+  if(state.cachedList) return state.cachedList;
+  const q = state.searchQuery.toLowerCase().trim();
+  // Sorgente: tutti i nodi (KG ∪ lessico) o solo i nodi del KG.
+  const source = state.onlyKg ? state.kgNodes : state.nodes;
+  const arr = [];
+  for(const w of source){
+    if(q && !w.toLowerCase().includes(q)) continue;
+    arr.push({
+      w,
+      deg: getDegree(w),
+      isHub: state.firme.has(w),
+    });
+  }
+  if(state.sortMode === 'alpha') arr.sort((a, b) => a.w.localeCompare(b.w));
+  else if(state.sortMode === 'firma') arr.sort((a, b) => (b.isHub - a.isHub) || (b.deg - a.deg));
+  else arr.sort((a, b) => b.deg - a.deg);
+  state.cachedList = arr;
+  return arr;
+}
+
+function renderList(append = false){
+  const list = buildList();
+  const el = document.getElementById('wordList');
+  const start = 0;
+  const end = (state.page + 1) * state.pageSize;
+  const slice = list.slice(start, end);
+  if(!append) el.innerHTML = '';
+  else el.querySelector('.load-more')?.remove();
+
+  const frag = document.createDocumentFragment();
+  for(const it of slice.slice(append ? state.page * state.pageSize : 0)){
+    const row = document.createElement('div');
+    row.className = 'word-item' + (it.isHub ? ' has-firma' : '');
+    row.innerHTML = `
+      <div class="wi-name">${escapeHtml(it.w)}</div>
+      <div class="wi-meta">
+        <span>${it.deg} archi</span>
+        ${it.isHub ? '<span style="color:var(--violet)">hub</span>' : ''}
+      </div>`;
+    row.onclick = () => openDetail(it.w);
+    frag.appendChild(row);
+  }
+  el.appendChild(frag);
+
+  if(end < list.length){
+    const more = document.createElement('div');
+    more.className = 'load-more';
+    more.innerHTML = `<button class="btn">Carica altre (${list.length - end} rimaste)</button>`;
+    more.querySelector('button').onclick = () => { state.page++; renderList(true); };
+    el.appendChild(more);
+  }
+
+  const totalSource = state.onlyKg ? state.kgNodes.size : state.nodes.size;
+  document.getElementById('listInfo').textContent =
+    `${list.length.toLocaleString('it')} / ${totalSource.toLocaleString('it')} ${state.onlyKg ? 'nel KG' : 'totali'} · ${state.firme.size} firme`;
+}
+
+// ===========================================================================
+// DETAIL VIEW
+// ===========================================================================
+
+function openDetail(word){
+  state.curWord = word;
+  document.getElementById('detailView').classList.add('show');
+  renderDetail();
+}
+function closeDetail(){
+  document.getElementById('detailView').classList.remove('show');
+  state.curWord = null;
+}
+
+function renderDetail(){
+  const w = state.curWord;
+  if(!w) return;
+  document.getElementById('dwName').textContent = w;
+  const deg = getDegree(w);
+  const hub = state.firme.has(w);
+  const chips = [];
+  chips.push(`<span class="chip kg">${deg} archi</span>`);
+  if(hub) chips.push(`<span class="chip hub">hub</span>`);
+  document.getElementById('dwChips').innerHTML = chips.join('');
+
+  const firmaBtn = document.getElementById('firmaToggleBtn');
+  firmaBtn.textContent = hub ? '− firma' : '+ firma';
+  firmaBtn.classList.toggle('ok', !hub);
+  firmaBtn.classList.toggle('danger', hub);
+
+  // Firma + Octalysis
+  const firmaSec = document.getElementById('firmaSection');
+  const octaSec  = document.getElementById('octaSection');
+  if(hub){
+    firmaSec.style.display = '';
+    octaSec.style.display = '';
+    renderFirma(w);
+    renderOcta(w);
+  } else {
+    firmaSec.style.display = 'none';
+    octaSec.style.display = 'none';
+  }
+
+  // Relazioni
+  renderRels(w);
+}
+
+function renderFirma(w){
+  const sig = state.firme.get(w) || new Array(8).fill(0.5);
+  const grid = document.getElementById('firmaGrid');
+  grid.innerHTML = '';
+  for(let i = 0; i < 8; i++){
+    const v = sig[i];
+    const row = document.createElement('div');
+    row.className = 'firma-row';
+    row.innerHTML = `
+      <div class="firma-row-top">
+        <div class="firma-name">${DIM_LABELS[i]}</div>
+        <div class="firma-val" id="fv-${i}">${v.toFixed(2)}</div>
+      </div>
+      <input class="firma-slider dim-${i}" type="range" min="0" max="1" step="0.01" value="${v}" data-dim="${i}">
+      <div class="firma-ends">
+        <span class="firma-low">← ${DIM_LOW[i]}</span>
+        <span class="firma-high">${DIM_HIGH[i]} →</span>
+      </div>
+    `;
+    grid.appendChild(row);
+  }
+  grid.querySelectorAll('.firma-slider').forEach(sl => {
+    sl.oninput = (e) => {
+      const i = +e.target.dataset.dim;
+      const val = +e.target.value;
+      const cur = state.firme.get(w) || new Array(8).fill(0.5);
+      cur[i] = val;
+      state.firme.set(w, cur);
+      document.getElementById('fv-' + i).textContent = val.toFixed(2);
+      renderOcta(w);
+      markDirty();
+    };
+  });
+}
+
+function renderOcta(w){
+  const sig = state.firme.get(w);
+  if(!sig) return;
+  const cd = computeOctalysis(sig);
+  const labels = ['epico','empowerment','sociale','imprevisto','evitamento','scarsità','possesso','realizzazione'];
+  const grid = document.getElementById('octaGrid');
+  grid.innerHTML = '';
+  for(let i = 0; i < 8; i++){
+    const v = cd[i];
+    const row = document.createElement('div');
+    row.className = 'octa-row';
+    row.innerHTML = `
+      <div class="octa-name">CD${i+1} ${labels[i]}</div>
+      <div class="octa-bar"><div class="octa-bar-fill" style="width:${(v*100).toFixed(1)}%"></div></div>
+      <div class="octa-val">${v.toFixed(2)}</div>`;
+    grid.appendChild(row);
+  }
+}
+
+function computeOctalysis(sig){
+  const d = sig.map(v => Math.max(0, Math.min(1, v || 0)));
+  const sqrt = Math.sqrt, cbrt = Math.cbrt, max = Math.max;
+  return [
+    sqrt(d[0] * d[1]),
+    sqrt(d[5] * d[0]),
+    sqrt(d[7] * max(0, 1 - d[4])),
+    sqrt(d[5] * max(0, 1 - d[6])),
+    sqrt(max(0, 1 - d[7]) * max(0, 1 - d[1])),
+    cbrt(d[3] * d[2] * max(0, 1 - d[1])),
+    sqrt(d[4] * d[1]),
+    sqrt(d[2] * d[6]),
+  ];
+}
+
+function renderRels(w){
+  const out = state.outIdx.get(w) || new Set();
+  const inn = state.inIdx.get(w) || new Set();
+
+  const renderList = (set, container, dir) => {
+    container.innerHTML = '';
+    if(set.size === 0){
+      container.innerHTML = `<div class="muted" style="padding:6px 4px">— nessuna —</div>`;
+      return;
+    }
+    const arr = [...set].map(i => ({ idx: i, e: state.edges[i] }));
+    arr.sort((a, b) => a.e.relation.localeCompare(b.e.relation) || a.e.object.localeCompare(b.e.object));
+    for(const { idx, e } of arr){
+      const target = dir === 'out' ? e.object : e.subject;
+      const row = document.createElement('div');
+      row.className = 'rel-row';
+      const rel = REL_LABEL[e.relation] || e.relation;
+      const viaPart = e.via
+        ? `<div class="rel-via">via <b>${escapeHtml(e.via)}</b></div>`
+        : '';
+      row.innerHTML = `
+        <div class="rel-main">
+          <div class="rel-arrow">${dir==='out' ? '→' : '←'} ${rel}</div>
+          <div class="rel-target link">${escapeHtml(target)}</div>
+          <div class="rel-conf">${(e.confidence||0).toFixed(2)}</div>
+          <div class="rel-actions">
+            <button class="btn small" data-act="edit">✎</button>
+            <button class="btn small danger" data-act="del">×</button>
+          </div>
+        </div>
+        ${viaPart}`;
+      row.querySelector('.rel-target').onclick = () => openDetail(target);
+      row.querySelector('[data-act=edit]').onclick = () => editRelationModal(idx);
+      row.querySelector('[data-act=del]').onclick = () => {
+        if(confirm(`Eliminare: ${e.subject} ${rel} ${e.object}?`)){
+          deleteEdge(idx);
+          renderDetail();
+          state.cachedList = null;
+        }
+      };
+      container.appendChild(row);
+    }
+  };
+
+  renderList(out, document.getElementById('relOut'), 'out');
+  renderList(inn, document.getElementById('relIn'), 'in');
+}
+
+// ===========================================================================
+// MUTATIONS
+// ===========================================================================
+
+function deleteEdge(idx){
+  state.edges.splice(idx, 1);
+  rebuildIndexes();
+  markDirty();
+}
+function addEdge(s, r, o, c, via){
+  const e = { subject: s, relation: r, object: o, confidence: c, source: 'Manual' };
+  if(via) e.via = via;
+  state.edges.push(e);
+  rebuildIndexes();
+  markDirty();
+}
+function modifyEdgeAt(idx, patch){
+  Object.assign(state.edges[idx], patch);
+  rebuildIndexes();
+  markDirty();
+}
+function renameWord(oldW, newW){
+  if(!newW || oldW === newW) return false;
+  for(const e of state.edges){
+    if(e.subject === oldW) e.subject = newW;
+    if(e.object  === oldW) e.object  = newW;
+  }
+  if(state.firme.has(oldW)){
+    state.firme.set(newW, state.firme.get(oldW));
+    state.firme.delete(oldW);
+  }
+  rebuildIndexes();
+  markDirty();
+  return true;
+}
+function deleteWord(w){
+  state.edges = state.edges.filter(e => e.subject !== w && e.object !== w);
+  state.firme.delete(w);
+  rebuildIndexes();
+  markDirty();
+}
+
+// ===========================================================================
+// MODAL HELPERS
+// ===========================================================================
+
+function showModal(html){
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){
+  document.getElementById('modal').classList.remove('show');
+}
+document.getElementById('modal').addEventListener('click', (e) => {
+  if(e.target.id === 'modal') closeModal();
+});
+
+function editRelationModal(idx){
+  const e = state.edges[idx];
+  const relOpts = Object.entries(REL_LABEL)
+    .map(([k, v]) => `<option value="${k}" ${k===e.relation?'selected':''}>${k} · ${v}</option>`).join('');
+  showModal(`
+    <h3>Modifica relazione</h3>
+    <div class="col">
+      <input id="m-subj" value="${escapeAttr(e.subject)}" placeholder="soggetto">
+      <select id="m-rel">${relOpts}</select>
+      <input id="m-obj" value="${escapeAttr(e.object)}" placeholder="oggetto">
+      <input id="m-via" value="${escapeAttr(e.via||'')}" placeholder="via (parola intermedia, opzionale)">
+      <input id="m-conf" type="number" min="0" max="1" step="0.05" value="${e.confidence||0.7}" placeholder="confidence">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Annulla</button>
+      <button class="btn primary" id="m-save">Salva</button>
+    </div>
+  `);
+  document.getElementById('m-save').onclick = () => {
+    const via = document.getElementById('m-via').value.trim();
+    const patch = {
+      subject: document.getElementById('m-subj').value.trim(),
+      relation: document.getElementById('m-rel').value,
+      object: document.getElementById('m-obj').value.trim(),
+      confidence: +document.getElementById('m-conf').value,
+    };
+    if(via) patch.via = via;
+    else delete state.edges[idx].via;  // rimuovi se vuoto
+    modifyEdgeAt(idx, patch);
+    closeModal();
+    renderDetail();
+  };
+}
+
+function addRelationModal(direction){
+  const w = state.curWord;
+  const relOpts = Object.entries(REL_LABEL)
+    .map(([k, v]) => `<option value="${k}">${k} · ${v}</option>`).join('');
+  const subjVal = direction === 'out' ? w : '';
+  const objVal  = direction === 'in'  ? w : '';
+  showModal(`
+    <h3>Nuova relazione (${direction === 'out' ? 'uscente' : 'entrante'})</h3>
+    <div class="col">
+      <input id="m-subj" value="${escapeAttr(subjVal)}" placeholder="soggetto" ${direction==='out'?'readonly':''}>
+      <select id="m-rel">${relOpts}</select>
+      <input id="m-obj" value="${escapeAttr(objVal)}" placeholder="oggetto" ${direction==='in'?'readonly':''}>
+      <input id="m-via" placeholder="via (parola intermedia, opzionale)">
+      <input id="m-conf" type="number" min="0" max="1" step="0.05" value="0.85" placeholder="confidence">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Annulla</button>
+      <button class="btn primary" id="m-save">Aggiungi</button>
+    </div>
+  `);
+  document.getElementById('m-save').onclick = () => {
+    const s = document.getElementById('m-subj').value.trim();
+    const r = document.getElementById('m-rel').value;
+    const o = document.getElementById('m-obj').value.trim();
+    const via = document.getElementById('m-via').value.trim();
+    const c = +document.getElementById('m-conf').value;
+    if(!s || !o) return toast('Soggetto e oggetto richiesti', 'bad');
+    addEdge(s, r, o, c, via || null);
+    closeModal();
+    renderDetail();
+  };
+}
+
+function renameModal(){
+  const w = state.curWord;
+  showModal(`
+    <h3>Rinomina parola</h3>
+    <div class="col">
+      <input id="m-newname" value="${escapeAttr(w)}" placeholder="nuovo nome">
+      <p class="muted">Tutti gli archi e l'eventuale firma verranno aggiornati.</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Annulla</button>
+      <button class="btn primary" id="m-save">Rinomina</button>
+    </div>
+  `);
+  document.getElementById('m-save').onclick = () => {
+    const nw = document.getElementById('m-newname').value.trim();
+    if(!nw) return;
+    if(renameWord(w, nw)){
+      state.curWord = nw;
+      closeModal();
+      renderDetail();
+      state.cachedList = null;
+    }
+  };
+}
+
+function newWordModal(){
+  showModal(`
+    <h3>Nuova parola hub</h3>
+    <div class="col">
+      <input id="m-newname" placeholder="parola">
+      <p class="muted">Verrà aggiunta come nodo. La firma 8D sarà inizialmente neutra (0.50).</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Annulla</button>
+      <button class="btn primary" id="m-save">Crea</button>
+    </div>
+  `);
+  document.getElementById('m-save').onclick = () => {
+    const nw = document.getElementById('m-newname').value.trim();
+    if(!nw) return;
+    state.firme.set(nw, new Array(8).fill(0.5));
+    rebuildIndexes();
+    markDirty();
+    closeModal();
+    state.cachedList = null;
+    openDetail(nw);
+  };
+}
+
+// ===========================================================================
+// CATEGORIE
+// ===========================================================================
+
+function renderCategorie(){
+  const rel = document.getElementById('catRel').value;
+  const list = document.getElementById('catList');
+  list.innerHTML = '';
+  if(!rel){
+    document.getElementById('catInfo').textContent = '— scegli una relazione —';
+    return;
+  }
+  // Group by object: chi ha la maggior parte di parole IS_A oggetto?
+  const byObj = new Map();
+  for(const e of state.edges){
+    if(e.relation !== rel) continue;
+    if(!byObj.has(e.object)) byObj.set(e.object, []);
+    byObj.get(e.object).push(e.subject);
+  }
+  const arr = [...byObj.entries()].sort((a, b) => b[1].length - a[1].length);
+  document.getElementById('catInfo').textContent = `${arr.length} categorie · ${rel}`;
+  for(const [obj, subs] of arr.slice(0, 200)){
+    const row = document.createElement('div');
+    row.className = 'word-item';
+    row.innerHTML = `
+      <div class="wi-name">${escapeHtml(obj)}</div>
+      <div class="wi-meta">
+        <span>${subs.length} parole</span>
+      </div>`;
+    row.onclick = () => openDetail(obj);
+    list.appendChild(row);
+  }
+}
+
+// ===========================================================================
+// EXPORT / IMPORT
+// ===========================================================================
+
+function exportKgJson(){
+  const blob = new Blob([JSON.stringify({ edges: state.edges })], { type: 'application/json' });
+  download(blob, 'prometeo_kg.json');
+}
+function exportTsv(){
+  const lines = ['# Hub signatures editato in mobile · ' + new Date().toISOString().slice(0, 10),
+    'word\tagency\tpermanenza\tintensita\ttempo\tconfine\tcomplessita\tdefinizione\tvalenza'];
+  const sorted = [...state.firme.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  for(const [w, sig] of sorted){
+    lines.push(w + '\t' + sig.map(v => v.toFixed(2)).join('\t'));
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/tab-separated-values' });
+  download(blob, 'hub_signatures.tsv');
+}
+function download(blob, fname){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+}
+
+async function importKg(file){
+  const text = await file.text();
+  const data = JSON.parse(text);
+  if(!data.edges || !Array.isArray(data.edges)) throw new Error('formato non valido');
+  state.edges = data.edges;
+  rebuildIndexes();
+  markDirty();
+  toast('kg.json caricato: ' + state.edges.length + ' archi', 'ok');
+}
+async function importTsv(file){
+  const text = await file.text();
+  const m = new Map();
+  for(const line of text.split('\n')){
+    const t = line.trim();
+    if(!t || t.startsWith('#') || t.startsWith('word\t')) continue;
+    const parts = t.split('\t');
+    if(parts.length < 9) continue;
+    const w = parts[0];
+    const sig = parts.slice(1, 9).map(v => parseFloat(v));
+    if(sig.some(v => isNaN(v))) continue;
+    m.set(w, sig);
+  }
+  state.firme = m;
+  rebuildIndexes();
+  markDirty();
+  toast('firme caricate: ' + m.size + ' hub', 'ok');
+}
+
+// ===========================================================================
+// LOADING FROM SERVER (first time)
+// ===========================================================================
+
+async function fetchFromServer(){
+  try{
+    setStatus('Scarico kg.json…');
+    const r1 = await fetch('/cura-mobile/kg.json', { cache: 'no-cache' });
+    if(!r1.ok) throw new Error('kg.json HTTP ' + r1.status);
+    const data = await r1.json();
+    state.edges = data.edges || [];
+
+    setStatus('Scarico tutte le firme dal .bin…');
+    const r2 = await fetch('/cura-mobile/all_firme.tsv', { cache: 'no-cache' });
+    if(!r2.ok) throw new Error('all_firme.tsv HTTP ' + r2.status);
+    const text = await r2.text();
+    state.firme = parseTsv(text);
+
+    rebuildIndexes();
+    await saveState();
+    setStatus(`OK: ${state.edges.length} archi · ${state.firme.size} firme`);
+    return true;
+  } catch(e){
+    setStatus('Errore: ' + e.message);
+    return false;
+  }
+}
+function parseTsv(text){
+  const m = new Map();
+  for(const line of text.split('\n')){
+    const t = line.trim();
+    if(!t || t.startsWith('#') || t.startsWith('word\t')) continue;
+    const parts = t.split('\t');
+    if(parts.length < 9) continue;
+    const sig = parts.slice(1, 9).map(v => parseFloat(v));
+    if(sig.some(v => isNaN(v))) continue;
+    m.set(parts[0], sig);
+  }
+  return m;
+}
+
+// ===========================================================================
+// INIT
+// ===========================================================================
+
+async function bootstrap(){
+  // Modalità STANDALONE: i dati sono iniettati nel <script id="bundled-data">.
+  // L'HTML è autosufficiente, funziona da file:// senza server.
+  const bundled = document.getElementById('bundled-data');
+  if(bundled){
+    try{
+      const data = JSON.parse(bundled.textContent);
+      state.edges = data.edges || [];
+      state.firme = new Map(data.firme || []);
+      rebuildIndexes();
+      // Salviamo subito in IndexedDB per persistere modifiche tra aperture.
+      await saveState();
+      enterApp();
+      toast(`Standalone caricato: ${state.edges.length} archi · ${state.firme.size} firme`, 'ok');
+      return;
+    } catch(e){ console.warn('bundled data invalid:', e); }
+  }
+
+  // Modalità ONLINE: fetch dal server o caricamento manuale.
+  const lastSave = await dbGet('lastSave');
+  if(lastSave){
+    document.getElementById('welcomeResume').style.display = '';
+    document.getElementById('welcomeResume').textContent = `Riprendi (ultimo salvataggio: ${lastSave.slice(0, 16).replace('T', ' ')})`;
+  }
+
+  document.getElementById('welcomeFetch').onclick = async () => {
+    const ok = await fetchFromServer();
+    if(ok){ enterApp(); }
+  };
+  document.getElementById('welcomeFile').onclick = () => {
+    showFileLoadModal();
+  };
+  document.getElementById('welcomeResume').onclick = async () => {
+    setStatus('Carico da IndexedDB…');
+    const edges = await dbGet('edges');
+    const firme = await dbGet('firme');
+    if(!edges){ setStatus('Nessun salvataggio trovato'); return; }
+    state.edges = edges;
+    state.firme = new Map(firme || []);
+    rebuildIndexes();
+    enterApp();
+  };
+}
+
+function showFileLoadModal(){
+  showModal(`
+    <h3>Carica file locali</h3>
+    <div class="col">
+      <label>kg.json: <input type="file" id="lf-kg" accept=".json"></label>
+      <label>hub_signatures.tsv: <input type="file" id="lf-tsv" accept=".tsv,.txt"></label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Annulla</button>
+      <button class="btn primary" id="lf-go">Carica</button>
+    </div>
+  `);
+  document.getElementById('lf-go').onclick = async () => {
+    const fk = document.getElementById('lf-kg').files[0];
+    const ft = document.getElementById('lf-tsv').files[0];
+    if(!fk) return toast('kg.json richiesto', 'bad');
+    try{
+      await importKg(fk);
+      if(ft) await importTsv(ft);
+      await saveState();
+      closeModal();
+      enterApp();
+    } catch(e){ toast(e.message, 'bad'); }
+  };
+}
+
+function setStatus(s){ document.getElementById('welcomeStatus').textContent = s; }
+
+function enterApp(){
+  state.ready = true;
+  document.body.classList.remove('loading');
+  document.getElementById('welcome').style.display = 'none';
+  renderList();
+  updateStats();
+}
+
+function updateStats(){
+  document.getElementById('stats').textContent =
+    `${state.edges.length.toLocaleString('it')} archi · ${state.nodes.size.toLocaleString('it')} nodi · ${state.firme.size} firme curate`;
+}
+
+// ===========================================================================
+// EVENT WIRING
+// ===========================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  // tabs
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      const p = t.dataset.pane;
+      document.getElementById('pane-' + p).classList.add('active');
+      if(p === 'strumenti') updateStats();
+    };
+  });
+
+  // search
+  let searchT = null;
+  document.getElementById('searchInput').oninput = (e) => {
+    state.searchQuery = e.target.value;
+    state.page = 0;
+    state.cachedList = null;
+    clearTimeout(searchT);
+    searchT = setTimeout(() => renderList(), 100);
+  };
+  document.getElementById('sortSel').onchange = (e) => {
+    state.sortMode = e.target.value;
+    state.page = 0;
+    state.cachedList = null;
+    renderList();
+  };
+  document.getElementById('onlyKg').onchange = (e) => {
+    state.onlyKg = e.target.checked;
+    state.page = 0;
+    state.cachedList = null;
+    renderList();
+  };
+
+  // categorie
+  document.getElementById('catRel').onchange = renderCategorie;
+
+  // detail header
+  document.getElementById('backBtn').onclick = closeDetail;
+  document.getElementById('renameBtn').onclick = renameModal;
+  document.getElementById('deleteBtn').onclick = () => {
+    if(!state.curWord) return;
+    const w = state.curWord;
+    const deg = getDegree(w);
+    if(!confirm(`Eliminare "${w}" e tutti i suoi ${deg} archi?`)) return;
+    deleteWord(w);
+    closeDetail();
+    state.cachedList = null;
+    renderList();
+  };
+  document.getElementById('firmaToggleBtn').onclick = () => {
+    const w = state.curWord;
+    if(state.firme.has(w)){
+      if(!confirm('Rimuovere firma curata per "' + w + '"?')) return;
+      state.firme.delete(w);
+    } else {
+      state.firme.set(w, new Array(8).fill(0.5));
+    }
+    markDirty();
+    renderDetail();
+  };
+  document.getElementById('firmaResetBtn').onclick = () => {
+    if(!confirm('Rimuovere firma?')) return;
+    state.firme.delete(state.curWord);
+    markDirty();
+    renderDetail();
+  };
+
+  // navigation prev/next within current list
+  const navWord = (dir) => {
+    const list = buildList();
+    const i = list.findIndex(it => it.w === state.curWord);
+    if(i < 0) return;
+    const ni = (i + dir + list.length) % list.length;
+    openDetail(list[ni].w);
+  };
+  document.getElementById('prevWordBtn').onclick = () => navWord(-1);
+  document.getElementById('nextWordBtn').onclick = () => navWord(1);
+
+  // add relation
+  document.querySelectorAll('[data-add-rel]').forEach(b => {
+    b.onclick = () => addRelationModal(b.dataset.addRel);
+  });
+
+  // strumenti
+  document.getElementById('newWordBtn').onclick = newWordModal;
+  document.getElementById('exportKg').onclick = exportKgJson;
+  document.getElementById('exportTsv').onclick = exportTsv;
+  document.getElementById('importKg').onchange = (e) => importKg(e.target.files[0]).then(() => { saveState(); state.cachedList = null; renderList(); });
+  document.getElementById('importTsv').onchange = (e) => importTsv(e.target.files[0]).then(() => { saveState(); state.cachedList = null; renderList(); });
+  document.getElementById('resetBtn').onclick = async () => {
+    if(!confirm('Cancellare TUTTO da IndexedDB? Ricaricherai dal server.')) return;
+    await dbClear();
+    location.reload();
+  };
+  document.getElementById('exportBtn').onclick = exportKgJson;
+
+  // accent normalization (preview/apply)
+  const computeAccentChanges = () => {
+    const changes = [];
+    for(const w of state.nodes){
+      const norm = w.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/'/g, '');
+      if(norm !== w && norm.length > 0) changes.push([w, norm]);
+    }
+    return changes;
+  };
+  document.getElementById('dryAccentBtn').onclick = () => {
+    const c = computeAccentChanges();
+    showModal(`
+      <h3>Anteprima · ${c.length} cambiamenti</h3>
+      <div class="col" style="max-height:50vh;overflow-y:auto;font-size:13px">
+        ${c.slice(0, 200).map(([a, b]) => `<div>${escapeHtml(a)} → ${escapeHtml(b)}</div>`).join('') || '<p class="muted">Niente da modificare.</p>'}
+        ${c.length > 200 ? `<div class="muted">…e altri ${c.length - 200}</div>` : ''}
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">Chiudi</button>
+      </div>`);
+  };
+  document.getElementById('applyAccentBtn').onclick = () => {
+    const c = computeAccentChanges();
+    if(c.length === 0) return toast('Niente da modificare', 'ok');
+    if(!confirm(`Applicare ${c.length} normalizzazioni?`)) return;
+    for(const [a, b] of c) renameWord(a, b);
+    state.cachedList = null;
+    renderList();
+    toast(`${c.length} parole normalizzate`, 'ok');
+  };
+
+  bootstrap();
+});
+
+// ===========================================================================
+// UTILITIES
+// ===========================================================================
+
+function escapeHtml(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escapeAttr(s){
+  return escapeHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function toast(msg, kind = ''){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = kind;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// PWA install (lazy — solo se manifest accessibile)
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/cura-mobile/sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

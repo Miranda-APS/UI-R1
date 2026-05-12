@@ -362,18 +362,19 @@ mod tests {
         let mut tracker = CovariationTracker::new();
         let mut reg = bootstrap_fractals();
 
-        // Input casuale: nessuna co-variazione stabile
+        // Ordine I Ching: [Agency, Permanenza, Intensita, Tempo, Confine, Complessita, Definizione, Valenza]
+        // Input casuale: nessuna co-variazione stabile, eccetto Valenza ↔ Intensità anti-correlate.
         let pseudo_random = [0.3, 0.7, 0.1, 0.9, 0.5, 0.2, 0.8, 0.4, 0.6, 0.35, 0.65, 0.45];
         for (i, &r) in pseudo_random.iter().enumerate() {
             let point = PrimitiveCore::new([
-                0.2,     // fisso
-                r,       // casuale
-                1.0 - r, // anti-casuale
-                0.7,     // fisso
-                0.5 + (i as f64 * 0.73).sin() * 0.3, // oscillante
-                0.7,     // fisso
-                0.2,     // fisso
-                0.5 + (i as f64 * 1.17).sin() * 0.3, // oscillante diverso
+                0.2,     // Agency fisso
+                0.7,     // Permanenza fissa
+                1.0 - r, // Intensità anti-casuale
+                0.7,     // Tempo fisso
+                0.5 + (i as f64 * 0.73).sin() * 0.3, // Confine oscillante
+                0.7,     // Complessità fissa
+                0.2,     // Definizione fissa
+                r,       // Valenza casuale (anti-correlata con Intensità)
             ]);
             tracker.observe(0, &point, &mut reg);
         }

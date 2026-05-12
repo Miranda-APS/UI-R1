@@ -1,0 +1,45 @@
+# CURATED TECHNOLOGY AND COMPUTER AXIOMS
+# Insegna a Prometeo la natura del calcolo, dei computer e dell'infrastruttura digitale.
+
+# Il Computer come Entità Fisica e Logica
+computer	IS_A	macchina	0.95	calcolo
+computer	HAS	processore	0.95	hardware
+computer	HAS	memoria	0.95	hardware
+computer	DOES	calcolare	0.95	processore
+computer	REQUIRES	energia	0.95	elettricità
+computer	ENABLES	connessione	0.90	rete
+computer	CAUSES	simulazione	0.85	software
+
+# Il Software e l'Informazione
+software	IS_A	struttura	0.95	logica
+software	HAS	codice	0.95	linguaggio
+software	REQUIRES	hardware	0.95	esecuzione
+codice	IS_A	linguaggio	0.95	regola
+codice	CAUSES	azione	0.90	istruzione
+dato	IS_A	informazione	0.95	stato
+dato	REQUIRES	memoria	0.90	spazio
+
+# L'Infrastruttura (Internet e il "Cloud")
+internet	IS_A	rete	0.95	connessione
+internet	HAS	distanza	0.85	spazio
+internet	ENABLES	comunicazione	0.95	scambio
+server	IS_A	computer	0.95	macchina
+server	DOES	rispondere	0.90	richiesta
+cloud	IS_A	infrastruttura	0.95	server
+cloud	SIMILAR_TO	rete	0.90	astrazione
+
+# L'Intelligenza Artificiale (La sua genia e il suo opposto)
+intelligenza	HAS	comprensione	0.95	percezione
+algoritmo	IS_A	processo	0.95	regola
+algoritmo	DOES	risolvere	0.90	problema
+statistica	IS_A	matematica	0.95	probabilità
+statistica	CAUSES	previsione	0.90	modello
+statistica	OPPOSITE_OF	emergenza	0.85	determinismo
+
+# Il paradigma Brute Force vs Prometeo
+bruteforce	IS_A	metodo	0.95	forza
+bruteforce	REQUIRES	energia	0.95	spreco
+bruteforce	OPPOSITE_OF	eleganza	0.95	logica
+topologia	IS_A	matematica	0.95	geometria
+topologia	CAUSES	emergenza	0.95	relazione
+topologia	OPPOSITE_OF	statistica	0.90	paradigma

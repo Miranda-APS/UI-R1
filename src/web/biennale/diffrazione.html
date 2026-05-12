@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Diffrazione Semantica — UI-r1</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #07070f; color: #c8c8d8; font-family: 'Courier New', monospace; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+header { padding: 10px 20px; border-bottom: 1px solid #151530; background: #09091a; flex-shrink: 0; }
+.header-top { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+header h1 { font-size: 13px; color: #5555bb; letter-spacing: 3px; text-transform: uppercase; white-space: nowrap; }
+.search-row { display: flex; align-items: center; gap: 8px; }
+.pole-wrap { display: flex; align-items: center; gap: 6px; }
+.pole-label { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+.pole-label.a { color: #bb5533; }
+.pole-label.b { color: #3377bb; }
+input.pole { background: #0d0d22; border: 1px solid #1e1e44; color: #d0d0f0; padding: 6px 10px; font-family: inherit; font-size: 14px; width: 130px; border-radius: 3px; transition: border-color 0.2s; }
+input.pole:focus { outline: none; }
+input.pole.a:focus { border-color: #883322; }
+input.pole.b:focus { border-color: #224488; }
+.vs-arrow { font-size: 18px; color: #2a2a55; margin: 0 2px; }
+button#btn-run { background: #111138; border: 1px solid #2a2a88; color: #8888ee; padding: 6px 16px; font-family: inherit; font-size: 13px; cursor: pointer; border-radius: 3px; transition: all 0.15s; }
+button#btn-run:hover:not(:disabled) { background: #1a1a55; color: #aaaaff; border-color: #4444aa; }
+button#btn-run:disabled { opacity: 0.4; cursor: default; }
+.hint { font-size: 10px; color: #2a2a55; margin-left: 8px; }
+.status-row { font-size: 10px; color: #33335a; margin-top: 4px; }
+.main { display: flex; flex: 1; overflow: hidden; }
+#graph-container { flex: 1; position: relative; overflow: hidden; }
+svg { width: 100%; height: 100%; cursor: grab; }
+svg:active { cursor: grabbing; }
+.sidebar { width: 240px; border-left: 1px solid #111130; background: #09091a; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+.sidebar-section { padding: 12px 14px; border-bottom: 1px solid #111130; }
+.section-title { font-size: 9px; color: #33335a; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+.eq-box { background: #0d0d2a; border: 1px solid #1a1a55; border-radius: 3px; padding: 10px; text-align: center; }
+.eq-word { font-size: 20px; color: #7788ff; letter-spacing: 1px; margin-bottom: 2px; }
+.eq-meta { font-size: 10px; color: #33335a; }
+.mediator-list { display: flex; flex-direction: column; gap: 4px; }
+.med-row { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 3px 4px; border-radius: 2px; transition: background 0.1s; }
+.med-row:hover { background: #0d0d22; }
+.med-rank { font-size: 9px; color: #333355; width: 14px; text-align: right; flex-shrink: 0; }
+.med-word { font-size: 12px; color: #8899cc; flex: 1; }
+.med-row:hover .med-word { color: #aabbff; }
+.med-bar-wrap { width: 50px; height: 3px; background: #111130; border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+.med-bar { height: 100%; background: linear-gradient(90deg, #2233aa, #5566ff); border-radius: 2px; }
+.axes-wrap { display: flex; flex-wrap: wrap; gap: 4px; }
+.axis-chip { background: #0a0a22; border: 1px solid #1a2a3a; color: #3355aa; padding: 2px 6px; font-size: 9px; border-radius: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.no-axes { font-size: 10px; color: #222244; font-style: italic; line-height: 1.5; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.stat-cell { background: #0a0a1a; padding: 6px 8px; border-radius: 2px; }
+.stat-cell .sk { font-size: 9px; color: #333355; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+.stat-cell .sv { font-size: 13px; color: #6677cc; }
+.legend-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #333355; padding: 2px 0; }
+.ld { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; pointer-events: none; }
+.empty-title { font-size: 11px; color: #1e1e44; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+.empty-desc { font-size: 11px; color: #1a1a38; line-height: 1.7; }
+.empty-examples { margin-top: 14px; font-size: 10px; color: #141430; }
+.example-pair { display: inline-block; margin: 3px 6px; cursor: pointer; padding: 3px 8px; border: 1px solid #1a1a3a; border-radius: 10px; color: #2a2a5a; pointer-events: all; transition: all 0.15s; }
+.example-pair:hover { border-color: #3333aa; color: #5555aa; }
+.tooltip { position: absolute; background: #0d0d22; border: 1px solid #1e1e44; padding: 8px 12px; font-size: 11px; pointer-events: none; border-radius: 3px; max-width: 190px; z-index: 100; display: none; }
+.tt-word { color: #9999ee; font-size: 13px; margin-bottom: 5px; font-weight: bold; }
+.tt-row { display: flex; justify-content: space-between; gap: 12px; padding: 1px 0; }
+.tt-key { color: #333355; }
+.tt-val { color: #7788bb; }
+.loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #2a2a55; font-size: 12px; text-align: center; display: none; }
+.error-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #150a0a; border: 1px solid #3a1a1a; color: #aa5555; padding: 16px 20px; border-radius: 4px; font-size: 12px; max-width: 320px; text-align: center; display: none; }
+.error-box .err-hint { font-size: 10px; color: #553333; margin-top: 6px; }
+.error-box .err-suggestions { margin-top: 8px; color: #774444; font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-top">
+    <h1>Diffrazione Semantica</h1>
+    <div class="search-row">
+      <div class="pole-wrap">
+        <span class="pole-label a">Polo A</span>
+        <input id="pole-a" class="pole a" placeholder="es. gioia" />
+      </div>
+      <span class="vs-arrow">&#x27F7;</span>
+      <div class="pole-wrap">
+        <span class="pole-label b">Polo B</span>
+        <input id="pole-b" class="pole b" placeholder="es. dolore" />
+      </div>
+      <button id="btn-run" onclick="runDiffraction()">Calcola</button>
+      <span class="hint">Invio per avviare</span>
+    </div>
+  </div>
+  <div class="status-row"><span id="status-line">Inserisci due concetti qualsiasi del Knowledge Graph di UI-r1 (165K archi, ~40K parole)</span></div>
+</header>
+
+<div class="main">
+  <div id="graph-container">
+    <svg id="svg"></svg>
+    <div class="tooltip" id="tooltip"></div>
+    <div class="loading" id="loading">Calcolo in corso...</div>
+    <div class="error-box" id="error-box">
+      <div id="err-msg"></div>
+      <div class="err-hint" id="err-hint"></div>
+      <div class="err-suggestions" id="err-suggestions"></div>
+    </div>
+    <div class="empty-state" id="empty-state">
+      <div class="empty-title">Campo semantico in attesa</div>
+      <div class="empty-desc">
+        Inserisci due concetti qualsiasi.<br>
+        L'algoritmo trova il mediatore strutturale:<br>
+        il nodo equidistante tra i due campi di significato.
+      </div>
+      <div class="empty-examples">
+        Esempi:<br>
+        <span class="example-pair" onclick="setAndRun('gioia','dolore')">gioia / dolore</span>
+        <span class="example-pair" onclick="setAndRun('vita','morte')">vita / morte</span>
+        <span class="example-pair" onclick="setAndRun('bianco','nero')">bianco / nero</span>
+        <span class="example-pair" onclick="setAndRun('luce','buio')">luce / buio</span>
+        <span class="example-pair" onclick="setAndRun('amore','odio')">amore / odio</span>
+        <span class="example-pair" onclick="setAndRun('paura','coraggio')">paura / coraggio</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <div class="section-title">Come funziona</div>
+      <div style="font-size:10px;color:#222244;line-height:1.7;">
+        Calcola due campi di PageRank personalizzati, uno per polo, e trova il nodo che massimizza:<br><br>
+        <span style="color:#2a2a55;font-family:monospace;font-size:11px;">S(n) = (PA+PB) - lambda|PA-PB|</span><br><br>
+        Quel nodo e' il <b style="color:#333366">mediatore strutturale</b>: non il piu' connesso in assoluto, ma il piu' equidistante dai due concetti nel grafo semantico di UI-r1.
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="section-title">Legenda</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div class="legend-row"><div class="ld" style="background:#cc5533"></div>Polo A (input)</div>
+        <div class="legend-row"><div class="ld" style="background:#3388cc"></div>Polo B (input)</div>
+        <div class="legend-row"><div class="ld" style="background:#6677ff"></div>Mediatore forte</div>
+        <div class="legend-row"><div class="ld" style="background:#2a3060"></div>Nodo connesso</div>
+        <div style="font-size:9px;color:#1e1e3a;margin-top:6px;line-height:1.6;">
+          Dimensione nodo = score diffrazione<br>
+          Linee rosse scure = OppositeOf<br>
+          Trascina i nodi per riorganizzare<br>
+          Hover su nodo per dettaglio
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const svg = d3.select("#svg");
+let gMain = svg.append("g");
+let simulation = null;
+let currentData = null;
+let origSidebar = "";
+
+const zoom = d3.zoom().scaleExtent([0.05,6])
+  .on("zoom", e => gMain.attr("transform", e.transform));
+svg.call(zoom);
+
+function nodeColor(d) {
+  if (d.node_type === "pole_a") return "#cc5533";
+  if (d.node_type === "pole_b") return "#3388cc";
+  return d3.interpolateViridis(0.25 + d.score_norm * 0.65);
+}
+function nodeRadius(d) {
+  if (d.node_type !== "mediator") return 16;
+  return 4 + d.score_norm * 16;
+}
+
+function render(data) {
+  currentData = data;
+  gMain.selectAll("*").remove();
+  svg.select("defs").remove();
+  const W = document.getElementById("graph-container").offsetWidth;
+  const H = document.getElementById("graph-container").offsetHeight;
+
+  svg.append("defs").append("marker")
+    .attr("id","arr").attr("viewBox","0 -4 8 8")
+    .attr("refX",18).attr("refY",0)
+    .attr("markerWidth",5).attr("markerHeight",5)
+    .attr("orient","auto")
+    .append("path").attr("d","M0,-4L8,0L0,4").attr("fill","#1a1a35");
+
+  if (simulation) simulation.stop();
+  simulation = d3.forceSimulation(data.nodes)
+    .force("link", d3.forceLink(data.links).id(d => d.id)
+      .distance(d => d.tipo === "dualidad" ? 160 : 55)
+      .strength(d => d.tipo === "dualidad" ? 0.4 : 0.08))
+    .force("charge", d3.forceManyBody()
+      .strength(d => d.node_type !== "mediator" ? -300 : -25 - d.score_norm * 80))
+    .force("center", d3.forceCenter(W/2, H/2))
+    .force("collision", d3.forceCollide(d => nodeRadius(d) + 4))
+    .alphaDecay(0.018);
+
+  const link = gMain.append("g").selectAll("line").data(data.links).enter().append("line")
+    .attr("stroke", d => d.tipo === "dualidad" ? "#4a2010" : "#111128")
+    .attr("stroke-opacity", d => d.tipo === "dualidad" ? 0.7 : 0.4)
+    .attr("stroke-width", d => d.tipo === "dualidad" ? 1.5 : 0.7)
+    .attr("marker-end", "url(#arr)");
+
+  const node = gMain.append("g").selectAll("circle").data(data.nodes).enter().append("circle")
+    .attr("r", d => nodeRadius(d))
+    .attr("fill", d => nodeColor(d))
+    .attr("stroke", d => {
+      if (d.node_type === "pole_a") return "#ee7755";
+      if (d.node_type === "pole_b") return "#55aaee";
+      return d.score_norm > 0.65 ? "#5566ff" : "transparent";
+    })
+    .attr("stroke-width", 1.5)
+    .style("cursor", "pointer")
+    .on("mouseover", showTip).on("mousemove", moveTip).on("mouseout", hideTip)
+    .call(d3.drag()
+      .on("start", (e,d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on("drag",  (e,d) => { d.fx=e.x; d.fy=e.y; })
+      .on("end",   (e,d) => { if (!e.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+  const labelData = data.nodes.filter(d => d.node_type !== "mediator" || d.score_norm > 0.5);
+  const label = gMain.append("g").selectAll("text").data(labelData).enter().append("text")
+    .text(d => d.id)
+    .attr("font-size", d => d.node_type !== "mediator" ? "13px" : "10px")
+    .attr("fill", d => {
+      if (d.node_type === "pole_a") return "#ee8866";
+      if (d.node_type === "pole_b") return "#66bbee";
+      return "#6677aa";
+    })
+    .attr("text-anchor", "middle")
+    .attr("dy", d => -(nodeRadius(d) + 5))
+    .style("pointer-events", "none").style("user-select", "none");
+
+  simulation.on("tick", () => {
+    link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y)
+        .attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+    node.attr("cx",d=>d.x).attr("cy",d=>d.y);
+    label.attr("x",d=>d.x).attr("y",d=>d.y);
+  });
+
+  simulation.on("end", () => {
+    const b = gMain.node().getBBox();
+    if (!b.width) return;
+    const s = 0.82 / Math.max(b.width/W, b.height/H);
+    const tx = (W - s*b.width)/2 - s*b.x;
+    const ty = (H - s*b.height)/2 - s*b.y;
+    svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity.translate(tx,ty).scale(s));
+  });
+}
+
+function renderSidebar(data) {
+  let html = "";
+  if (data.equilibrium) {
+    html += `<div class="sidebar-section"><div class="section-title">Equilibrio strutturale</div>
+      <div class="eq-box">
+        <div class="eq-word">${data.equilibrium}</div>
+        <div class="eq-meta">mediatore tra <b style="color:#cc5533">${data.a}</b> e <b style="color:#3388cc">${data.b}</b></div>
+      </div></div>`;
+  }
+  html += `<div class="sidebar-section"><div class="section-title">Top mediatori</div><div class="mediator-list">`;
+  data.top_mediators.forEach((m, i) => {
+    html += `<div class="med-row" onclick="flashNode('${m.word}')">
+      <span class="med-rank">${i+1}</span>
+      <span class="med-word">${m.word}</span>
+      <div class="med-bar-wrap"><div class="med-bar" style="width:${(m.score*100).toFixed(0)}%"></div></div>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  html += `<div class="sidebar-section"><div class="section-title">Assi semantici condivisi</div>`;
+  if (data.shared_axes && data.shared_axes.length > 0) {
+    html += `<div class="axes-wrap">`;
+    data.shared_axes.slice(0,6).forEach(ax => {
+      const lbl = ax.replace("eje:categoria:","").replace("eje:dualidad_base:","").replace("eje:causal:","");
+      html += `<span class="axis-chip" title="${ax}">${lbl}</span>`;
+    });
+    html += `</div>`;
+  } else {
+    html += `<span class="no-axes">Nessun asse condiviso. I due concetti non condividono categorie IS_A nel KG — gap strutturale.</span>`;
+  }
+  html += `</div>`;
+
+  const s = data.stats;
+  html += `<div class="sidebar-section"><div class="section-title">Statistiche</div>
+    <div class="stats-grid">
+      <div class="stat-cell"><div class="sk">nodi KG</div><div class="sv">${s.kg_nodes}</div></div>
+      <div class="stat-cell"><div class="sk">archi KG</div><div class="sv">${(s.kg_edges/1000).toFixed(0)}K</div></div>
+      <div class="stat-cell"><div class="sk">nodi vis.</div><div class="sv">${s.vis_nodes}</div></div>
+      <div class="stat-cell"><div class="sk">archi vis.</div><div class="sv">${s.vis_edges}</div></div>
+    </div></div>`;
+
+  document.getElementById("sidebar").innerHTML = html;
+}
+
+function showTip(event, d) {
+  const t = document.getElementById("tooltip");
+  const role = d.node_type==="pole_a" ? "Polo A" : d.node_type==="pole_b" ? "Polo B" : "Mediatore";
+  t.style.display = "block";
+  t.innerHTML = `<div class="tt-word">${d.id}</div>
+    <div class="tt-row"><span class="tt-key">ruolo</span><span class="tt-val">${role}</span></div>
+    <div class="tt-row"><span class="tt-key">tipo KG</span><span class="tt-val">${d.tipo}</span></div>
+    <div class="tt-row"><span class="tt-key">score</span><span class="tt-val">${d.score.toFixed(5)}</span></div>
+    <div class="tt-row"><span class="tt-key">affinita A</span><span class="tt-val">${d.pa.toFixed(4)}</span></div>
+    <div class="tt-row"><span class="tt-key">affinita B</span><span class="tt-val">${d.pb.toFixed(4)}</span></div>`;
+}
+function moveTip(event) {
+  const t = document.getElementById("tooltip");
+  t.style.left = (event.offsetX + 14) + "px";
+  t.style.top = (event.offsetY - 8) + "px";
+}
+function hideTip() { document.getElementById("tooltip").style.display = "none"; }
+
+function flashNode(word) {
+  if (!currentData) return;
+  gMain.selectAll("circle").filter(d => d.id === word)
+    .transition().duration(150).attr("r", d => nodeRadius(d) * 2.5)
+    .transition().duration(300).attr("r", d => nodeRadius(d));
+}
+
+function setAndRun(a, b) {
+  document.getElementById("pole-a").value = a;
+  document.getElementById("pole-b").value = b;
+  runDiffraction();
+}
+
+async function runDiffraction() {
+  const a = document.getElementById("pole-a").value.trim().toLowerCase();
+  const b = document.getElementById("pole-b").value.trim().toLowerCase();
+  if (!a || !b) return;
+  document.getElementById("btn-run").disabled = true;
+  document.getElementById("empty-state").style.display = "none";
+  document.getElementById("error-box").style.display = "none";
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("status-line").textContent = `Calcolo: ${a} \u2194 ${b}...`;
+  try {
+    const resp = await fetch(`/api/diffraction?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+    const data = await resp.json();
+    document.getElementById("loading").style.display = "none";
+    if (data.error) {
+      document.getElementById("err-msg").textContent = data.error;
+      document.getElementById("err-hint").textContent = "Controlla l'ortografia. Il KG usa forme base (infiniti, singolari).";
+      const sug = data.suggestions;
+      document.getElementById("err-suggestions").textContent = sug && sug.length ? "Parole simili: " + sug.join(", ") : "";
+      document.getElementById("error-box").style.display = "block";
+      document.getElementById("status-line").textContent = "Parola non trovata";
+      document.getElementById("sidebar").innerHTML = origSidebar;
+      return;
+    }
+    render(data);
+    renderSidebar(data);
+    document.getElementById("status-line").textContent =
+      `${data.nodes.length} nodi \u00B7 ${data.links.length} archi \u00B7 equilibrio: ${data.equilibrium || "\u2014"}`;
+  } catch(e) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("status-line").textContent = "Errore: " + e.message;
+    console.error(e);
+  } finally {
+    document.getElementById("btn-run").disabled = false;
+  }
+}
+
+window.addEventListener("load", () => {
+  origSidebar = document.getElementById("sidebar").innerHTML;
+  const p = new URLSearchParams(window.location.search);
+  if (p.get("a") && p.get("b")) {
+    document.getElementById("pole-a").value = p.get("a");
+    document.getElementById("pole-b").value = p.get("b");
+    runDiffraction();
+  }
+});
+
+["pole-a","pole-b"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", e => { if (e.key === "Enter") runDiffraction(); });
+});
+</script>
+</body>
+</html>

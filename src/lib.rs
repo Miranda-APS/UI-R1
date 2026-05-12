@@ -40,7 +40,3 @@ pub use topology::{
     PerceptualField, TensionWord,
     TranslatedExpression, translate_state, translate_or_raw, IdentityContext,
 };
-
-// LLM Substrate (feature-gated)
-#[cfg(feature = "llm-substrate")]
-pub use topology::llm_substrate;

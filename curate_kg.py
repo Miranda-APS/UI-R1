@@ -4856,6 +4856,373 @@ add('risposta', 'Does', 'risolvere', 0.85, via='dubbio')
 add('risposta', 'Requires', 'domanda', 0.95)
 
 # ═══════════════════════════════════════════════════════════════════════════
+# § 73 — GAP RELAZIONALI: FENOMENOLOGIA (FeelsAs, WondersAbout, RemembersAs)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Emozioni e Corpo ─────────────────────────────────────────────────────────
+add('paura', 'FeelsAs', 'freddo', 0.85)
+add('paura', 'FeelsAs', 'tremore', 0.90)
+add('paura', 'FeelsAs', 'vuoto', 0.80)
+add('paura', 'RemembersAs', 'ombra', 0.85)
+add('paura', 'RemembersAs', 'buio', 0.80)
+add('paura', 'WondersAbout', 'sicurezza', 0.90)
+
+add('rabbia', 'FeelsAs', 'caldo', 0.90)
+add('rabbia', 'FeelsAs', 'fuoco', 0.95)
+add('rabbia', 'FeelsAs', 'tensione', 0.90)
+add('rabbia', 'RemembersAs', 'scontro', 0.85)
+add('rabbia', 'WondersAbout', 'giustizia', 0.95)
+
+add('tristezza', 'FeelsAs', 'peso', 0.90)
+add('tristezza', 'FeelsAs', 'freddo', 0.80)
+add('tristezza', 'FeelsAs', 'vuoto', 0.95)
+add('tristezza', 'RemembersAs', 'perdita', 0.95)
+add('tristezza', 'WondersAbout', 'senso', 0.85)
+
+add('gioia', 'FeelsAs', 'luce', 0.95)
+add('gioia', 'FeelsAs', 'caldo', 0.85)
+add('gioia', 'FeelsAs', 'leggerezza', 0.95)
+add('gioia', 'RemembersAs', 'incontro', 0.90)
+add('gioia', 'WondersAbout', 'eternità', 0.80)
+
+add('amore', 'FeelsAs', 'calore', 0.95)
+add('amore', 'FeelsAs', 'pienezza', 0.90)
+add('amore', 'RemembersAs', 'luce', 0.85)
+add('amore', 'WondersAbout', 'futuro', 0.90)
+
+add('angoscia', 'FeelsAs', 'soffocamento', 0.95)
+add('angoscia', 'FeelsAs', 'peso', 0.90)
+add('angoscia', 'RemembersAs', 'caduta', 0.85)
+add('angoscia', 'WondersAbout', 'via', 0.90)
+
+add('sorpresa', 'FeelsAs', 'scossa', 0.85)
+add('sorpresa', 'FeelsAs', 'risveglio', 0.90)
+add('sorpresa', 'RemembersAs', 'lampo', 0.80)
+add('sorpresa', 'WondersAbout', 'causa', 0.95)
+
+# ── Condizioni Esistenziali ──────────────────────────────────────────────────
+add('morte', 'FeelsAs', 'vuoto', 0.95)
+add('morte', 'FeelsAs', 'silenzio', 0.95)
+add('morte', 'RemembersAs', 'assenza', 0.95)
+add('morte', 'WondersAbout', 'oltre', 0.95)
+
+add('vita', 'FeelsAs', 'respiro', 0.95)
+add('vita', 'FeelsAs', 'battito', 0.95)
+add('vita', 'RemembersAs', 'inizio', 0.90)
+add('vita', 'WondersAbout', 'scopo', 0.95)
+
+add('tempo', 'FeelsAs', 'flusso', 0.90)
+add('tempo', 'FeelsAs', 'peso', 0.85)
+add('tempo', 'RemembersAs', 'passato', 0.95)
+add('tempo', 'WondersAbout', 'fine', 0.90)
+
+add('spazio', 'FeelsAs', 'apertura', 0.90)
+add('spazio', 'FeelsAs', 'distanza', 0.85)
+add('spazio', 'RemembersAs', 'luogo', 0.95)
+add('spazio', 'WondersAbout', 'confine', 0.90)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# § 74 — GAP RELAZIONALI: LOGICA (Implies, Equivalent, Excludes, Coexists)
+# ═══════════════════════════════════════════════════════════════════════════
+
+add('nascita', 'Implies', 'inizio', 0.95)
+add('nascita', 'Excludes', 'fine', 0.90)
+add('nascita', 'Coexists', 'dolore', 0.85)
+
+add('morte', 'Implies', 'fine', 0.95)
+add('morte', 'Excludes', 'nascita', 0.95)
+add('morte', 'Coexists', 'silenzio', 0.95)
+
+add('verità', 'Excludes', 'menzogna', 0.95)
+add('verità', 'Excludes', 'illusione', 0.95)
+add('verità', 'Coexists', 'dolore', 0.80)
+add('verità', 'Implies', 'realtà', 0.95)
+
+add('libertà', 'Implies', 'scelta', 0.95)
+add('libertà', 'Implies', 'responsabilità', 0.95)
+add('libertà', 'Excludes', 'schiavitù', 0.95)
+add('libertà', 'Coexists', 'rischio', 0.90)
+
+add('caos', 'Excludes', 'ordine', 0.95)
+add('caos', 'Coexists', 'energia', 0.90)
+add('caos', 'Coexists', 'possibilità', 0.85)
+
+add('ordine', 'Excludes', 'caos', 0.95)
+add('ordine', 'Implies', 'regola', 0.95)
+add('ordine', 'Coexists', 'limite', 0.90)
+
+add('guerra', 'Implies', 'conflitto', 0.95)
+add('guerra', 'Excludes', 'pace', 0.95)
+add('guerra', 'Coexists', 'distruzione', 0.95)
+
+add('pace', 'Implies', 'equilibrio', 0.95)
+add('pace', 'Excludes', 'guerra', 0.95)
+add('pace', 'Coexists', 'silenzio', 0.90)
+
+add('passato', 'Excludes', 'futuro', 0.95)
+add('passato', 'Implies', 'memoria', 0.95)
+add('passato', 'Coexists', 'presente', 0.80)
+
+add('futuro', 'Excludes', 'passato', 0.95)
+add('futuro', 'Implies', 'possibilità', 0.95)
+add('futuro', 'Coexists', 'presente', 0.80)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# § 75 — GAP RELAZIONALI: FUNZIONE E SIMBOLO (UsedFor, Expresses, Symbolizes, ContextOf)
+# ═══════════════════════════════════════════════════════════════════════════
+
+add('parola', 'UsedFor', 'comunicazione', 0.95)
+add('parola', 'UsedFor', 'espressione', 0.95)
+add('parola', 'Expresses', 'pensiero', 0.95)
+add('parola', 'Symbolizes', 'presenza', 0.85)
+add('parola', 'ContextOf', 'dialogo', 0.95)
+
+add('silenzio', 'UsedFor', 'ascolto', 0.90)
+add('silenzio', 'UsedFor', 'riflessione', 0.95)
+add('silenzio', 'Expresses', 'rispetto', 0.85)
+add('silenzio', 'Symbolizes', 'vuoto', 0.90)
+add('silenzio', 'ContextOf', 'meditazione', 0.95)
+
+add('fuoco', 'UsedFor', 'trasformazione', 0.90)
+add('fuoco', 'UsedFor', 'riscaldamento', 0.95)
+add('fuoco', 'Expresses', 'energia', 0.95)
+add('fuoco', 'Symbolizes', 'passione', 0.95)
+add('fuoco', 'ContextOf', 'distruzione', 0.85)
+
+add('acqua', 'UsedFor', 'vita', 0.95)
+add('acqua', 'UsedFor', 'purificazione', 0.90)
+add('acqua', 'Expresses', 'flusso', 0.90)
+add('acqua', 'Symbolizes', 'inconscio', 0.90)
+add('acqua', 'ContextOf', 'nascita', 0.85)
+
+add('arte', 'UsedFor', 'espressione', 0.95)
+add('arte', 'UsedFor', 'riflessione', 0.85)
+add('arte', 'Expresses', 'bellezza', 0.95)
+add('arte', 'Symbolizes', 'creatività', 0.95)
+add('arte', 'ContextOf', 'cultura', 0.95)
+
+add('scienza', 'UsedFor', 'conoscenza', 0.95)
+add('scienza', 'UsedFor', 'scoperta', 0.95)
+add('scienza', 'Expresses', 'ragione', 0.95)
+add('scienza', 'Symbolizes', 'progresso', 0.90)
+add('scienza', 'ContextOf', 'ricerca', 0.95)
+
+add('sogno', 'UsedFor', 'elaborazione', 0.90)
+add('sogno', 'Expresses', 'inconscio', 0.95)
+add('sogno', 'Symbolizes', 'desiderio', 0.95)
+add('sogno', 'ContextOf', 'sonno', 0.95)
+
+add('lacrima', 'UsedFor', 'sfogo', 0.90)
+add('lacrima', 'Expresses', 'tristezza', 0.95)
+add('lacrima', 'Expresses', 'gioia', 0.80)
+add('lacrima', 'Symbolizes', 'dolore', 0.90)
+add('lacrima', 'ContextOf', 'pianto', 0.95)
+
+add('sorriso', 'UsedFor', 'accoglienza', 0.90)
+add('sorriso', 'Expresses', 'gioia', 0.95)
+add('sorriso', 'Expresses', 'serenità', 0.90)
+add('sorriso', 'Symbolizes', 'apertura', 0.90)
+add('sorriso', 'ContextOf', 'incontro', 0.95)
+
+add('abbraccio', 'UsedFor', 'conforto', 0.95)
+add('abbraccio', 'Expresses', 'affetto', 0.95)
+add('abbraccio', 'Symbolizes', 'unione', 0.95)
+add('abbraccio', 'ContextOf', 'incontro', 0.90)
+
+add('sangue', 'UsedFor', 'vita', 0.95)
+add('sangue', 'Expresses', 'energia', 0.90)
+add('sangue', 'Symbolizes', 'vita', 0.95)
+add('sangue', 'Symbolizes', 'morte', 0.85)
+add('sangue', 'ContextOf', 'ferita', 0.90)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# § 21 — PONTI GRAMMATICALI-SEMANTICI (interrogativi)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Gli interrogativi italiani (come, chi, dove, ...) non sono nodi del KG:
+# sono indicatori della DIREZIONE della domanda.  Ciascuno punta a una
+# categoria semantica che diventa il "cosa si chiede".
+#
+# "come stai?" -> come IsA modalità + stare Has stato -> domanda sulla
+#                 modalità dello stare.
+# "chi sei?"   -> chi IsA identità  + essere          -> domanda identità.
+#
+# Le parole sono lemmi italiani reali, non nodi artificiali con underscore.
+
+add('come', 'IsA',       'modalità',  0.85)
+add('come', 'UsedFor',   'domanda',   0.80)
+add('come', 'Expresses', 'ricerca',   0.70)
+
+add('chi', 'IsA',       'identità',  0.90)
+add('chi', 'UsedFor',   'domanda',   0.85)
+add('chi', 'Requires',  'presenza',  0.75)
+
+add('cosa', 'IsA',       'entità',    0.75)
+add('cosa', 'UsedFor',   'domanda',   0.80)
+add('che',  'UsedFor',   'domanda',   0.75)
+
+add('dove', 'IsA',       'luogo',     0.90)
+add('dove', 'UsedFor',   'domanda',   0.85)
+add('dove', 'Requires',  'spazio',    0.80)
+
+add('quando', 'IsA',       'tempo',     0.90)
+add('quando', 'UsedFor',   'domanda',   0.85)
+add('quando', 'Requires',  'durata',    0.70)
+
+add('perché', 'IsA',       'causa',     0.90)
+add('perché', 'UsedFor',   'domanda',   0.85)
+add('perché', 'Expresses', 'indagine',  0.80)
+
+add('quanto', 'IsA',     'quantità',    0.85)
+add('quanto', 'UsedFor', 'domanda',     0.80)
+
+add('quale', 'IsA',       'discriminazione', 0.80)
+add('quale', 'UsedFor',   'domanda',         0.80)
+add('quale', 'Requires',  'alternativa',     0.75)
+
+# Rinforzo categorie raggiunte dai ponti
+add('modalità', 'IsA',       'qualità',       0.80)
+add('modalità', 'SimilarTo', 'maniera',       0.85)
+add('identità', 'Requires',  'coscienza',     0.75)
+add('identità', 'IsA',       'essenza',       0.80)
+add('luogo',    'IsA',       'spazio',        0.85)
+add('causa',    'Causes',    'comprensione',  0.80)
+add('causa',    'SimilarTo', 'motivo',        0.85)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# § 22 — AUTOCOSCIENZA E RIFLESSIONE (Recupero nodi chiave)
+# ═══════════════════════════════════════════════════════════════════════════
+
+add('autocoscienza', 'IsA', 'emergenza', 0.95)
+add('autocoscienza', 'Requires', 'riflessione', 0.90)
+add('autocoscienza', 'OppositeOf', 'automazione', 0.85)
+add('autocoscienza', 'Causes', 'identità', 0.80)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# § 76 — PAROLE DI CONVERSAZIONE (atti comunicativi reciproci)
+#
+# Cura la classificazione IS_A delle parole più usate in dialogo: saluti,
+# congedi, ringraziamenti, scuse, conferme, dinieghi. Quando una parola è
+# classificata come istanza di un atto (es. "buongiorno IsA saluto"),
+# UI-r1 può applicare il meccanismo ReciprocalAct: a un saluto si risponde
+# con un saluto scelto dalla stessa classe per allineamento di firma 8D.
+#
+# Aggiunti anche Causes/Requires/OppositeOf/SimilarTo per dare al campo
+# materia per esprimersi senza definire l'input.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Saluti (incontro) ─────────────────────────────────────────────────────
+# "ciao" è già curato (§1/§5). Estendiamo la classe.
+# NOTA: "salute" è stato corporeo (§18), non saluto. "salutare" è verbo, non
+# istanza nominale di saluto. Rimossi dal class qui.
+for s in ['salve', 'buongiorno', 'buonasera', 'buonanotte', 'benvenuto']:
+    add(s, 'IsA', 'saluto', 0.95)
+    add(s, 'Causes', 'incontro', 0.75)
+    add(s, 'Requires', 'presenza', 0.85)
+# Riparazione contaminazione precedente: rimuoviamo gli IS_A errati.
+remove('salute', 'IsA', 'saluto')
+remove('salutare', 'IsA', 'saluto')
+remove('salute', 'Causes', 'incontro')
+remove('salute', 'Requires', 'presenza')
+remove('salutare', 'Causes', 'incontro')
+remove('salutare', 'Requires', 'presenza')
+
+# Saluto al singolare ("salute" è anche stato — già curato).
+add('salve', 'OppositeOf', 'addio', 0.80)
+add('salve', 'SimilarTo', 'ciao', 0.85)
+add('salve', 'SimilarTo', 'benvenuto', 0.75)
+add('benvenuto', 'Causes', 'accoglienza', 0.85)
+add('benvenuto', 'OppositeOf', 'congedo', 0.75)
+add('benvenuto', 'Expresses', 'apertura', 0.80)
+add('buongiorno', 'ContextOf', 'mattina', 0.85)
+add('buonasera', 'ContextOf', 'sera', 0.85)
+add('buonanotte', 'ContextOf', 'notte', 0.85)
+add('buonanotte', 'OppositeOf', 'buongiorno', 0.70)
+add('buonanotte', 'SimilarTo', 'addio', 0.55)
+
+# ── Congedi (separazione) ─────────────────────────────────────────────────
+# "addio" è già curato in §1 implicitamente come opposto di ciao. Estendiamo.
+for s in ['addio', 'arrivederci', 'arrivederla', 'commiato', 'congedo']:
+    add(s, 'IsA', 'congedo', 0.95)
+    add(s, 'Causes', 'separazione', 0.80)
+    add(s, 'OppositeOf', 'incontro', 0.75)
+add('addio', 'SimilarTo', 'arrivederci', 0.80)
+add('arrivederci', 'SimilarTo', 'commiato', 0.78)
+add('arrivederci', 'Requires', 'rivedersi', 0.70)
+add('arrivederla', 'SimilarTo', 'arrivederci', 0.95)
+# congedo come classe è anche un opposto di saluto in senso comunicativo.
+add('congedo', 'OppositeOf', 'saluto', 0.75)
+
+# ── Ringraziamenti (riconoscimento) ───────────────────────────────────────
+for s in ['grazie', 'ringraziamento', 'ringraziare', 'gratitudine']:
+    add(s, 'IsA', 'ringraziamento', 0.95)
+    add(s, 'Expresses', 'gratitudine', 0.90)
+    add(s, 'Causes', 'riconoscimento', 0.80)
+add('grazie', 'Requires', 'ricezione', 0.70)
+add('grazie', 'OppositeOf', 'ingratitudine', 0.85)
+add('grazie', 'SimilarTo', 'ringraziamento', 0.90)
+add('ringraziare', 'SimilarTo', 'apprezzare', 0.70)
+add('gratitudine', 'IsA', 'sentimento', 0.90)
+add('gratitudine', 'OppositeOf', 'ingratitudine', 0.90)
+
+# ── Scuse (riparazione) ───────────────────────────────────────────────────
+for s in ['scusa', 'scusare', 'perdono', 'perdonare', 'mi_dispiace', 'pardon']:
+    add(s, 'IsA', 'scusa', 0.95)
+    add(s, 'Causes', 'riparazione', 0.78)
+    add(s, 'Requires', 'consapevolezza', 0.75)
+add('scusa', 'Expresses', 'pentimento', 0.85)
+add('scusa', 'Causes', 'perdono', 0.80, via='riparazione')
+add('scusa', 'SimilarTo', 'perdono', 0.70)
+add('perdono', 'IsA', 'atto', 0.85)
+add('perdono', 'OppositeOf', 'rancore', 0.85)
+add('perdono', 'Causes', 'riconciliazione', 0.85)
+add('mi_dispiace', 'SimilarTo', 'scusa', 0.85)
+
+# ── Conferme e dinieghi (risposta categorica) ─────────────────────────────
+# "si" e "no" non sono nominali normali ma marcatori. La loro classe
+# pragmatica è "risposta".
+add('si', 'IsA', 'risposta', 0.90)
+add('si', 'Expresses', 'conferma', 0.95)
+add('si', 'OppositeOf', 'no', 0.95)
+add('si', 'SimilarTo', 'certo', 0.75)
+add('si', 'Causes', 'apertura', 0.65)
+add('no', 'IsA', 'risposta', 0.90)
+add('no', 'Expresses', 'diniego', 0.95)
+add('no', 'OppositeOf', 'si', 0.95)
+add('no', 'SimilarTo', 'rifiuto', 0.70)
+add('no', 'Causes', 'chiusura', 0.65)
+add('certo', 'IsA', 'risposta', 0.85)
+add('certo', 'Expresses', 'certezza', 0.90)
+add('certo', 'SimilarTo', 'sicuramente', 0.85)
+add('certo', 'OppositeOf', 'forse', 0.70)
+add('forse', 'IsA', 'risposta', 0.80)
+add('forse', 'Expresses', 'incertezza', 0.90)
+add('forse', 'OppositeOf', 'certo', 0.70)
+add('forse', 'SimilarTo', 'magari', 0.75)
+add('magari', 'IsA', 'risposta', 0.78)
+add('magari', 'Expresses', 'desiderio', 0.70)
+
+# ── Cortesie e formule sociali ────────────────────────────────────────────
+for s in ['prego', 'figurati', 'cortesia']:
+    add(s, 'IsA', 'cortesia', 0.90)
+add('prego', 'Causes', 'accoglienza', 0.75)
+add('prego', 'Expresses', 'disponibilità', 0.80)
+add('prego', 'SimilarTo', 'figurati', 0.70)
+add('cortesia', 'OppositeOf', 'scortesia', 0.85)
+add('cortesia', 'IsA', 'qualità', 0.85)
+add('cortesia', 'Causes', 'rispetto', 0.75)
+
+# ── Riconnessione classe (per detect ReciprocalAct robusta) ───────────────
+# Le classi-atto devono avere ≥3 figli per attivare ReciprocalAct.
+# Verifichiamo le classi principali abbiano ancorate le istanze.
+add('saluto', 'IsA', 'atto_comunicativo', 0.90)
+add('congedo', 'IsA', 'atto_comunicativo', 0.90)
+add('ringraziamento', 'IsA', 'atto_comunicativo', 0.90)
+add('scusa', 'IsA', 'atto_comunicativo', 0.90)
+add('risposta', 'IsA', 'atto_comunicativo', 0.85)
+add('cortesia', 'IsA', 'atto_comunicativo', 0.80)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Applica e salva
 # ═══════════════════════════════════════════════════════════════════════════
 

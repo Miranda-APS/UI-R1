@@ -282,17 +282,135 @@ pub fn detect_speaker_claim(
 
     let predicate = predicate?;
 
-    // Raffina il kind in base al predicato: se il predicato è nel dominio
-    // emozionale (KG o lista), upgraded a Feeling indipendentemente dal verbo.
-    // "io sono triste" (Identity verbo + emozione) → kind = Feeling
-    let final_kind = if kind == ClaimKind::Identity {
-        let is_emotional = is_emotional_word(&predicate, lexicon, kg);
-        if is_emotional { ClaimKind::Feeling } else { kind }
-    } else {
-        kind
+    // ── Validazione KG-aware del predicato ─────────────────────────────────
+    // Phase 73 (Francesco 2026-04-26): "il SpeakerClaim parser scambia verbi
+    // per emozioni" — chiamo, cercando registrati come Feeling. Verifichiamo
+    // strutturalmente prima di confermare il claim.
+    //
+    // Regole:
+    //   - Identity:  upgrade a Feeling se predicato è emozionale (logica esistente).
+    //                Altrimenti accettato — può essere un nome o aggettivo identità.
+    //   - Feeling:   il predicato DEVE essere emozionale (KG IsA emozione/...).
+    //                Altrimenti il claim è scartato — niente falsi positivi.
+    //   - Action:    il predicato DEVE essere un verbo (POS=Verb nel lessico) o
+    //                avere lemma diverso da sé (forma flessa di verbo).
+    //                Altrimenti il claim è scartato.
+    let final_kind = match kind {
+        ClaimKind::Identity => {
+            if is_emotional_word(&predicate, lexicon, kg) {
+                ClaimKind::Feeling
+            } else {
+                ClaimKind::Identity
+            }
+        }
+        ClaimKind::Feeling => {
+            // Il predicato deve essere genuinamente emozionale.
+            // Se non lo è, il claim è un falso positivo — rifiuta.
+            if !is_emotional_word(&predicate, lexicon, kg) {
+                return None;
+            }
+            ClaimKind::Feeling
+        }
+        ClaimKind::Action => {
+            // Il predicato dovrebbe essere un verbo (forma flessa o infinito).
+            // Verifichiamo via lemmatize: se la lemmatizzazione produce un
+            // infinito diverso, è un verbo flesso. Oppure il lessico marca
+            // la parola come Verb.
+            let is_verb_form = crate::topology::grammar::lemmatize(&predicate).is_some()
+                || lexicon.get(&predicate)
+                    .and_then(|p| p.pos.as_ref())
+                    .map(|pos| matches!(pos, crate::topology::grammar::PartOfSpeech::Verb))
+                    .unwrap_or(false);
+            if !is_verb_form {
+                // Es. "io voglio pace" — "pace" non è verbo. Forse è
+                // un'identità o il predicato è il NOME di ciò che si vuole.
+                // Accettiamo come Action ma con il predicato così com'è —
+                // l'azione è "volere pace".
+                ClaimKind::Action
+            } else {
+                ClaimKind::Action
+            }
+        }
     };
 
     Some(SpeakerClaim { agent, kind: final_kind, predicate })
+}
+
+/// Phase 73: rileva una presentazione di nome del parlante.
+/// Pattern riconosciuti:
+///   "mi chiamo X"       → Some("X")
+///   "io mi chiamo X"    → Some("X")
+///   "il mio nome è X"   → Some("X")
+///   "sono X" (X è una parola sconosciuta al KG e al lessico)  → Some("X")
+///
+/// X deve essere una parola "non strutturale" — non in lessico stabile,
+/// non in KG, lunghezza ≥ 3. Questo riduce falsi positivi tipo
+/// "sono triste" → "triste" (che è in lessico ed è un aggettivo emotivo).
+pub fn detect_name_introduction(
+    raw_words: &[String],
+    lexicon: &Lexicon,
+    kg: Option<&KnowledgeGraph>,
+) -> Option<String> {
+    if raw_words.len() < 2 { return None; }
+    let words: Vec<&str> = raw_words.iter().map(|w| w.as_str()).collect();
+
+    // Pattern "mi chiamo X" / "io mi chiamo X" / "chiamo X" (chiamarsi 1a sg)
+    if let Some(p) = words.iter().position(|&w| w == "chiamo") {
+        // Verifica che sia preceduto da "mi" o sia in posizione iniziale dopo "io"
+        let preceded_by_mi = p > 0 && (words[p - 1] == "mi" ||
+            (p >= 2 && words[p - 2] == "io" && words[p - 1] == "mi"));
+        let initial_or_after_io = p == 0 || (p == 1 && words[0] == "io");
+        if preceded_by_mi || initial_or_after_io {
+            // Il nome è la prima parola-contenuto dopo "chiamo"
+            for &w in words.iter().skip(p + 1) {
+                if is_likely_proper_name(w, lexicon, kg) {
+                    return Some(w.to_string());
+                }
+            }
+        }
+    }
+
+    // Pattern "il mio nome è X"
+    if let Some(p) = words.iter().position(|&w| w == "nome") {
+        if p + 1 < words.len() && (words[p + 1] == "è" || words[p + 1] == "e") {
+            for &w in words.iter().skip(p + 2) {
+                if is_likely_proper_name(w, lexicon, kg) {
+                    return Some(w.to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Euristica: una parola è probabilmente un nome proprio se NON è nel
+/// lessico stabile e NON è nel KG e ha lunghezza ≥ 3 e non è una
+/// function word.
+fn is_likely_proper_name(
+    word: &str,
+    lexicon: &Lexicon,
+    kg: Option<&KnowledgeGraph>,
+) -> bool {
+    if word.len() < 3 { return false; }
+    if lexicon.is_function_word(word) { return false; }
+    // Salta articoli e preposizioni
+    if matches!(word, "un" | "una" | "uno" | "il" | "la" | "lo" | "i" | "gli" | "le") {
+        return false;
+    }
+    // Se è già un sostantivo/aggettivo conosciuto al KG, probabilmente non è un nome proprio
+    if let Some(kg) = kg {
+        if !kg.query_objects(word, RelationType::IsA).is_empty() {
+            return false;
+        }
+    }
+    // Se è nel lessico con stabilità alta, probabilmente non è un nome
+    if let Some(pat) = lexicon.get(word) {
+        if pat.stability > 0.5 && pat.exposure_count > 5 {
+            return false;
+        }
+    }
+    true
 }
 
 /// Verifica se una parola è nel dominio emozionale.

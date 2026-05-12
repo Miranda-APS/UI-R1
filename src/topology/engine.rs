@@ -484,6 +484,17 @@ pub struct PrometeoTopologyEngine {
     pub last_compound_states: Vec<CompoundState>,
     /// Contatore tick autonomi (per decidere quando controllare crescita)
     tick_counter: u32,
+    /// Phase 69: sink degli eventi interni — il "tempo proprio" dell'entità.
+    /// NON è un log. Eventi sotto soglia di salience svaniscono;
+    /// sopra soglia vengono loggati e — via `emit_event` + `absorb_event` —
+    /// assorbiti nei sistemi memoria esistenti.
+    pub events: crate::topology::events::EventSink,
+    /// Phase 69 Step B: materiale da digerire in REM.
+    /// Eventi con salience 0.4-0.7 (medio-salienti) si accumulano qui
+    /// come "contesto del momento" che il prossimo sogno REM comprimerà.
+    /// NON è un log — cap 32, le entry vecchie vengono rimosse (non archivio).
+    /// Eventi con salience > 0.7 diventano SemanticEpisode direttamente.
+    pub pending_digestion: std::collections::VecDeque<(crate::topology::events::InternalEvent, f64, u32)>,
     /// Campo topologico delle parole — substrato primario.
     /// Le parole sono vertici, le co-occorrenze sono archi.
     /// I frattali emergono come regioni dense.
@@ -614,6 +625,11 @@ pub struct PrometeoTopologyEngine {
     pub needs: crate::topology::needs::NeedsHierarchy,
     /// Ultimo stato dei bisogni calcolato.
     pub last_needs_state: Option<crate::topology::needs::NeedsState>,
+    /// Phase 69: stato precedente di crisi identitaria (per rilevare transizioni).
+    /// Inizialmente false. Aggiornato in receive() dopo register_valence_shift.
+    pub was_in_crisis: bool,
+    /// Phase 69: precedente primary_tension (per rilevare TensionCrystallized).
+    pub last_primary_tension: Option<(String, String)>,
 
     /// Sistema dei desideri — motivazioni persistenti sopra le intenzioni.
     pub desire: crate::topology::desire::DesireCore,
@@ -645,6 +661,69 @@ pub struct PrometeoTopologyEngine {
     /// True se il prossimo input deve essere insegnato automaticamente.
     /// Viene impostato quando l'entità non capisce l'input corrente.
     pub learning_mode_pending: bool,
+
+    /// Comprensione multi-facet dell'input corrente: cosa l'entità ha capito
+    /// leggendo TUTTE le relazioni tipate del KG (non solo IS_A/Causes).
+    /// Contiene attribuzioni al parlante (da Requires/Causes/UsedFor) e
+    /// ipotesi aperte (concetti-perno sotto-definiti). Popolata in `receive()`.
+    pub last_scene: Option<crate::topology::understanding::SceneUnderstanding>,
+
+    /// Grafo di comprensione transitiva: BFS multi-hop dai lemmi input nel KG,
+    /// con sillogismi e convergenze. È il "ragionamento" di UI-r1 mentre
+    /// cerca di capire l'input. Popolato in `receive()` quando il KG non è
+    /// vuoto. Esposto via API per visualizzazione nella chat admin.
+    pub last_comprehension_graph: Option<crate::topology::comprehension_graph::ComprehensionGraph>,
+
+    /// Phase 71 — Deliberation: il ciclo soggettivo del turno corrente.
+    /// Lega identità, traiettoria narrativa, interlocutore, atto comunicativo,
+    /// interrogativi, comprensione, desiderio, coerenza, intenzione e forma
+    /// dell'azione. È la SOLA struttura che `compose()` legge per decidere
+    /// la risposta. Costruita in `receive()` DOPO tutti gli aggiornamenti
+    /// di stato.
+    pub last_deliberation: Option<crate::topology::deliberation::Deliberation>,
+
+    /// Phase 72 — SpeakerProfile: quello che UI-r1 ha imparato del parlante
+    /// nel corso della sessione. Accumula self_facts (cose che il parlante
+    /// ha affermato di sé), entity_facts (cose dette su UI-r1), domande
+    /// aperte rivolte a UI-r1, concetti menzionati, gap di conoscenza.
+    /// È la base della NARRATIVA: la continuità del dialogo non è uno stato
+    /// che decade, è un modello del parlante che cresce.
+    pub speaker_profile: crate::topology::speaker_profile::SpeakerProfile,
+
+    /// Phase 73 — ComprehensionReport: il documento di comprensione che
+    /// UI-r1 SCRIVE ad ogni input. Letto strutturalmente dal KG (atto di
+    /// parola, posizioni dei significanti, vuoti come soglie, sillogismi,
+    /// pertinenza per sé). Niente generazione probabilistica — solo lettura
+    /// esplicita della rete simbolica. È la metacognizione resa visibile.
+    pub last_comprehension_report:
+        Option<crate::topology::comprehension_report::ComprehensionReport>,
+
+    /// Phase 74 — ActionDecision: il documento di ragionamento sull'azione.
+    /// Letto dal ComprehensionReport + SpeakerProfile, decide cosa fare:
+    /// invitare ad articolare, rispondere a una domanda, riconoscere un
+    /// posizionamento, ricambiare un atto fatico, elaborare. Vincola
+    /// compose() perché la voce non sia scollegata dalla comprensione.
+    pub last_action_decision:
+        Option<crate::topology::action_reasoning::ActionDecision>,
+
+    /// Phase 78 — SelfProfile: quello che UI-r1 ha imparato di SÉ in
+    /// questa sessione. Storico delle proprie ActionDecision come fatti
+    /// relazionali (turno, kind, gap_attended, anchors_used). MAI la
+    /// stringa di output renderizzato — quella vive nel PF1 come residuo
+    /// di self-listening. Il cross-reference SelfProfile↔SpeakerProfile
+    /// produce percezioni (es. closure di un vuoto che UI-r1 stessa aveva
+    /// aperto) che colorano comprehension report e modulano stato.
+    pub self_profile: crate::topology::self_profile::SelfProfile,
+
+    /// Phase 75 — KG procedurale: contiene la metaconoscenza del FARE.
+    /// Pattern grammaticali, ruoli sintattici (pronome/articolo/preposizione/
+    /// marcatore/verbo), tassonomia degli atti di parola (articolazione,
+    /// identificazione, ricambio, asserzione, presentazione, riconoscimento).
+    /// Caricato da `prometeo_kg_procedurale.json` all'avvio. È un'AREA
+    /// distinta dal KG semantico (`kg`): condividono i nodi-parola ma
+    /// le relazioni hanno funzione diversa. Insegnabile per triple,
+    /// senza modifiche a Rust.
+    pub kg_procedural: crate::topology::knowledge_graph::KnowledgeGraph,
 }
 
 impl PrometeoTopologyEngine {
@@ -694,6 +773,8 @@ impl PrometeoTopologyEngine {
             semantic_axes: Vec::new(),
             last_compound_states: Vec::new(),
             tick_counter: 0,
+            events: crate::topology::events::EventSink::new(),
+            pending_digestion: std::collections::VecDeque::with_capacity(32),
             word_topology,
             conversation_turn_count: 0,
             knowledge_base: KnowledgeBase::new(),
@@ -721,6 +802,8 @@ impl PrometeoTopologyEngine {
             last_comprehension_nuclei: Vec::new(),
             needs: crate::topology::needs::NeedsHierarchy::new(),
             last_needs_state: None,
+            was_in_crisis: false,
+            last_primary_tension: None,
             desire: crate::topology::desire::DesireCore::new(),
             interlocutor: crate::topology::interlocutor::InterlocutorModel::new(),
             last_humor_state: crate::topology::humor::HumorState::empty(),
@@ -731,6 +814,14 @@ impl PrometeoTopologyEngine {
             last_comprehension: Vec::new(),
             last_input_is_question: false,
             learning_mode_pending: false,
+            last_scene: None,
+            last_comprehension_graph: None,
+            last_deliberation: None,
+            speaker_profile: crate::topology::speaker_profile::SpeakerProfile::new(),
+            last_comprehension_report: None,
+            last_action_decision: None,
+            self_profile: crate::topology::self_profile::SelfProfile::new(),
+            kg_procedural: crate::topology::knowledge_graph::KnowledgeGraph::new(),
             instance_born: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -794,6 +885,8 @@ impl PrometeoTopologyEngine {
             semantic_axes: Vec::new(),
             last_compound_states: Vec::new(),
             tick_counter: 0,
+            events: crate::topology::events::EventSink::new(),
+            pending_digestion: std::collections::VecDeque::with_capacity(32),
             word_topology,
             conversation_turn_count: 0,
             knowledge_base: KnowledgeBase::new(),
@@ -821,6 +914,8 @@ impl PrometeoTopologyEngine {
             last_comprehension_nuclei: Vec::new(),
             needs: crate::topology::needs::NeedsHierarchy::new(),
             last_needs_state: None,
+            was_in_crisis: false,
+            last_primary_tension: None,
             desire: crate::topology::desire::DesireCore::new(),
             interlocutor: crate::topology::interlocutor::InterlocutorModel::new(),
             last_humor_state: crate::topology::humor::HumorState::empty(),
@@ -831,6 +926,14 @@ impl PrometeoTopologyEngine {
             last_comprehension: Vec::new(),
             last_input_is_question: false,
             learning_mode_pending: false,
+            last_scene: None,
+            last_comprehension_graph: None,
+            last_deliberation: None,
+            speaker_profile: crate::topology::speaker_profile::SpeakerProfile::new(),
+            last_comprehension_report: None,
+            last_action_decision: None,
+            self_profile: crate::topology::self_profile::SelfProfile::new(),
+            kg_procedural: crate::topology::knowledge_graph::KnowledgeGraph::new(),
             instance_born: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -846,6 +949,34 @@ impl PrometeoTopologyEngine {
     #[deprecated(note = "Usa new() — l'entita nasce sempre con vocabolario cardinale")]
     pub fn new_infant() -> Self {
         Self::new()
+    }
+
+    /// Phase 75: carica il Knowledge Graph PROCEDURALE da file JSON.
+    /// È un'area separata dal KG semantico, usata per pattern grammaticali,
+    /// ruoli sintattici, tassonomia degli atti di parola. Niente effetti
+    /// collaterali sul word_topology o sui simplici — è metaconoscenza,
+    /// non semantica del mondo. Se il file non esiste, resta vuoto:
+    /// il sistema funziona ma senza pattern strutturati per la composizione.
+    pub fn load_kg_procedural_from_file(&mut self, path: &std::path::Path) {
+        if !path.exists() {
+            eprintln!("[KG-PROC] file non trovato: {} — KG procedurale vuoto",
+                path.display());
+            return;
+        }
+        match std::fs::read_to_string(path) {
+            Err(e) => eprintln!("[KG-PROC] errore lettura {}: {}", path.display(), e),
+            Ok(json) => {
+                match serde_json::from_str::<crate::topology::knowledge_graph::KgSnapshot>(&json) {
+                    Err(e) => eprintln!("[KG-PROC] errore parsing JSON: {}", e),
+                    Ok(snap) => {
+                        self.kg_procedural =
+                            crate::topology::knowledge_graph::KnowledgeGraph::from_snapshot(snap);
+                        eprintln!("[KG-PROC] caricato: {} archi, {} nodi",
+                            self.kg_procedural.edge_count, self.kg_procedural.node_count);
+                    }
+                }
+            }
+        }
     }
 
     /// Carica il Knowledge Graph da file JSON (generato da `import-kg`).
@@ -1763,6 +1894,202 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         self.knowledge_base.teach_entry(domain, content, triggers);
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // Phase 69 Step B — Event orchestration
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// Phase 69 Step B: emissione + assorbimento di un evento interno.
+    ///
+    /// Il punto di ingresso unificato per tutti gli eventi emessi
+    /// dai siti di mutation. Orchestra:
+    /// 1. Filtri `EventSink` (oblio se salience < 0.2, debounce)
+    /// 2. Se passa: log (da `EventSink::emit`) + assorbimento memoria
+    /// 3. (Futuro B.2+) generazione `SelfNotice` se condizioni soddisfatte
+    ///
+    /// Da preferire rispetto a `self.events.emit(...)` diretto — chiamate
+    /// dirette a `events.emit` saltano l'assorbimento.
+    pub fn emit_event(&mut self, event: crate::topology::events::InternalEvent) {
+        let salience = event.salience();
+        // events.emit ritorna true solo se non è stato filtrato
+        let passed = self.events.emit(event.clone());
+        if !passed {
+            return;
+        }
+        // Assorbimento: propaga l'evento ai sistemi memoria in base a salience.
+        self.absorb_event(event.clone(), salience);
+
+        // Phase 69 B.4: autocoscienza — se l'evento è saliente e le condizioni
+        // interne lo permettono, l'entità si accorge del proprio mutamento.
+        // `observe_event` applica i 3 criteri (salience > 0.5, non-crisi,
+        // non-sovraccarico) e ritorna Option<SelfNotice>.
+        //
+        // Nota anti-ricorsione: `observe_event` ritorna None se l'evento è
+        // già un SelfNotice (base case), quindi la chiamata ricorsiva a
+        // `emit_event` con il notice NON produce meta-meta infiniti.
+        let in_crisis = self.identity.is_in_crisis();
+        let tick = self.tick_counter;
+        if let Some(notice) = self.narrative_self.observe_event(&event, in_crisis, tick) {
+            self.emit_event(notice);
+        }
+    }
+
+    /// Phase 69 Step B: assorbe un evento nei sistemi memoria esistenti.
+    ///
+    /// NON un log. Il routing è semantico:
+    /// - `salience > 0.7`: evento chiaramente memorabile → `SemanticEpisode` immediato.
+    /// - `salience 0.4-0.7`: materiale per la digestione REM (pending_digestion).
+    /// - `salience 0.2-0.4`: svanisce senza traccia (è passato solo per il log).
+    fn absorb_event(&mut self, event: crate::topology::events::InternalEvent, salience: f64) {
+        let tick = self.tick_counter;
+
+        if salience > 0.7 {
+            self.absorb_as_semantic_episode(&event);
+            // Non duplichiamo in pending_digestion — l'episodio già cristallizza.
+            return;
+        }
+
+        if salience > 0.4 {
+            self.push_pending_digestion(event, salience, tick);
+        }
+        // < 0.4: svanisce. Il sistema dimentica.
+    }
+
+    /// Crea un `SemanticEpisode` da un evento ad alta salience.
+    ///
+    /// L'episodio cattura: concetti chiave dall'evento + stato globale corrente
+    /// (frattali attivi, firma campo, stance, intenzione, valori, energia).
+    /// Diventa materiale per recall_by_concepts/signature in future conversazioni.
+    fn absorb_as_semantic_episode(&mut self, event: &crate::topology::events::InternalEvent) {
+        let key_concepts = Self::extract_concepts_from_event(event);
+        let field_sig = self.env_biased_field_sig().to_vec();
+
+        let stance = format!("{:?}", self.narrative_self.stance);
+        let intention = self.narrative_self.pending_intention
+            .as_ref()
+            .map(|i| format!("{:?}", i))
+            .unwrap_or_else(|| "none".to_string());
+
+        let active_values: Vec<String> = self.self_model.top_values(5)
+            .iter().map(|(n, _)| n.clone()).collect();
+
+        // Top frattali attivi (da PF1, non storia simpliciale).
+        let fractal_scores = self.pf_activation
+            .emerge_fractal_activations(&self.pf_field);
+        let mut dominant_fractals: Vec<(u32, String, f64)> = fractal_scores.iter()
+            .enumerate()
+            .filter_map(|(f, &score)| {
+                if score > 0.1 {
+                    self.registry.get(f as u32)
+                        .map(|fr| (f as u32, fr.name.clone(), score as f64))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        dominant_fractals.sort_by(|a, b|
+            b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal)
+        );
+        dominant_fractals.truncate(5);
+
+        // Energia campo: somma delle attivazioni normalizzata.
+        let total_act: f32 = self.pf_activation.activations.iter()
+            .filter(|&&a| a > 0.02)
+            .sum();
+        let field_energy = ((total_act as f64) / 20.0).min(1.0);
+
+        self.semantic_episodes.record(
+            key_concepts,
+            dominant_fractals,
+            field_sig,
+            &stance,
+            &intention,
+            active_values,
+            field_energy,
+        );
+    }
+
+    /// Estrae concetti chiave da un evento per popolare `SemanticEpisode.key_concepts`.
+    ///
+    /// Non tutti gli eventi hanno concetti naturali. Per quelli che non ne hanno
+    /// (crisi identitaria, silenzio), si usano parole descrittive fisse che
+    /// rimandano al senso dell'evento.
+    fn extract_concepts_from_event(event: &crate::topology::events::InternalEvent) -> Vec<String> {
+        use crate::topology::events::{InternalEvent, SilenceLevel};
+        match event {
+            InternalEvent::TensionCrystallized { word_a, word_b } => {
+                vec![word_a.clone(), word_b.clone(), "tensione".to_string()]
+            }
+            InternalEvent::IdentityCrisisOnset { .. } => {
+                vec!["crisi".to_string(), "coerenza".to_string(), "io".to_string()]
+            }
+            InternalEvent::IdentityCrisisResolved { .. } => {
+                vec!["risoluzione".to_string(), "coerenza".to_string(), "io".to_string()]
+            }
+            InternalEvent::ValenceFlip { cd, .. } => {
+                let drive_name = crate::topology::valence::DRIVE_NAMES[*cd].to_lowercase();
+                vec![drive_name, "valenza".to_string(), "cambiamento".to_string()]
+            }
+            InternalEvent::DominantNeedShift { old_need, new_need, .. } => {
+                vec![
+                    format!("{:?}", old_need).to_lowercase(),
+                    format!("{:?}", new_need).to_lowercase(),
+                    "bisogno".to_string(),
+                ]
+            }
+            InternalEvent::OtherEmotionalShift { old_ev, new_ev } => {
+                let direction = if new_ev < old_ev { "distress" } else { "sollievo" };
+                vec!["altro".to_string(), direction.to_string(), "emozione".to_string()]
+            }
+            InternalEvent::EpisodeSalienceHigh { concepts, .. } => concepts.clone(),
+            InternalEvent::BridgeDiscovered { .. } => {
+                vec!["connessione".to_string(), "scoperta".to_string()]
+            }
+            InternalEvent::SilenceThreshold { level, .. } => match level {
+                SilenceLevel::Solitude => vec!["solitudine".to_string(), "silenzio".to_string()],
+                SilenceLevel::DeepTime => vec!["silenzio".to_string(), "profondità".to_string(), "tempo".to_string()],
+                _ => vec!["silenzio".to_string()],
+            },
+            InternalEvent::DesireSatisfied { desire_name, .. } => {
+                vec![desire_name.clone(), "desiderio".to_string(), "soddisfazione".to_string()]
+            }
+            InternalEvent::SelfNotice { observed_event, .. } => {
+                // Meta-evento: eredita i concetti dell'osservato + "consapevolezza"
+                let mut concepts = Self::extract_concepts_from_event(observed_event);
+                concepts.push("consapevolezza".to_string());
+                concepts
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Aggiunge un evento alla coda di digestione, mantenendola sotto il cap.
+    fn push_pending_digestion(
+        &mut self,
+        event: crate::topology::events::InternalEvent,
+        salience: f64,
+        tick: u32,
+    ) {
+        const CAP: usize = 32;
+        if self.pending_digestion.len() >= CAP {
+            // Rimuovi l'entry più vecchia con salience più bassa — il sistema
+            // "dimentica" prima le cose meno salienti, non per ordine FIFO.
+            if let Some((idx, _)) = self.pending_digestion.iter().enumerate()
+                .min_by(|a, b| a.1.1.partial_cmp(&b.1.1).unwrap_or(std::cmp::Ordering::Equal))
+            {
+                self.pending_digestion.remove(idx);
+            }
+        }
+        self.pending_digestion.push_back((event, salience, tick));
+    }
+
+    /// Numero di eventi attualmente in attesa di digestione.
+    /// Esposto per diagnostica (test + UI admin futura).
+    pub fn pending_digestion_count(&self) -> usize {
+        self.pending_digestion.len()
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+
     /// Ricevi un input testuale: perturba il campo, cattura in memoria,
     /// restituisci la risposta emergente.
     pub fn receive(&mut self, input: &str) -> EmergentResponse {
@@ -1777,6 +2104,13 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+
+        // Phase 69: l'unico evento "dall'esterno". Tutto il resto è interno.
+        // Emetto PRIMA di qualsiasi altra cosa — è il vero inizio di un nuovo momento.
+        self.emit_event(crate::topology::events::InternalEvent::InputReceived {
+            text: input.to_string(),
+            tick: self.tick_counter,
+        });
 
         // Prefrontale — learning mode: se il turno precedente non era capito,
         // il nuovo input viene insegnato automaticamente prima di essere elaborato.
@@ -2144,6 +2478,96 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             self.last_comprehension = Vec::new();
         }
         tick!("prefrontal_attractors");
+
+        // ── SceneUnderstanding — comprensione multi-facet dell'input ──────────
+        // Ogni tipo di relazione KG (IsA, Has, Does, Causes, Requires, UsedFor,
+        // OppositeOf, Expresses, ...) contribuisce con la sua semantica tipata.
+        // Risultato: attribuzioni al parlante (da Requires/Causes/UsedFor) e
+        // ipotesi aperte (concetti-perno sotto-definiti). Letto prima della
+        // generazione per informare il doppio output (reazione + ipotesi).
+        if self.kg.edge_count > 0 && !input_words_for_provenance.is_empty() {
+            let lemma_refs: Vec<&str> = input_words_for_provenance.iter()
+                .map(|s| s.as_str())
+                .collect();
+            let scene = crate::topology::understanding::SceneUnderstanding::assemble(
+                &lemma_refs, input, &self.kg,
+            );
+
+            // Semina pre-propagazione leggera (0.08) per le attribuzioni al parlante:
+            // il campo deve "vedere" cosa è stato attribuito all'Altro senza che
+            // queste parole dominino l'input proprio. Tetto per-parola per evitare
+            // cumuli (max 0.10).
+            let mut seed_acc: std::collections::HashMap<String, f32> =
+                std::collections::HashMap::new();
+            for (attr, conf) in scene.speaker_attributions.iter().take(8) {
+                let target = attr.target();
+                // Non riattivare parole input (già al loro livello naturale)
+                if input_words_for_provenance.iter().any(|w| w == target) { continue; }
+                let seed = 0.08_f32 * (*conf);
+                let entry = seed_acc.entry(target.to_string()).or_insert(0.0);
+                *entry = (*entry + seed).min(0.10);
+            }
+            for (w, strength) in &seed_acc {
+                self.pf_activation.activate_by_name(&self.pf_field, w, *strength);
+            }
+
+            self.last_scene = Some(scene);
+
+            // ── Pronomi interrogativi: portano peso semantico fondamentale
+            //    ("chi" chiede di una persona/entità, "cosa" di una cosa,
+            //    "perché" di una causa, ecc.) ma vengono filtrati come
+            //    function_words a monte. Li recuperiamo dal raw input per
+            //    aggiungerli come root del grafo. Risultato: "chi sei?"
+            //    ha 2 root (chi, essere) anziché solo "essere", e
+            //    ReciprocalAct.detect correttamente NON scatta su un solo
+            //    root né su un input con interrogativi.
+            let mut augmented_roots: Vec<String> = input_words_for_provenance.clone();
+            for tok in input.split_whitespace() {
+                let cleaned: String = tok.chars()
+                    .filter(|c| c.is_alphabetic() || *c == '\'' || *c == 'à' || *c == 'è'
+                              || *c == 'é' || *c == 'ì' || *c == 'ò' || *c == 'ù')
+                    .collect::<String>().to_lowercase();
+                if cleaned.is_empty() { continue; }
+                let is_interrogative = matches!(cleaned.as_str(),
+                    "chi" | "cosa" | "che" | "dove" | "quando" | "perché" | "perche"
+                    | "come" | "quale" | "quali" | "quanto" | "quanta" | "quanti" | "quante"
+                );
+                if is_interrogative && !augmented_roots.iter().any(|r| r == &cleaned) {
+                    augmented_roots.push(cleaned);
+                }
+            }
+            let augmented_refs: Vec<&str> = augmented_roots.iter()
+                .map(|s| s.as_str())
+                .collect();
+
+            // ── ComprehensionGraph — esplorazione transitiva multi-hop ─────
+            // Costruita sui lemmi input + interrogativi recuperati: è la
+            // lettura che UI-r1 fa del messaggio appena arrivato. "chi sei?"
+            // produce due esplorazioni separate (da chi e da essere) che
+            // convergono su concetti come identità, persona, sé.
+            let cg = crate::topology::comprehension_graph::ComprehensionGraph::build(
+                &augmented_refs, &self.kg,
+            );
+
+            // ── Sibling activation — risposta dalla regione, non dall'eco ──
+            // I "fratelli" delle parole input (concetti che condividono un
+            // parent IsA con loro) ricevono una piccola attivazione nel campo.
+            // È il vocabolario della regione: per "ciao" (saluto) le parole
+            // "salve", "benvenuto", "buongiorno". Niente template — il campo
+            // li ha disponibili, sceglierà se emergeranno o meno.
+            let siblings = cg.siblings_of_roots(&self.kg, 8);
+            for (sib, score) in &siblings {
+                if input_words_for_provenance.iter().any(|w| w == sib) { continue; }
+                let strength = (0.10 * score).min(0.12) as f32;
+                self.pf_activation.activate_by_name(&self.pf_field, sib, strength);
+            }
+
+            self.last_comprehension_graph = Some(cg);
+        } else {
+            self.last_scene = None;
+            self.last_comprehension_graph = None;
+        }
+        tick!("scene_understanding");
 
         {
             let self_boosts = self.self_model.field_boosts(&input_words_for_provenance);
@@ -2601,10 +3025,59 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             let post_input_sig = self.env_biased_field_sig();
             // Phase 62: valenza emotiva dell'input (IS_A chain sulle parole)
             let other_ev = self.compute_other_emotional_valence(&self.last_input_words.clone(), &negated_words);
+
+            // Phase 69 B.3: snapshot pre-register per rilevare shift interlocutore.
+            let prev_emo = self.interlocutor.emotional_valence;
+            let prev_pattern = self.interlocutor.detected_pattern.clone();
+            let prev_intent = self.interlocutor.attributed_intent.clone();
+
             self.interlocutor.register_input(&pre_input_sig, &post_input_sig, self.tick_counter, other_ev);
+
+            // OtherEmotionalShift: solo se delta significativo (> 0.3 in |delta|).
+            let new_emo = self.interlocutor.emotional_valence;
+            if (prev_emo - new_emo).abs() > 0.3 {
+                self.emit_event(crate::topology::events::InternalEvent::OtherEmotionalShift {
+                    old_ev: prev_emo,
+                    new_ev: new_emo,
+                });
+            }
+
+            // InteractionPatternShift: solo se pattern cambia.
+            if prev_pattern != self.interlocutor.detected_pattern {
+                self.emit_event(crate::topology::events::InternalEvent::InteractionPatternShift {
+                    old_pattern: prev_pattern,
+                    new_pattern: self.interlocutor.detected_pattern.clone(),
+                });
+            }
+
+            // AttributedIntentShift: solo se intent cambia.
+            if prev_intent != self.interlocutor.attributed_intent {
+                self.emit_event(crate::topology::events::InternalEvent::AttributedIntentShift {
+                    old_intent: prev_intent,
+                    new_intent: self.interlocutor.attributed_intent.clone(),
+                });
+            }
+
+            // HumorAwakened: rileva il passaggio da non-umor a umor attivo.
+            let prev_humor_inc = self.last_humor_state.incongruity_score;
             self.last_humor_state = crate::topology::humor::HumorSense::sense(
                 &self.word_topology, &self.lexicon, &enriched_fid_act,
             );
+            if prev_humor_inc < 0.15 && self.last_humor_state.incongruity_score >= 0.15 {
+                let kind = if self.last_humor_state.irony_active
+                    && self.last_humor_state.bisociation_pair.is_some() {
+                    crate::topology::events::HumorKind::Both
+                } else if self.last_humor_state.irony_active {
+                    crate::topology::events::HumorKind::Irony
+                } else {
+                    crate::topology::events::HumorKind::Bisociation
+                };
+                self.emit_event(crate::topology::events::InternalEvent::HumorAwakened {
+                    incongruity_score: self.last_humor_state.incongruity_score,
+                    kind,
+                });
+            }
+
             // Aggiungi bias da interlocutore, desideri, umorismo
             compound_bias.extend(self.interlocutor.will_biases());
             compound_bias.extend(self.desire.will_biases(&post_input_sig));
@@ -2634,6 +3107,18 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             other_emotional_valence: self.interlocutor.emotional_valence,
         };
         let needs_state = self.needs.sense(&vital, &self.identity, &self.self_model, &needs_field);
+
+        // Phase 69: rileva shift del dominant_need confrontando con stato precedente.
+        if let Some(prev) = &self.last_needs_state {
+            if prev.dominant_need != needs_state.dominant_need {
+                self.emit_event(crate::topology::events::InternalEvent::DominantNeedShift {
+                    old_need: prev.dominant_need,
+                    new_need: needs_state.dominant_need,
+                    pressure: needs_state.dominant_pressure,
+                });
+            }
+        }
+
         self.last_needs_state = Some(needs_state.clone());
 
         // 15b. Ciclo deliberativo — NarrativeSelf con stato interiore completo.
@@ -2660,10 +3145,70 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 dominant_desire_intensity,
             };
             let valence = crate::topology::valence::Valence::compute(&valence_input);
+
+            // Phase 69: rileva flip di valenza PRIMA di aggiornare (serve old state).
+            // Un flip è un cambio di segno del drive con magnitudo > 0.15 su entrambi
+            // i lati — è un "mutamento" significativo, non oscillazione rumorosa.
+            {
+                let old_drives = self.narrative_self.valence.drives;
+                let new_drives = valence.drives;
+                for cd in 0..8 {
+                    let old_v = old_drives[cd];
+                    let new_v = new_drives[cd];
+                    if (old_v.signum() != new_v.signum())
+                        && old_v.abs() > 0.15
+                        && new_v.abs() > 0.15
+                    {
+                        self.emit_event(crate::topology::events::InternalEvent::ValenceFlip {
+                            cd,
+                            old_val: old_v,
+                            new_val: new_v,
+                        });
+                    }
+                }
+            }
+
             self.narrative_self.set_valence(valence.clone());
 
             // Phase 55: registra lo shift di valenza nell'identità per vulnerabilità
             self.identity.register_valence_shift(&valence.drives);
+
+            // Phase 69: rileva transizione di crisi identitaria (onset/resolved).
+            {
+                let now_in_crisis = self.identity.is_in_crisis();
+                if now_in_crisis && !self.was_in_crisis {
+                    // Trigger CD: il drive con magnitude più alta al momento della crisi
+                    let trigger_cd = valence.drives.iter()
+                        .enumerate()
+                        .max_by(|a, b| a.1.abs().partial_cmp(&b.1.abs()).unwrap_or(std::cmp::Ordering::Equal))
+                        .map(|(i, _)| i);
+                    self.emit_event(crate::topology::events::InternalEvent::IdentityCrisisOnset {
+                        coherence: self.identity.coherence_integrity,
+                        trigger_cd,
+                    });
+                } else if !now_in_crisis && self.was_in_crisis {
+                    self.emit_event(crate::topology::events::InternalEvent::IdentityCrisisResolved {
+                        coherence: self.identity.coherence_integrity,
+                    });
+                }
+                self.was_in_crisis = now_in_crisis;
+            }
+
+            // Phase 69: rileva cristallizzazione di primary_tension.
+            // Una tensione è "cristallizzata" quando diventa nuova (da None a Some)
+            // o cambia rispetto alla precedente.
+            {
+                let current_tension = self.identity.primary_tension.clone();
+                if current_tension != self.last_primary_tension {
+                    if let Some((a, b)) = &current_tension {
+                        self.emit_event(crate::topology::events::InternalEvent::TensionCrystallized {
+                            word_a: a.clone(),
+                            word_b: b.clone(),
+                        });
+                    }
+                    self.last_primary_tension = current_tension;
+                }
+            }
 
             // Phase B: il desiderio emerge dall'incrocio KG-comprensione × drive Octalysis.
             // Chiamato DOPO che valence è computata (drives disponibili) e last_comprehension
@@ -2883,6 +3428,150 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             }
         }
         // ─────────────────────────────────────────────────────────────────────
+
+        // ─── Phase 72/73: SpeakerProfile aggiornato PRIMA della Deliberation
+        // Aggiorna il modello del parlante con i fatti di questo turno:
+        // claim su sé / su UI-r1, domande aperte, concetti menzionati,
+        // gap di conoscenza derivati strutturalmente dal KG, e — se il
+        // parlante si è presentato — il suo NOME (Phase 73). Questo deve
+        // avvenire PRIMA di build_deliberation così che SpeakerContext
+        // nella Deliberation includa anche il turno corrente.
+        let kg_facts_for_observe = self.derive_kg_facts(&self.last_input_words.clone());
+        let speaker_claim_clone = self.last_input_reading.as_ref()
+            .and_then(|r| r.speaker_claim.clone());
+        // Phase 73: rileva presentazione ("mi chiamo X")
+        if let Some(name) = crate::topology::input_reading::detect_name_introduction(
+            &self.last_input_words, &self.lexicon, Some(&self.kg),
+        ) {
+            self.speaker_profile.set_name_if_unset(&name);
+        }
+        self.speaker_profile.observe_turn(
+            input,
+            &kg_facts_for_observe,
+            speaker_claim_clone.as_ref(),
+            &self.kg,
+        );
+        tick!("speaker_profile");
+
+        // ─── Phase 78: Closure perception (cross-reference) ───────────────
+        // Dopo che SpeakerProfile ha osservato il turno corrente, controlla
+        // se ha appena chiuso un vuoto che SelfProfile attendeva — cioè se
+        // il parlante ha portato al significante quello che IO avevo
+        // invitato ad articolare al turno precedente. È un fatto relazionale
+        // (cross-reference fra organi), non una regola: o c'è la coincidenza
+        // strutturale o non c'è.
+        let closure = crate::topology::self_profile::detect_closure(
+            &self.self_profile,
+            &self.speaker_profile,
+            self.speaker_profile.turn_count,
+        );
+        let prior_gap_closure = closure.as_ref().map(|c| {
+            crate::topology::comprehension_report::PriorGapClosure {
+                trigger: c.gap_trigger.clone(),
+                role: c.gap_role.clone(),
+                closing_word: c.closing_word.clone(),
+                opened_at_turn: c.opened_at_turn,
+            }
+        });
+        // Phase 78: piccolo push continuo a coherence_integrity quando il
+        // cerchio si chiude. Non è una soglia — è un effetto di stato che
+        // si accumula nel tempo. Se il dialogo si articola coerentemente,
+        // la coerenza dell'identità sale; se i vuoti restano aperti, non
+        // si applica niente (assenza di push, non penalità). I numeri qui
+        // sono GAIN della modulazione (quanto un fatto colora il canale),
+        // mai trigger di switch.
+        if closure.is_some() {
+            self.identity.coherence_integrity =
+                (self.identity.coherence_integrity + 0.04).min(1.0);
+        }
+        
+        let has_drifted = crate::topology::self_profile::detect_drift(
+            &self.self_profile,
+            &self.speaker_profile,
+            self.conversation_turn_count,
+            !self.last_input_words.is_empty(),
+        );
+
+        if has_drifted {
+            self.identity.coherence_integrity =
+                (self.identity.coherence_integrity - 0.02).max(0.0);
+        }
+        
+        tick!("closure_perception");
+
+        // ─── Phase 71: Deliberation — il ciclo soggettivo del turno ──────
+        // Ora che SpeakerProfile è aggiornato, build_deliberation legge
+        // tutto lo stato corrente (incluso ciò che UI-r1 ha appena imparato
+        // del parlante) e produce la deliberazione del turno.
+        self.last_deliberation = Some(self.build_deliberation());
+        tick!("deliberation");
+
+        // ─── Phase 73: ComprehensionReport — UI-r1 SCRIVE cosa ha capito ──
+        // Lettura strutturata della rete simbolica del KG sull'enunciato
+        // ricevuto. È un documento procedurale, non generato: ogni sezione
+        // è popolata da query esplicite. Il report è la metacognizione resa
+        // visibile — il "ho capito che..." che precede ogni decisione.
+        // Phase 78: se è stata percepita una closure, viene passata al
+        // report — l'enunciato corrente sarà letto come continuazione
+        // dell'articolazione precedente, non come asserzione isolata.
+        if let Some(deliberation) = self.last_deliberation.as_ref() {
+            let syllogisms: Vec<crate::topology::comprehension_graph::Syllogism> =
+                self.last_comprehension_graph.as_ref()
+                    .map(|g| g.syllogisms.clone())
+                    .unwrap_or_default();
+            let report = crate::topology::comprehension_report::build_report(
+                input,
+                &deliberation.kg_facts,
+                speaker_claim_clone.as_ref(),
+                &syllogisms,
+                &self.kg,
+                prior_gap_closure,
+            );
+            self.last_comprehension_report = Some(report);
+        }
+        tick!("comprehension_report");
+
+        // ─── Phase 74: ActionDecision — UI-r1 SCRIVE come risponderà ─────
+        // Legge il ComprehensionReport + SpeakerProfile e decide
+        // strutturalmente: cosa indirizzare (gap/domanda/claim/classe-fatica),
+        // quale forma, quale soggetto narrativo, quali parole-ancora.
+        // È il bridge tra comprensione esplicita e voce — finora compose()
+        // generava ignorando il report.
+        if let Some(report) = self.last_comprehension_report.as_ref() {
+            let decision = crate::topology::action_reasoning::decide_action(
+                report,
+                &self.speaker_profile,
+            );
+
+            // Phase 74: la decisione VINCOLA la deliberation. Sovrascrivi
+            // l'action_shape (ora viene da action_reasoning, non da KgFacts)
+            // e aggiungi le anchor_words. compose le leggerà.
+            if let Some(d) = self.last_deliberation.as_mut() {
+                d.action_shape = decision.shape;
+                d.anchor_words = decision.anchor_words.clone();
+            }
+
+            // Phase 74: biasso il campo PF1 con le parole-ancora prima della
+            // generazione. Sono i significanti che la decisione richiede
+            // come materia per la voce. Boost piccolo (0.15) — è bias, non
+            // forzatura: il campo resta libero di scegliere quale ancora
+            // emerge come parola finale.
+            for anchor in &decision.anchor_words {
+                self.pf_activation.activate_by_name(&self.pf_field, anchor, 0.15);
+            }
+
+            // Phase 78: registra la decisione in SelfProfile come fatto
+            // strutturale (turno, kind, gap_attended, anchors_used). MAI
+            // la stringa di output renderizzato — quella vivrà nel PF1
+            // come residuo di self-listening. Questo permette al turno
+            // SUCCESSIVO di rilevare closure tramite cross-reference con
+            // SpeakerProfile: "il parlante ha colmato il vuoto che IO
+            // avevo aperto qui".
+            self.self_profile.record(self.speaker_profile.turn_count, &decision);
+
+            self.last_action_decision = Some(decision);
+        }
+        tick!("action_reasoning");
 
         // 16. Estrai risposta emergente
         self.total_perturbations += 1;
@@ -4250,6 +4939,17 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             }
         }
 
+        // ── Phase 70 — Short-circuit ReciprocalAct RIMOSSO ─────────────
+        // L'idea iniziale era: per un saluto/congedo/ringraziamento UI-r1
+        // sceglie un fratello dalla stessa classe e risponde solo con
+        // quella parola. Era template: bypassava identity_seed (Phase 65),
+        // self_witness (Phase 66), narrative coherence pull (Phase 64),
+        // l'interlocutor model. Anche "ciao" deve attraversare l'intero
+        // pipeline così la risposta emerge dallo stato di UI-r1, non da
+        // un lookup di classe. ReciprocalAct::detect resta per la
+        // visualizzazione del grafo (mostra il riconoscimento dell'atto)
+        // ma non guida più la scelta della risposta.
+
         // Calcola active_fractals una volta sola — riusata da Phase 3.
         let active_fractals_cache: Vec<(FractalId, f64)> = self.pf_emerge_fractals();
 
@@ -4404,6 +5104,11 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     self.last_input_is_question,
                     self.interlocutor.emotional_valence < -0.35,
                     narrative_intent,
+                    self.last_deliberation.as_ref(),
+                    // Phase 77: KG procedurale + decisione esplicita per il pattern matcher
+                    Some(&self.kg_procedural),
+                    self.last_action_decision.as_ref(),
+                    self.last_comprehension_report.as_ref(),
                 ) {
                     self.last_archetype_used = "emergent".to_string();
                     self.last_generated_words = emergent.words_used.clone();
@@ -4502,7 +5207,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         }
     }
 
-    /// Firma 8D del campo corrente — esposta pubblicamente per DualField e synthesis.
+    /// Firma 8D del campo corrente — esposta pubblicamente per synthesis e introspezione.
     pub fn field_sig(&self) -> [f64; 8] {
         self.compute_field_sig()
     }
@@ -5404,6 +6109,526 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             locus_sublocus: self.locus.sub_locus_view(&self.registry),
         }
     }
+
+    /// Phase 70 — Scelta del fratello che risponde all'atto reciproco.
+    ///
+    /// Per ogni candidato (es. salve, benvenuto, buongiorno per "ciao"),
+    /// calcola un alignment_score = somma di:
+    ///   - allineamento con la firma di identità (chi UI-r1 è stabilmente)
+    ///   - allineamento con i drive Octalysis (cosa UI-r1 sente adesso)
+    ///   - bonus stabilità lessicale (parole consolidate vincono su rumorose)
+    ///
+    /// Restituisce il fratello con score più alto. Se nessun candidato è
+    /// nel lessico, restituisce None (fall-through al generatore standard).
+    pub fn choose_reciprocal_response(
+        &self,
+        act: &crate::topology::comprehension_graph::ReciprocalAct,
+    ) -> Option<String> {
+        let drives = &self.narrative_self.valence.drives;
+        let identity_sig = &self.identity.self_signature;
+
+        let mut best: Option<(String, f64)> = None;
+        for sib in &act.siblings {
+            // Skip parole input (per evitare di rispondere con la stessa parola)
+            if self.last_input_words.iter().any(|iw| iw == sib) { continue; }
+            // La parola dev'essere conosciuta dal lessico (firma 8D disponibile)
+            let pat = match self.lexicon.get(sib) {
+                Some(p) => p,
+                None => continue,
+            };
+            let sig = pat.signature.values();
+
+            // Allineamento con identità (peso 0.4) + drive Octalysis (peso 0.4)
+            // + stabilità lessicale (peso 0.2): le parole più radicate
+            // sono preferite a parità di alignment.
+            let mut id_dot = 0.0_f64;
+            let mut drv_dot = 0.0_f64;
+            for i in 0..8 {
+                id_dot  += identity_sig[i] * sig[i];
+                drv_dot += drives[i]       * sig[i];
+            }
+            let stability = pat.stability;
+            let score = 0.40 * id_dot + 0.40 * drv_dot + 0.20 * stability;
+
+            if best.as_ref().map_or(true, |(_, b)| score > *b) {
+                best = Some((sib.clone(), score));
+            }
+        }
+        best.map(|(w, _)| w)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Phase 71 — Deliberation: il ciclo soggettivo del turno
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// Costruisce la Deliberation del turno corrente leggendo lo stato
+    /// e i FATTI strutturali dal KG. Niente enum InputAct/ResponseIntention
+    /// nel dispatch: tutto deriva da proprietà strutturali dell'input
+    /// (lunghezza, IsA chain, marker, pronomi) e dello stato corrente
+    /// (identità, narrativa, valenza, desideri, modello dell'Altro).
+    pub fn build_deliberation(&mut self) -> crate::topology::deliberation::Deliberation {
+        use crate::topology::deliberation::*;
+        use crate::topology::relation::RelationType;
+
+        // ── 1. PERCEZIONE: identità ─────────────────────────────────────────
+        let drives = self.narrative_self.valence.drives;
+        let dominant_idx = (0..8)
+            .max_by(|&a, &b| drives[a].abs().partial_cmp(&drives[b].abs())
+                .unwrap_or(std::cmp::Ordering::Equal))
+            .unwrap_or(0);
+        let identity_now = IdentityFrame {
+            self_signature: self.identity.self_signature,
+            current_drives: drives,
+            dominant_drive: (dominant_idx, drives[dominant_idx]),
+            coherence_integrity: self.identity.coherence_integrity,
+        };
+
+        // ── 1. PERCEZIONE: traiettoria ──────────────────────────────────────
+        let recent_attractor = self.narrative_self.recent_fractal_attractor(4);
+        let trajectory = Trajectory {
+            recent_fractals: recent_attractor.iter().map(|(f, w)| (*f, *w)).collect(),
+            turns_in_session: self.narrative_self.turns.len(),
+        };
+
+        // ── 1. PERCEZIONE: interlocutore ────────────────────────────────────
+        let other_now = InterlocutorFrame {
+            presence: self.interlocutor.presence,
+            emotional_valence: self.interlocutor.emotional_valence,
+            attributed_intent: self.interlocutor.attributed_intent.clone(),
+            interaction_pattern: self.interlocutor.detected_pattern.clone(),
+            cumulative_resonance: self.interlocutor.cumulative_resonance,
+            cumulative_novelty: self.interlocutor.cumulative_novelty,
+        };
+
+        let input_words = self.last_input_words.clone();
+
+        // ── 2. KG-FACTS: leggo direttamente la struttura del KG e dell'input
+        let kg_facts = self.derive_kg_facts(&input_words);
+
+        // ── 1b. SPEAKER-CONTEXT: cosa UI-r1 sa del parlante in questo momento
+        let speaker_context = self.derive_speaker_context();
+
+        // ── 3. INTERROGAZIONE: domande derivate dai fatti ──────────────────
+        let other_present = other_now.presence > 0.10
+            || self.narrative_self.turns.len() > 0;
+        let has_active_desire = !self.desire.desires.is_empty();
+        let inquiry_kinds = inquiries_for_facts(&kg_facts, other_present, has_active_desire);
+        let inquiries: Vec<SelfInquiry> = inquiry_kinds.into_iter().map(|kind| {
+            let question = kind.question_text(&input_words);
+            let answer = self.attempt_inquiry_answer(&kind, &kg_facts);
+            SelfInquiry { kind, question, answer }
+        }).collect();
+
+        // ── 4. COMPRENSIONE: dal grafo ──────────────────────────────────────
+        let comprehension = self.derive_comprehension_findings();
+
+        // ── 5. DESIDERIO: top desire attivo ─────────────────────────────────
+        let active_desire = self.desire.desires.iter()
+            .max_by(|a, b| a.intensity.partial_cmp(&b.intensity)
+                .unwrap_or(std::cmp::Ordering::Equal))
+            .map(|d| ActiveDesire {
+                name: d.name.clone(),
+                intensity: d.intensity,
+                source_label: format!("{:?}", d.source),
+            });
+
+        // ── 6. COERENZA: narrative_fit ──────────────────────────────────────
+        let active_fractals_now = self.pf_emerge_fractals();
+        let coherence_score = self.narrative_self.coherence_score(&active_fractals_now);
+        let identity_strain = (1.0 - self.identity.coherence_integrity).max(0.0);
+        let mode = if trajectory.turns_in_session == 0 {
+            NarrativeMode::Opening
+        } else if coherence_score >= 0.50 {
+            NarrativeMode::Continuing
+        } else {
+            NarrativeMode::Diverging
+        };
+        let narrative_fit = NarrativeFit { coherence_score, identity_strain, mode };
+
+        // ── 7. AZIONE: forma derivata strutturalmente da fatti + stato ──────
+        let withdraw_pressure = self.last_field_pressures.as_ref()
+            .map(|fp| fp.withdraw).unwrap_or(0.0);
+        let vital_overloaded = matches!(
+            self.vital.sense(&self.complex).tension,
+            crate::topology::vital::TensionState::Overloaded,
+        );
+        let action_shape = derive_action_shape(
+            &kg_facts, &other_now, withdraw_pressure, vital_overloaded,
+        );
+
+        // ── Reasoning testuale ──────────────────────────────────────────────
+        let mut reasoning: Vec<String> = Vec::new();
+        let drive_name = ["scopo", "padronanza", "creatività", "possesso",
+                          "connessione", "scarsità", "curiosità", "evitamento"];
+        reasoning.push(format!(
+            "sento dominante: {} ({:+.2}); coerenza identità {:.2}",
+            drive_name.get(dominant_idx).copied().unwrap_or("?"),
+            drives[dominant_idx], identity_now.coherence_integrity,
+        ));
+        if narrative_fit.mode == NarrativeMode::Opening {
+            reasoning.push("primo turno: nessuna narrativa, apertura pura".to_string());
+        } else {
+            reasoning.push(format!(
+                "narrativa: {} (coerenza con turni recenti {:.2})",
+                narrative_fit.mode.as_str(), narrative_fit.coherence_score,
+            ));
+        }
+        if other_now.presence > 0.20 {
+            reasoning.push(format!(
+                "Altro: presenza {:.2}, valenza {:+.2}, intent {}",
+                other_now.presence, other_now.emotional_valence,
+                other_now.attributed_intent.as_str(),
+            ));
+        }
+        if !kg_facts.root_classes.is_empty() {
+            reasoning.push(format!(
+                "KG: radici classificate come [{}]; classe specifica {}; {} fratelli; emot.prox {:.2}",
+                kg_facts.root_classes.join(", "),
+                kg_facts.specific_class.as_deref().unwrap_or("—"),
+                kg_facts.class_siblings_count,
+                kg_facts.emotional_proximity,
+            ));
+        } else {
+            reasoning.push("KG: l'input non è stato classificato (radici fuori KG)".to_string());
+        }
+        if let Some(d) = &active_desire {
+            reasoning.push(format!("desiderio attivo: {} ({:.2})", d.name, d.intensity));
+        }
+
+        // ── Reasoning del SpeakerProfile: cosa UI-r1 ricorda del parlante ──
+        if speaker_context.turns_observed > 0 {
+            if let Some(f) = &speaker_context.last_self_fact {
+                reasoning.push(format!("ricordo che il parlante {}", f));
+            }
+            if let Some(f) = &speaker_context.last_entity_fact {
+                reasoning.push(format!("il parlante mi ha definita: {}", f));
+            }
+            if !speaker_context.open_questions.is_empty() {
+                reasoning.push(format!(
+                    "porto con me {} domanda/e aperta/e: \"{}\"",
+                    speaker_context.open_questions.len(),
+                    speaker_context.open_questions.first().cloned().unwrap_or_default(),
+                ));
+            }
+            if !speaker_context.open_gaps.is_empty() {
+                reasoning.push(format!(
+                    "vorrei sapere ancora: \"{}\"",
+                    speaker_context.open_gaps.first().cloned().unwrap_or_default(),
+                ));
+            }
+        }
+
+        reasoning.push(format!("forma scelta: {}", action_shape.as_str()));
+
+        Deliberation {
+            identity_now, trajectory, other_now,
+            input_words, speaker_context, kg_facts, inquiries, comprehension,
+            active_desire, narrative_fit, action_shape, reasoning,
+            anchor_words: Vec::new(),  // popolato dopo da ActionDecision
+        }
+    }
+
+    /// Estrae il SpeakerContext per la Deliberation a partire dallo stato
+    /// corrente del SpeakerProfile. Espone: numero turni osservati, ultimi
+    /// fatti, domande aperte, gap aperti, top concetti menzionati.
+    fn derive_speaker_context(&self) -> crate::topology::deliberation::SpeakerContext {
+        use crate::topology::deliberation::SpeakerContext;
+        let p = &self.speaker_profile;
+        let last_self_fact = p.self_facts.last().map(|f| {
+            format!("ha {} \"{}\" (turno {})", f.kind.as_str(), f.predicate, f.turn)
+        });
+        let last_entity_fact = p.entity_facts.last().map(|f| {
+            format!("\"{}\" ({}, turno {})", f.predicate, f.kind.as_str(), f.turn)
+        });
+        let open_questions: Vec<String> = p.unresolved_questions()
+            .map(|q| q.raw_input.clone())
+            .collect();
+        let open_gaps: Vec<String> = p.open_gaps()
+            .map(|g| g.question.clone())
+            .collect();
+        let top_concepts: Vec<String> = p.top_mentioned(5)
+            .into_iter().map(|(w, _)| w).collect();
+        SpeakerContext {
+            turns_observed: p.turn_count,
+            last_self_fact, last_entity_fact,
+            open_questions, open_gaps, top_concepts,
+        }
+    }
+
+    /// Legge dal KG e dalla forma fisica dell'input i fatti strutturali
+    /// usati dalla Deliberation. Niente enum: solo proprietà del grafo
+    /// e marker fisici dell'input.
+    fn derive_kg_facts(
+        &self,
+        input_words: &[String],
+    ) -> crate::topology::deliberation::KgFacts {
+        use crate::topology::deliberation::KgFacts;
+        use crate::topology::relation::RelationType;
+
+        let roots: Vec<String> = self.last_comprehension_graph.as_ref()
+            .map(|g| g.roots.clone())
+            .unwrap_or_default();
+
+        // Classi IsA dirette delle radici
+        let mut root_classes: Vec<String> = Vec::new();
+        for r in &roots {
+            for (parent, _) in self.kg.query_objects_weighted(r, RelationType::IsA) {
+                if !root_classes.iter().any(|c| c == parent) {
+                    root_classes.push(parent.to_string());
+                }
+            }
+        }
+
+        // Classe più specifica: parent IsA con MENO figli ma ≥3.
+        // Skip mega-hub (>200 figli) — categorie troppo astratte non sono
+        // categorie utili per il fit reciproco.
+        let mut best_class: Option<(String, usize)> = None;
+        for cls in &root_classes {
+            let children = self.kg.query_subjects(cls, RelationType::IsA);
+            if children.len() < 3 || children.len() > 200 { continue; }
+            // Esclusi le radici stesse dai siblings
+            let sib_count = children.iter()
+                .filter(|c| !roots.iter().any(|r| r == *c))
+                .count();
+            if sib_count == 0 { continue; }
+            let take = match &best_class {
+                None => true,
+                Some((_, b_count)) => sib_count < *b_count,
+            };
+            if take { best_class = Some((cls.clone(), sib_count)); }
+        }
+        let (specific_class, class_siblings_count) = match best_class {
+            Some((c, n)) => (Some(c), n),
+            None => (None, 0),
+        };
+
+        // Marker fisici nell'input
+        let raw_input = input_words.join(" ");
+        let has_question_marker = self.last_input_is_question;
+        let interrogative_pronouns = ["chi", "cosa", "che", "dove", "quando",
+                                       "perché", "perche", "come", "quale",
+                                       "quali", "quanto", "quanta", "quanti", "quante"];
+        let has_interrogative_pronoun = input_words.iter()
+            .any(|w| interrogative_pronouns.contains(&w.to_lowercase().as_str()))
+            || raw_input.split_whitespace().any(|tok| {
+                let cleaned: String = tok.chars()
+                    .filter(|c| c.is_alphabetic() || ['à','è','é','ì','ò','ù'].contains(c))
+                    .collect::<String>().to_lowercase();
+                interrogative_pronouns.contains(&cleaned.as_str())
+            });
+
+        // SpeakerClaim: estraiamo dal last_input_reading se presente
+        let speaker_claim = self.last_input_reading.as_ref()
+            .and_then(|r| r.speaker_claim.as_ref())
+            .map(|sc| {
+                use crate::topology::input_reading::{ClaimAgent, ClaimKind};
+                let agent = match sc.agent { ClaimAgent::Speaker => "Speaker", ClaimAgent::Entity => "Entity" };
+                let kind = match sc.kind {
+                    ClaimKind::Identity => "Identity",
+                    ClaimKind::Feeling => "Feeling",
+                    ClaimKind::Action => "Action",
+                };
+                (format!("{}:{}", agent, kind), sc.predicate.clone())
+            });
+
+        // Self-referenced: l'input contiene "tu" o ha un Entity-claim
+        let self_referenced = input_words.iter().any(|w| w == "tu" || w == "ti")
+            || speaker_claim.as_ref()
+                .map(|(label, _)| label.starts_with("Entity"))
+                .unwrap_or(false);
+
+        let content_word_count = input_words.iter()
+            .filter(|w| w.chars().count() >= 3 && !self.lexicon.is_function_word(w))
+            .count();
+
+        // Proximità emotiva: quanto le radici raggiungono concetti emozionali
+        // via KG. Strutturale, niente keyword: cerchiamo se le radici hanno
+        // IsA in {emozione, sentimento, sensazione, stato_d_animo, affetto}
+        // a 1 o 2 hop. Score = max conf su quei cammini.
+        let emotion_classes = ["emozione", "sentimento", "sensazione",
+                               "stato_d_animo", "affetto"];
+        let mut emotional_proximity = 0.0_f64;
+        for r in &roots {
+            // 1-hop: r IsA emotion_class
+            for (parent, conf) in self.kg.query_objects_weighted(r, RelationType::IsA) {
+                if emotion_classes.contains(&parent) {
+                    emotional_proximity = emotional_proximity.max(conf as f64);
+                }
+                // 2-hop: r IsA X, X IsA emotion_class
+                for (gp, conf2) in self.kg.query_objects_weighted(parent, RelationType::IsA) {
+                    if emotion_classes.contains(&gp) {
+                        emotional_proximity = emotional_proximity
+                            .max((conf as f64) * (conf2 as f64) * 0.7);
+                    }
+                }
+            }
+            // Causes/Has emotion: input causa o ha qualcosa di emozionale
+            for (target, conf) in self.kg.query_objects_weighted(r, RelationType::Causes) {
+                for (parent, conf2) in self.kg.query_objects_weighted(target, RelationType::IsA) {
+                    if emotion_classes.contains(&parent) {
+                        emotional_proximity = emotional_proximity
+                            .max((conf as f64) * (conf2 as f64) * 0.6);
+                    }
+                }
+            }
+        }
+
+        KgFacts {
+            roots,
+            root_classes,
+            specific_class,
+            class_siblings_count,
+            has_question_marker,
+            has_interrogative_pronoun,
+            speaker_claim,
+            content_word_count,
+            emotional_proximity,
+            self_referenced,
+        }
+    }
+
+    /// Tenta di rispondere a un interrogativo leggendo lo stato corrente
+    /// e i fatti KG. Ritorna Some(risposta) o None se è gap aperto.
+    fn attempt_inquiry_answer(
+        &self,
+        kind: &crate::topology::deliberation::InquiryKind,
+        facts: &crate::topology::deliberation::KgFacts,
+    ) -> Option<String> {
+        use crate::topology::deliberation::InquiryKind;
+        use crate::topology::relation::RelationType;
+        match kind {
+            InquiryKind::WhatIsThis => {
+                if let Some(cls) = &facts.specific_class {
+                    Some(format!(
+                        "è un'istanza di \"{}\" ({} altri della stessa classe)",
+                        cls, facts.class_siblings_count,
+                    ))
+                } else if !facts.root_classes.is_empty() {
+                    Some(format!("appartiene a [{}]", facts.root_classes.join(", ")))
+                } else {
+                    None
+                }
+            }
+            InquiryKind::FromWhom => {
+                let pres = self.interlocutor.presence;
+                let intent = self.interlocutor.attributed_intent.as_str();
+                if pres < 0.10 && self.narrative_self.turns.len() < 1 {
+                    Some("uno sconosciuto — nessuna interazione precedente".to_string())
+                } else {
+                    Some(format!("presenza {:.2}, intent: {}", pres, intent))
+                }
+            }
+            InquiryKind::WhatRequiresOfMe => {
+                let g = self.last_comprehension_graph.as_ref()?;
+                let root = g.roots.first()?;
+                let reqs: Vec<String> = self.kg.query_objects_weighted(
+                    root, RelationType::Requires,
+                ).iter().take(3).map(|(t, _)| t.to_string()).collect();
+                if reqs.is_empty() {
+                    if facts.has_question_marker || facts.has_interrogative_pronoun {
+                        Some("una risposta".to_string())
+                    } else { None }
+                } else {
+                    Some(format!("richiede: {}", reqs.join(", ")))
+                }
+            }
+            InquiryKind::WhatDoIFeelAboutIt => {
+                let drives = &self.narrative_self.valence.drives;
+                let dom = (0..8).max_by(|&a, &b|
+                    drives[a].abs().partial_cmp(&drives[b].abs())
+                        .unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0);
+                let drive_name = ["scopo", "padronanza", "creatività", "possesso",
+                                  "connessione", "scarsità", "curiosità", "evitamento"];
+                Some(format!(
+                    "drive dominante: {} ({:+.2})",
+                    drive_name.get(dom).copied().unwrap_or("?"), drives[dom],
+                ))
+            }
+            InquiryKind::WhatDoIWant => {
+                let d = self.desire.desires.iter()
+                    .max_by(|a, b| a.intensity.partial_cmp(&b.intensity)
+                        .unwrap_or(std::cmp::Ordering::Equal))?;
+                Some(format!("{} ({:.2})", d.name, d.intensity))
+            }
+            InquiryKind::HowDoIRespond => {
+                // La risposta a "come rispondo" è la action_shape — ma essa
+                // non è ancora stata calcolata in questo punto. Ritorniamo
+                // un'indicazione strutturale.
+                if facts.is_short() && facts.has_specific_classification() {
+                    Some("una parola dalla regione".to_string())
+                } else if facts.is_question_form() {
+                    Some("una risposta o contro-domanda".to_string())
+                } else if facts.emotional_proximity > 0.4
+                    && self.interlocutor.emotional_valence < -0.30 {
+                    Some("eco empatica all'Altro".to_string())
+                } else {
+                    Some("una frase dal campo".to_string())
+                }
+            }
+        }
+    }
+
+    /// Estrae le findings di comprensione dal grafo per la Deliberation.
+    fn derive_comprehension_findings(
+        &self,
+    ) -> crate::topology::deliberation::ComprehensionFindings {
+        use crate::topology::deliberation::ComprehensionFindings;
+        use crate::topology::relation::RelationType;
+        let g = match self.last_comprehension_graph.as_ref() {
+            Some(g) => g,
+            None => return ComprehensionFindings {
+                reached_concepts: vec![], consequences: vec![],
+                requirements: vec![], opposites: vec![], region_siblings: vec![],
+            },
+        };
+
+        let mut reached: Vec<(String, f32)> = g.nodes.values()
+            .filter(|n| n.depth > 0)
+            .map(|n| (n.word.clone(), n.support))
+            .collect();
+        reached.sort_by(|a, b| b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal));
+        reached.truncate(8);
+
+        let mut consequences: Vec<String> = Vec::new();
+        let mut requirements: Vec<String> = Vec::new();
+        let mut opposites: Vec<String> = Vec::new();
+        for root in &g.roots {
+            for (t, _) in self.kg.query_objects_weighted(root, RelationType::Causes) {
+                if !consequences.iter().any(|s| s == t) { consequences.push(t.to_string()); }
+            }
+            for (t, _) in self.kg.query_objects_weighted(root, RelationType::Enables) {
+                if !consequences.iter().any(|s| s == t) { consequences.push(t.to_string()); }
+            }
+            for (t, _) in self.kg.query_objects_weighted(root, RelationType::Requires) {
+                if !requirements.iter().any(|s| s == t) { requirements.push(t.to_string()); }
+            }
+            for (t, _) in self.kg.query_objects_weighted(root, RelationType::OppositeOf) {
+                if !opposites.iter().any(|s| s == t) { opposites.push(t.to_string()); }
+            }
+        }
+        consequences.truncate(6);
+        requirements.truncate(6);
+        opposites.truncate(4);
+
+        let region_siblings: Vec<String> = g.siblings_of_roots(&self.kg, 6)
+            .into_iter().map(|(s, _)| s).collect();
+
+        ComprehensionFindings {
+            reached_concepts: reached,
+            consequences, requirements, opposites, region_siblings,
+        }
+    }
+}
+
+/// Capitalizza la prima lettera e aggiunge il punto finale.
+fn capitalize_with_period(word: &str) -> String {
+    let mut c = word.chars();
+    let head = match c.next() {
+        None => return String::from("."),
+        Some(f) => f.to_uppercase().to_string(),
+    };
+    format!("{}{}.", head, c.as_str())
 }
 
 /// Mappa l'intenzione alla struttura grammaticale corretta per Phase 3.
@@ -5421,6 +6646,225 @@ fn intention_to_structure(intention: &Intention) -> SentenceStructure {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ─── Phase 69 Step B: flusso evento → memoria ─────────────────
+
+    /// Un evento con salience > 0.7 deve produrre un SemanticEpisode.
+    /// Verifica il flusso completo emit_event → absorb_event → semantic_episodes.
+    #[test]
+    fn test_phase69_high_salience_event_becomes_episode() {
+        use crate::topology::events::InternalEvent;
+        let mut engine = PrometeoTopologyEngine::new_infant();
+        let before = engine.semantic_episodes.len();
+
+        // TensionCrystallized ha salience 0.8 — sopra la soglia 0.7 per episodio.
+        engine.emit_event(InternalEvent::TensionCrystallized {
+            word_a: "tecnologia".to_string(),
+            word_b: "presenza".to_string(),
+        });
+
+        let after = engine.semantic_episodes.len();
+        // Con B.4, un evento molto saliente crea (a) il proprio episodio
+        // e (b) un SelfNotice ricorsivo anch'esso saliente. Quindi >= 1.
+        assert!(after >= before + 1,
+            "A high-salience event must create at least one SemanticEpisode, got {} → {}",
+            before, after);
+
+        // L'episodio deve contenere i concetti dell'evento.
+        let last = engine.semantic_episodes.recent(1);
+        assert!(!last.is_empty());
+        let ep = &last[0];
+        assert!(ep.key_concepts.contains(&"tecnologia".to_string())
+            || ep.key_concepts.contains(&"presenza".to_string()),
+            "Episode concepts should include event subjects, got {:?}",
+            ep.key_concepts);
+    }
+
+    /// Eventi con salience 0.4-0.7 vanno in pending_digestion, non in episodi.
+    #[test]
+    fn test_phase69_medium_salience_event_pends_digestion() {
+        use crate::topology::events::InternalEvent;
+        let mut engine = PrometeoTopologyEngine::new_infant();
+        let episodes_before = engine.semantic_episodes.len();
+        let pending_before = engine.pending_digestion_count();
+
+        // DominantNeedShift con pressure 0.6 → salience ~0.58 (tra 0.4 e 0.7).
+        engine.emit_event(InternalEvent::DominantNeedShift {
+            old_need: crate::topology::needs::NeedLevel::Connessione,
+            new_need: crate::topology::needs::NeedLevel::Comprensione,
+            pressure: 0.6,
+        });
+
+        // Medium salience non crea episodio direttamente, ma può produrre
+        // un SelfNotice (salience × 1.2) che a sua volta entra o in episodio
+        // o in pending_digestion. Quindi pending_digestion_count >= +1.
+        assert!(engine.pending_digestion_count() >= pending_before + 1,
+            "Medium-salience event must be added to pending_digestion, got +{}",
+            engine.pending_digestion_count() - pending_before);
+        let _ = episodes_before;
+    }
+
+    /// Eventi sotto soglia di oblio (< 0.2) svaniscono senza traccia.
+    #[test]
+    fn test_phase69_low_salience_event_forgotten() {
+        use crate::topology::events::{InternalEvent, SilenceLevel};
+        let mut engine = PrometeoTopologyEngine::new_infant();
+        let episodes_before = engine.semantic_episodes.len();
+        let pending_before = engine.pending_digestion_count();
+
+        // Pause ha salience 0.1 — sotto soglia di oblio.
+        engine.emit_event(InternalEvent::SilenceThreshold {
+            level: SilenceLevel::Pause,
+            duration_seconds: 5,
+        });
+
+        assert_eq!(engine.semantic_episodes.len(), episodes_before,
+            "Low-salience event must NOT create an episode");
+        assert_eq!(engine.pending_digestion_count(), pending_before,
+            "Low-salience event must NOT enter pending_digestion");
+        // Dovrebbe essere stato contato come "forgotten" nel sink.
+        assert!(engine.events.forgotten_count >= 1);
+    }
+
+    /// Il debounce scarta eventi duplicati entro 1 secondo.
+    #[test]
+    fn test_phase69_debounce_prevents_duplicate_episodes() {
+        use crate::topology::events::InternalEvent;
+        let mut engine = PrometeoTopologyEngine::new_infant();
+        let before = engine.semantic_episodes.len();
+
+        // Emetti lo stesso evento due volte in rapida successione.
+        let ev = InternalEvent::TensionCrystallized {
+            word_a: "x".to_string(),
+            word_b: "y".to_string(),
+        };
+        engine.emit_event(ev.clone());
+        engine.emit_event(ev);
+
+        // Con B.4, la prima emissione genera (a) TensionCrystallized episodio
+        // e (b) SelfNotice su quello. La seconda emissione dell'evento originale
+        // è debounced (stesso debounce_key). Quindi episodi creati ≤ 2.
+        assert!(engine.semantic_episodes.len() <= before + 2,
+            "Debounce must prevent duplicate emission of the original event");
+        assert!(engine.events.debounced_count >= 1,
+            "At least one duplicate must have been debounced");
+    }
+
+    // ─── B.4: SelfNotice generator ─────────────────────────────────
+
+    /// Un evento saliente (> 0.5) deve produrre un SelfNotice.
+    /// Il SelfNotice diventa a sua volta un episodio (salience × 1.2).
+    #[test]
+    fn test_phase69_b4_salient_event_produces_notice() {
+        use crate::topology::events::InternalEvent;
+        let mut engine = PrometeoTopologyEngine::new_infant();
+        let episodes_before = engine.semantic_episodes.len();
+
+        // ValenceFlip CD5 -0.6 → +0.5 = magnitudo 1.1 → salience ~0.84 (molto alta)
+        engine.emit_event(InternalEvent::ValenceFlip {
+            cd: 4,
+            old_val: -0.6,
+            new_val: 0.5,
+        });
+
+        // Ci aspettiamo ALMENO 2 episodi: il ValenceFlip stesso (sal > 0.7)
+        // E il SelfNotice ricorsivo che lo ha osservato (sal × 1.2 > 0.7 anche).
+        assert!(engine.semantic_episodes.len() >= episodes_before + 1,
+            "ValenceFlip saliente deve produrre almeno un episodio");
+        // notice_window deve aver registrato il notice.
+        assert!(engine.narrative_self.notice_window.notices_in_window >= 1,
+            "NoticeWindow deve aver registrato il notice");
+    }
+
+    /// SelfNotice non produce meta-meta (base case anti-ricorsione).
+    #[test]
+    fn test_phase69_b4_no_meta_meta_notice() {
+        use crate::topology::events::InternalEvent;
+        let mut engine = PrometeoTopologyEngine::new_infant();
+
+        // Un SelfNotice diretto deve essere processato ma NON generare un altro notice.
+        let inner = InternalEvent::IdentityCrisisResolved { coherence: 0.8 };
+        let notice = InternalEvent::SelfNotice {
+            observed_event: Box::new(inner),
+            noticed_at: 0,
+            interpretation: None,
+        };
+        let notices_before = engine.narrative_self.notice_window.notices_in_window;
+        engine.emit_event(notice);
+        // La finestra NON deve essere incrementata (observe_event ritorna None
+        // quando l'evento è già un notice).
+        assert_eq!(engine.narrative_self.notice_window.notices_in_window, notices_before,
+            "SelfNotice non deve produrre meta-meta");
+    }
+
+    /// In crisi acuta, l'entità non riflette.
+    #[test]
+    fn test_phase69_b4_crisis_suppresses_notice() {
+        use crate::topology::events::InternalEvent;
+        let mut engine = PrometeoTopologyEngine::new_infant();
+
+        // Forza crisi: coherence_integrity bassa + update_count sufficiente
+        // (is_in_crisis richiede update_count >= 3 && coherence < 0.5).
+        engine.identity.coherence_integrity = 0.3;
+        engine.identity.update_count = 5;
+        assert!(engine.identity.is_in_crisis());
+
+        let notices_before = engine.narrative_self.notice_window.notices_in_window;
+        // Evento saliente che normalmente produrrebbe notice
+        engine.emit_event(InternalEvent::TensionCrystallized {
+            word_a: "a".to_string(),
+            word_b: "b".to_string(),
+        });
+        assert_eq!(engine.narrative_self.notice_window.notices_in_window, notices_before,
+            "In crisi, nessun notice deve essere emesso");
+    }
+
+    /// Sovraccarico cognitivo: dopo N notice nella finestra, smettiamo di notice.
+    #[test]
+    fn test_phase69_b4_overload_caps_notices() {
+        use crate::topology::events::InternalEvent;
+        let mut engine = PrometeoTopologyEngine::new_infant();
+        // Non in crisi
+        engine.identity.coherence_integrity = 0.9;
+
+        // Emetto 10 eventi salienti diversi in rapida successione.
+        for i in 0..10u32 {
+            engine.emit_event(InternalEvent::TensionCrystallized {
+                word_a: format!("a{}", i),
+                word_b: format!("b{}", i),
+            });
+        }
+
+        // La finestra ha max_per_window = 5. Dopo 5 notice, il sovraccarico
+        // sopprime gli altri.
+        assert!(engine.narrative_self.notice_window.notices_in_window <= 5,
+            "Con max_per_window=5, notices non deve superare 5, got {}",
+            engine.narrative_self.notice_window.notices_in_window);
+    }
+
+    /// Il cap di pending_digestion evita crescita illimitata.
+    /// Quando è pieno, l'entry meno saliente viene rimossa (non FIFO).
+    #[test]
+    fn test_phase69_pending_digestion_capped() {
+        use crate::topology::events::InternalEvent;
+        let mut engine = PrometeoTopologyEngine::new_infant();
+
+        // Emetti 40 eventi diversi con salience media.
+        for i in 0..40u32 {
+            engine.emit_event(InternalEvent::WordAwakened {
+                word_id: i,
+                activation: 0.8, // salience circa 0.48
+            });
+            // Avanza per non essere debounced (il debounce è per (kind, target)
+            // ma il target è il word_id, quindi già differiscono).
+        }
+
+        assert!(engine.pending_digestion_count() <= 32,
+            "pending_digestion must be capped at 32, got {}",
+            engine.pending_digestion_count());
+    }
+
+    // ─── Tests precedenti ──────────────────────────────────────────
 
     /// Test diagnostico: cosa succede DAVVERO quando insegniamo con le nuove lezioni.
     /// Verifica che i fix (pronomi, IDF, contesti differenziati) funzionano.
@@ -5682,13 +7126,16 @@ mod tests {
         assert!(engine.lexicon.knows("gioia"), "Deve aver imparato 'gioia'");
         assert!(engine.lexicon.knows("tristezza"), "Deve aver imparato 'tristezza'");
 
-        // Gioia e tristezza devono avere firme diverse
+        // Gioia e tristezza devono avere firme diverse.
+        // Post-Phase 63 (hash UTF-8 rimosso): la differenziazione è fenomenologica.
+        // Con solo 2 esposizioni per parola in contesti quasi identici, la differenza
+        // è piccola ma > 0 — basta a dire "non sono la stessa parola".
         let sig_gioia = engine.lexicon.get("gioia").unwrap().signature;
         let sig_trist = engine.lexicon.get("tristezza").unwrap().signature;
         let diff: f64 = sig_gioia.values().iter().zip(sig_trist.values().iter())
             .map(|(a, b)| (a - b).abs())
             .sum();
-        assert!(diff > 0.01, "Gioia e tristezza devono avere firme diverse (diff={})", diff);
+        assert!(diff > 0.005, "Gioia e tristezza devono avere firme diverse (diff={})", diff);
 
         // === ESPERIENZA: receive() perturba il campo ===
         let perturb_before = engine.total_perturbations;

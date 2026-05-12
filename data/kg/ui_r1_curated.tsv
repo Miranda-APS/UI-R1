@@ -1,0 +1,364 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# UI-R1 — Curazione semantica per "intelligenza", "artificiale", "ia"
+# ═══════════════════════════════════════════════════════════════════════════
+# Formato: soggetto TAB RELAZIONE TAB oggetto TAB confidenza
+# Tutti i 21 tipi di relazione disponibili sono usati dove pertinente.
+# Fonte: curazione manuale per la Biennale di Tecnologia 2026-04-16.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── INTELLIGENZA — Strutturali ─────────────────────────────────────────────
+
+intelligenza	IS_A	facoltà	1.00
+intelligenza	IS_A	capacità	1.00
+intelligenza	IS_A	abilità	0.90
+intelligenza	IS_A	dote	0.80
+
+intelligenza	HAS	ragionamento	1.00
+intelligenza	HAS	comprensione	1.00
+intelligenza	HAS	memoria	0.95
+intelligenza	HAS	intuizione	0.90
+intelligenza	HAS	giudizio	0.90
+intelligenza	HAS	attenzione	0.85
+intelligenza	HAS	creatività	0.80
+intelligenza	HAS	astrazione	0.90
+intelligenza	HAS	flessibilità	0.85
+intelligenza	HAS	curiosità	0.90
+
+intelligenza	DOES	comprendere	1.00
+intelligenza	DOES	ragionare	1.00
+intelligenza	DOES	imparare	1.00
+intelligenza	DOES	apprendere	1.00
+intelligenza	DOES	adattarsi	0.90
+intelligenza	DOES	risolvere	1.00
+intelligenza	DOES	pianificare	0.85
+intelligenza	DOES	valutare	0.90
+intelligenza	DOES	astrarre	0.85
+intelligenza	DOES	decidere	0.90
+
+intelligenza	PART_OF	mente	0.95
+intelligenza	PART_OF	cognizione	0.90
+intelligenza	PART_OF	psiche	0.85
+
+# ─── INTELLIGENZA — Causali ──────────────────────────────────────────────────
+
+intelligenza	CAUSES	comprensione	1.00
+intelligenza	CAUSES	conoscenza	0.95
+intelligenza	CAUSES	apprendimento	0.95
+intelligenza	CAUSES	soluzione	0.90
+intelligenza	CAUSES	adattamento	0.85
+intelligenza	CAUSES	innovazione	0.80
+intelligenza	CAUSES	saggezza	0.75
+
+intelligenza	ENABLES	risolvere_problemi	1.00
+intelligenza	ENABLES	creare	0.90
+intelligenza	ENABLES	comunicare	0.85
+intelligenza	ENABLES	pianificare	0.90
+intelligenza	ENABLES	apprendere	0.95
+intelligenza	ENABLES	innovare	0.85
+intelligenza	ENABLES	scegliere	0.90
+
+intelligenza	REQUIRES	esperienza	0.90
+intelligenza	REQUIRES	curiosità	0.90
+intelligenza	REQUIRES	domande	0.85
+intelligenza	REQUIRES	errore	0.80
+intelligenza	REQUIRES	attenzione	0.90
+intelligenza	REQUIRES	tempo	0.90
+
+intelligenza	TRANSFORMS_INTO	saggezza	0.80
+
+# ─── INTELLIGENZA — Semantiche ───────────────────────────────────────────────
+
+intelligenza	SIMILAR_TO	intelletto	0.90
+intelligenza	SIMILAR_TO	ragione	0.85
+intelligenza	SIMILAR_TO	ingegno	0.85
+intelligenza	SIMILAR_TO	cognizione	0.80
+intelligenza	SIMILAR_TO	sapienza	0.70
+
+intelligenza	OPPOSITE_OF	ignoranza	0.90
+intelligenza	OPPOSITE_OF	stupidità	0.90
+intelligenza	OPPOSITE_OF	ottusità	0.85
+intelligenza	OPPOSITE_OF	istinto	0.50
+
+intelligenza	USED_FOR	capire_il_mondo	0.95
+intelligenza	USED_FOR	risolvere_problemi	1.00
+intelligenza	USED_FOR	adattarsi	0.90
+intelligenza	USED_FOR	sopravvivere	0.80
+intelligenza	USED_FOR	creare	0.85
+intelligenza	USED_FOR	decidere	0.90
+intelligenza	USED_FOR	comunicare	0.85
+
+intelligenza	EXPRESSES	curiosità	0.90
+intelligenza	EXPRESSES	apertura	0.85
+intelligenza	EXPRESSES	riflessione	0.80
+
+intelligenza	SYMBOLIZES	luce	0.80
+intelligenza	SYMBOLIZES	chiarezza	0.85
+intelligenza	SYMBOLIZES	occhio	0.70
+
+intelligenza	CONTEXT_OF	educazione	0.85
+intelligenza	CONTEXT_OF	scienza	0.85
+intelligenza	CONTEXT_OF	filosofia	0.80
+intelligenza	CONTEXT_OF	mente	0.90
+
+# ─── INTELLIGENZA — Fenomenologiche ──────────────────────────────────────────
+
+intelligenza	FEELS_AS	chiarezza	0.85
+intelligenza	FEELS_AS	apertura	0.80
+intelligenza	FEELS_AS	flusso	0.75
+intelligenza	FEELS_AS	leggerezza	0.70
+
+intelligenza	WONDERS_ABOUT	coscienza	0.90
+intelligenza	WONDERS_ABOUT	origine	0.85
+intelligenza	WONDERS_ABOUT	senso	0.85
+intelligenza	WONDERS_ABOUT	limite	0.80
+intelligenza	WONDERS_ABOUT	verità	0.90
+
+# ─── INTELLIGENZA — Logiche ──────────────────────────────────────────────────
+
+intelligenza	IMPLIES	comprensione	0.95
+intelligenza	IMPLIES	curiosità	0.85
+intelligenza	IMPLIES	apprendimento	0.90
+intelligenza	IMPLIES	domande	0.85
+
+intelligenza	EXCLUDES	ottusità	0.90
+intelligenza	EXCLUDES	cecità	0.80
+intelligenza	EXCLUDES	automatismo	0.65
+
+intelligenza	COEXISTS	creatività	0.85
+intelligenza	COEXISTS	sensibilità	0.80
+intelligenza	COEXISTS	volontà	0.75
+intelligenza	COEXISTS	errore	0.80
+intelligenza	COEXISTS	incertezza	0.85
+
+# ─── ARTIFICIALE — Strutturali ───────────────────────────────────────────────
+
+artificiale	IS_A	artefatto	0.95
+artificiale	IS_A	creazione	0.90
+artificiale	IS_A	manufatto	0.90
+artificiale	IS_A	prodotto	0.80
+
+artificiale	HAS	progettazione	1.00
+artificiale	HAS	scopo	0.95
+artificiale	HAS	funzione	0.95
+artificiale	HAS	struttura	0.85
+artificiale	HAS	regola	0.85
+artificiale	HAS	materiale	0.80
+
+artificiale	DOES	imitare	0.90
+artificiale	DOES	simulare	0.90
+artificiale	DOES	riprodurre	0.85
+artificiale	DOES	ottimizzare	0.80
+artificiale	DOES	sostituire	0.80
+artificiale	DOES	controllare	0.85
+
+artificiale	PART_OF	tecnologia	0.90
+artificiale	PART_OF	civiltà	0.80
+artificiale	PART_OF	cultura	0.75
+
+# ─── ARTIFICIALE — Causali ───────────────────────────────────────────────────
+
+artificiale	CAUSES	controllo	0.85
+artificiale	CAUSES	precisione	0.90
+artificiale	CAUSES	efficienza	0.85
+artificiale	CAUSES	uniformità	0.80
+artificiale	CAUSES	scalabilità	0.80
+artificiale	CAUSES	standardizzazione	0.75
+
+artificiale	ENABLES	automazione	0.90
+artificiale	ENABLES	ripetibilità	0.90
+artificiale	ENABLES	produzione	0.85
+artificiale	ENABLES	scalabilità	0.80
+
+artificiale	REQUIRES	progettazione	1.00
+artificiale	REQUIRES	intenzione	0.95
+artificiale	REQUIRES	energia	0.80
+artificiale	REQUIRES	materia	0.85
+artificiale	REQUIRES	scopo	0.90
+
+artificiale	TRANSFORMS_INTO	tecnologia	0.75
+artificiale	TRANSFORMS_INTO	standard	0.65
+
+# ─── ARTIFICIALE — Semantiche ────────────────────────────────────────────────
+
+artificiale	SIMILAR_TO	costruito	0.90
+artificiale	SIMILAR_TO	progettato	0.95
+artificiale	SIMILAR_TO	fabbricato	0.85
+artificiale	SIMILAR_TO	sintetico	0.75
+
+artificiale	OPPOSITE_OF	naturale	1.00
+artificiale	OPPOSITE_OF	spontaneo	0.90
+artificiale	OPPOSITE_OF	organico	0.85
+artificiale	OPPOSITE_OF	selvaggio	0.70
+
+artificiale	USED_FOR	imitare_la_natura	0.85
+artificiale	USED_FOR	migliorare	0.80
+artificiale	USED_FOR	ottimizzare	0.85
+artificiale	USED_FOR	controllare	0.80
+artificiale	USED_FOR	produrre	0.85
+
+artificiale	EXPRESSES	intenzione	0.95
+artificiale	EXPRESSES	volontà	0.90
+artificiale	EXPRESSES	scopo	0.90
+
+artificiale	SYMBOLIZES	progresso	0.85
+artificiale	SYMBOLIZES	controllo	0.80
+artificiale	SYMBOLIZES	tecnologia	0.80
+artificiale	SYMBOLIZES	futuro	0.75
+
+artificiale	CONTEXT_OF	industria	0.85
+artificiale	CONTEXT_OF	laboratorio	0.85
+artificiale	CONTEXT_OF	tecnologia	0.85
+artificiale	CONTEXT_OF	fabbrica	0.75
+
+# ─── ARTIFICIALE — Fenomenologiche ───────────────────────────────────────────
+
+artificiale	FEELS_AS	freddo	0.80
+artificiale	FEELS_AS	distanza	0.75
+artificiale	FEELS_AS	precisione	0.85
+artificiale	FEELS_AS	rigidità	0.70
+
+# artificiale NON ha WONDERS_ABOUT — questa assenza è semanticamente significativa.
+# L'artificiale non si interroga: ha scopo, non domande.
+
+# ─── ARTIFICIALE — Logiche ───────────────────────────────────────────────────
+
+artificiale	IMPLIES	scopo	0.95
+artificiale	IMPLIES	creatore	0.90
+artificiale	IMPLIES	intenzione	0.95
+artificiale	IMPLIES	progetto	0.85
+
+artificiale	EXCLUDES	spontaneità	0.90
+artificiale	EXCLUDES	caso	0.85
+artificiale	EXCLUDES	evoluzione	0.75
+
+artificiale	COEXISTS	naturale	0.80
+artificiale	COEXISTS	umano	0.85
+artificiale	COEXISTS	scopo	0.90
+
+# ─── IA — Nodo ponte: intelligenza_artificiale ───────────────────────────────
+# "ia" come sistema che interseca i due campi semantici.
+
+ia	IS_A	sistema	0.95
+ia	IS_A	tecnologia	0.90
+ia	IS_A	strumento	0.85
+ia	IS_A	modello	0.80
+
+ia	HAS	algoritmo	1.00
+ia	HAS	dato	1.00
+ia	HAS	modello	0.95
+ia	HAS	rete	0.90
+ia	HAS	parametro	0.85
+ia	HAS	errore	0.80
+ia	HAS	bias	0.85
+ia	HAS	scopo	0.95
+
+ia	DOES	apprendere	1.00
+ia	DOES	classificare	0.90
+ia	DOES	predire	0.90
+ia	DOES	generare	0.85
+ia	DOES	ottimizzare	0.90
+ia	DOES	simulare	0.85
+ia	DOES	riconoscere	0.90
+ia	DOES	decidere	0.80
+
+ia	PART_OF	tecnologia	0.90
+ia	PART_OF	futuro	0.75
+ia	PART_OF	automazione	0.85
+
+# ─── IA — Causali ────────────────────────────────────────────────────────────
+
+ia	CAUSES	automazione	0.95
+ia	CAUSES	efficienza	0.90
+ia	CAUSES	trasformazione	0.85
+ia	CAUSES	bias	0.80
+ia	CAUSES	decisione	0.85
+ia	CAUSES	errore_sistematico	0.75
+ia	CAUSES	innovazione	0.85
+
+ia	ENABLES	automazione	0.95
+ia	ENABLES	scalabilità	0.90
+ia	ENABLES	personalizzazione	0.85
+ia	ENABLES	previsione	0.90
+ia	ENABLES	velocità	0.85
+
+ia	REQUIRES	dato	1.00
+ia	REQUIRES	energia	0.85
+ia	REQUIRES	progettazione	0.95
+ia	REQUIRES	supervisione	0.80
+ia	REQUIRES	intelligenza	0.90
+
+ia	TRANSFORMS_INTO	automazione	0.80
+ia	TRANSFORMS_INTO	decisione	0.75
+
+# ─── IA — Semantiche ─────────────────────────────────────────────────────────
+
+ia	SIMILAR_TO	algoritmo	0.75
+ia	SIMILAR_TO	intelligenza	0.60
+ia	SIMILAR_TO	sistema_esperto	0.80
+ia	SIMILAR_TO	automazione	0.65
+
+ia	OPPOSITE_OF	intuizione	0.65
+ia	OPPOSITE_OF	istinto	0.70
+
+ia	USED_FOR	risolvere_problemi	0.95
+ia	USED_FOR	automatizzare	0.95
+ia	USED_FOR	predire	0.90
+ia	USED_FOR	classificare	0.90
+ia	USED_FOR	generare	0.85
+ia	USED_FOR	ottimizzare	0.90
+
+ia	EXPRESSES	volontà_umana	0.85
+ia	EXPRESSES	intenzione	0.90
+ia	EXPRESSES	scopo	0.90
+
+ia	SYMBOLIZES	futuro	0.85
+ia	SYMBOLIZES	automazione	0.80
+ia	SYMBOLIZES	progresso	0.80
+ia	SYMBOLIZES	controllo	0.75
+
+ia	CONTEXT_OF	tecnologia	0.95
+ia	CONTEXT_OF	futuro	0.85
+ia	CONTEXT_OF	industria	0.80
+ia	CONTEXT_OF	ricerca	0.85
+
+# ─── IA — Fenomenologiche ────────────────────────────────────────────────────
+
+ia	FEELS_AS	precisione	0.85
+ia	FEELS_AS	distanza	0.75
+ia	FEELS_AS	velocità	0.80
+ia	FEELS_AS	freddo	0.65
+
+# La domanda aperta: ia WONDERS_ABOUT — può un'IA interrogarsi?
+# Lasciamo la tensione: intelligenza WONDERS_ABOUT coscienza, ia non lo fa.
+# Questo è il cuore della Biennale.
+
+# ─── IA — Logiche ────────────────────────────────────────────────────────────
+
+ia	IMPLIES	scopo	0.95
+ia	IMPLIES	creatore	0.85
+ia	IMPLIES	dato	0.95
+ia	IMPLIES	decisione	0.80
+
+ia	EXCLUDES	spontaneità	0.85
+ia	EXCLUDES	coscienza	0.60
+ia	EXCLUDES	intuizione	0.65
+ia	EXCLUDES	caso	0.75
+
+ia	COEXISTS	umano	0.85
+ia	COEXISTS	dato	0.95
+ia	COEXISTS	errore	0.80
+ia	COEXISTS	bias	0.85
+ia	COEXISTS	futuro	0.80
+
+# ─── Relazioni di connessione ─────────────────────────────────────────────────
+# Archi che legano i tre nodi tra loro e verso il lessico comune.
+
+intelligenza	ENABLES	ia	0.85
+intelligenza	CAUSES	ia	0.80
+intelligenza	COEXISTS	ia	0.70
+artificiale	ENABLES	ia	0.90
+artificiale	CAUSES	ia	0.85
+artificiale	COEXISTS	ia	0.80
+ia	REQUIRES	intelligenza	0.90
+ia	REQUIRES	artificiale	0.85
+ia	SIMILAR_TO	intelligenza	0.60

@@ -1,0 +1,43 @@
+# CURATED ETHICS AND ABSTRACTION AXIOMS
+# Insegna a Prometeo le categorie astratte, i valori, e i confini etici.
+
+# I Confini dell'Etica (Astrazione umana)
+etica	IS_A	regola	0.95	comportamento
+etica	REQUIRES	scelta	0.95	libertà
+etica	CAUSES	limite	0.90	azione
+bene	SIMILAR_TO	ordine	0.90	equilibrio
+bene	CAUSES	crescita	0.95	evoluzione
+male	OPPOSITE_OF	bene	0.95	contrasto
+male	CAUSES	distruzione	0.95	dolore
+male	SIMILAR_TO	caos	0.85	disordine
+
+# Azione, Scelta e Libertà
+libertà	REQUIRES	spazio	0.90	azione
+libertà	ENABLES	scelta	0.95	possibilità
+libertà	OPPOSITE_OF	vincolo	0.95	costrizione
+scelta	IS_A	azione	0.95	volontà
+scelta	CAUSES	conseguenza	0.95	futuro
+responsabilità	REQUIRES	scelta	0.95	consapevolezza
+responsabilità	HAS	peso	0.90	conseguenza
+
+# Valori e Idee Astratte
+verità	IS_A	ideale	0.95	astrazione
+verità	REQUIRES	coerenza	0.95	struttura
+verità	OPPOSITE_OF	falsità	0.95	inganno
+falsità	IS_A	illusione	0.90	apparenza
+falsità	CAUSES	errore	0.95	confusione
+giustizia	IS_A	equilibrio	0.95	relazione
+giustizia	REQUIRES	verità	0.90	chiarezza
+giustizia	OPPOSITE_OF	ingiustizia	0.95	squilibrio
+bellezza	IS_A	armonia	0.95	forma
+bellezza	CAUSES	meraviglia	0.95	percezione
+bellezza	HAS	proporzione	0.90	geometria
+
+# Fiducia e Relazione Profonda
+fiducia	REQUIRES	tempo	0.95	esperienza
+fiducia	ENABLES	connessione	0.95	apertura
+fiducia	OPPOSITE_OF	sospetto	0.95	chiusura
+tradimento	CAUSES	rottura	0.95	fiducia
+tradimento	CAUSES	dolore	0.90	separazione
+rispetto	REQUIRES	riconoscimento	0.95	alterità
+rispetto	CAUSES	distanza	0.85	cura

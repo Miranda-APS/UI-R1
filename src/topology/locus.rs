@@ -755,8 +755,8 @@ mod tests {
         let mut locus = Locus::new();
         locus.move_to(0, &complex, &registry); // SPAZIO
 
-        // Signature con Valenza alta e Intensita bassa
-        let sig = PrimitiveCore::new([0.2, 0.9, 0.1, 0.7, 0.5, 0.7, 0.2, 0.5]);
+        // Ordine I Ching: Valenza=7. Signature con Valenza alta (0.9) e Intensità bassa (0.1).
+        let sig = PrimitiveCore::new([0.2, 0.7, 0.1, 0.5, 0.2, 0.7, 0.5, 0.9]);
         locus.update_sub_position(&sig, 0.5);
 
         // Valenza (libera in SPAZIO) deve essersi spostata verso 0.9

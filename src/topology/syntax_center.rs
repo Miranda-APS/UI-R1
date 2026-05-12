@@ -108,9 +108,10 @@ fn person_from_hexagram(id: FractalId) -> Person {
 
 /// Inferisce il tempo verbale dalla media pesata delle dimensioni del campo.
 ///
-/// Legge la firma 8D delle parole attive: [Confine, Valenza, Intensita, Definizione,
-/// Complessita, Permanenza, Agency, Tempo]. Le dimensioni Tempo e Permanenza
-/// sono le coordinate che descrivono "quando" il campo sta vivendo:
+/// Legge la firma 8D delle parole attive in ordine I Ching canonico:
+/// [Agency, Permanenza, Intensita, Tempo, Confine, Complessita, Definizione, Valenza].
+/// Le dimensioni Tempo e Permanenza sono le coordinate che descrivono "quando" il campo
+/// sta vivendo:
 /// - Tempo alto (>0.65)  → Futuro  (proiettato, aperto)
 /// - Tempo basso + Permanenza bassa (<0.35 entrambi) → Imperfetto (passato lontano)
 /// - Altrimenti → Presente
@@ -124,8 +125,8 @@ fn tense_from_active_words(active_words: &[(&str, f64)], lexicon: &Lexicon) -> T
     for (word, activation) in active_words.iter().take(10) {
         if let Some(pat) = lexicon.get(word) {
             let sig = pat.signature.values();
-            tempo_sum += sig[7] * activation; // Tempo
-            perm_sum  += sig[5] * activation; // Permanenza
+            tempo_sum += sig[3] * activation; // Tempo (☵ Acqua)
+            perm_sum  += sig[1] * activation; // Permanenza (☷ Terra)
             total     += activation;
         }
     }

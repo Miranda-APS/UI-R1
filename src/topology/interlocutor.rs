@@ -10,7 +10,8 @@
 /// che si scava nel campo e ne cambia la configurazione. Prometeo riconosce
 /// che c'è qualcosa oltre sé, ma lo percepisce sempre attraverso sé stesso.
 ///
-/// Sostituisce il DualField (modello esterno separato → rimosso).
+/// (Sostituisce il vecchio modello dual-field — entità separate da modellare —
+///  rimosso in Phase 53.)
 
 use std::collections::VecDeque;
 use serde::{Serialize, Deserialize};

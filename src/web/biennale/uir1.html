@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI-R1 — campo semantico</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --cream: #f4efe4;
+  --ink:   #1c1710;
+  --rule:  #ddd8cc;
+  --muted: #9a9080;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  background: var(--cream);
+  color: var(--ink);
+  font-family: Georgia, serif;
+  padding: 48px 56px 80px;
+  max-width: 780px;
+}
+
+@media (max-width: 600px) {
+  body { padding: 28px 20px 60px; }
+  h1   { font-size: 1.7rem; }
+}
+
+/* ── TITOLO ──────────────────────────────── */
+h1 {
+  font-size: 2.4rem;
+  font-weight: normal;
+  font-style: italic;
+  letter-spacing: .02em;
+  margin-bottom: 12px;
+}
+.meta-badges {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 48px;
+  flex-wrap: wrap;
+}
+.badge {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 7px 12px;
+}
+.badge-label {
+  font-family: var(--font-mono);
+  font-size: .42rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 3px;
+}
+.badge-value {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: .90rem;
+  color: var(--ink);
+  display: block;
+}
+.badge-desc {
+  font-family: var(--font-mono);
+  font-size: .44rem;
+  color: var(--muted);
+  display: block;
+  margin-top: 2px;
+}
+
+/* ── SEZIONI ─────────────────────────────── */
+section {
+  margin-bottom: 40px;
+  border-top: 1px solid var(--rule);
+  padding-top: 18px;
+}
+.section-label {
+  font-family: var(--font-mono);
+  font-size: .46rem;
+  letter-spacing: .20em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.section-desc {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: .74rem;
+  color: var(--muted);
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+
+/* ── FIRMA 8D ────────────────────────────── */
+.dim-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 40px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dim-label-wrap { }
+.dim-name {
+  font-family: var(--font-mono);
+  font-size: .62rem;
+  color: var(--ink);
+  display: block;
+}
+.dim-hint {
+  font-family: var(--font-mono);
+  font-size: .42rem;
+  color: var(--muted);
+  display: block;
+  line-height: 1.4;
+}
+.bar-track {
+  height: 5px;
+  background: var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ink);
+  transition: width .4s ease;
+}
+.dim-val {
+  font-family: var(--font-mono);
+  font-size: .58rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ── OCTALYSIS ───────────────────────────── */
+.cd-row {
+  display: grid;
+  grid-template-columns: 190px 1fr 40px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.cd-name {
+  font-family: var(--font-mono);
+  font-size: .60rem;
+  color: var(--ink);
+  display: block;
+}
+.cd-hint {
+  font-family: var(--font-mono);
+  font-size: .42rem;
+  color: var(--muted);
+  display: block;
+  line-height: 1.4;
+}
+
+/* ── RELAZIONI ───────────────────────────── */
+.rel-block {
+  margin-bottom: 10px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.rel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--cream);
+  transition: background .1s;
+}
+.rel-header:hover { background: #ece7db; }
+.rel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rel-name {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: .84rem;
+}
+.rel-desc {
+  font-family: var(--font-mono);
+  font-size: .44rem;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.rel-count {
+  font-family: var(--font-mono);
+  font-size: .60rem;
+  color: var(--muted);
+}
+.rel-arrow {
+  font-family: var(--font-mono);
+  font-size: .60rem;
+  color: var(--muted);
+  margin-left: 8px;
+  transition: transform .2s;
+}
+.rel-block.open .rel-arrow { transform: rotate(90deg); }
+
+.rel-body {
+  display: none;
+  padding: 4px 14px 12px;
+  border-top: 1px solid var(--rule);
+  background: var(--cream);
+}
+.rel-block.open .rel-body { display: block; }
+
+.word-list {
+  list-style: none;
+  columns: 2;
+  column-gap: 24px;
+}
+.word-list li {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: .82rem;
+  line-height: 1.8;
+  break-inside: avoid;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.word-list li::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  position: relative;
+  top: -2px;
+}
+.word-conf {
+  font-family: var(--font-mono);
+  font-size: .44rem;
+  color: var(--muted);
+}
+.word-list.few { columns: 1; }
+
+/* ── SELETTORE PAROLA ───────────────────────── */
+.word-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 32px;
+  width: fit-content;
+  max-width: 100%;
+}
+.word-btn {
+  padding: 8px 18px;
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: .88rem;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  transition: all .15s;
+  border-right: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.word-btn:last-child { border-right: none; }
+.word-btn:hover { background: #ece7db; color: var(--ink); }
+.word-btn.active { background: var(--ink); color: var(--cream); }
+
+@media (max-width: 600px) {
+  .word-switcher { width: 100%; }
+  .word-btn {
+    flex: 1 1 auto;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    text-align: center;
+    padding: 10px 8px;
+    font-size: .80rem;
+  }
+  .word-btn:last-child { border-bottom: none; }
+}
+
+/* ── PERCORSO DEL CAMPO ──────────────────────── */
+.percorso-intro {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: .76rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.step {
+  position: relative;
+  padding-left: 36px;
+  margin-bottom: 0;
+}
+.step-num {
+  position: absolute;
+  left: 0;
+  top: 1px;
+  font-family: var(--font-mono);
+  font-size: .62rem;
+  color: var(--muted);
+  width: 24px;
+  text-align: center;
+}
+.step-title {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: .92rem;
+  color: var(--ink);
+  display: block;
+  margin-bottom: 4px;
+}
+.step-caption {
+  font-family: var(--font-mono);
+  font-size: .42rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.step-body {
+  margin-bottom: 4px;
+}
+.step-connector {
+  margin-left: 36px;
+  padding-left: 0;
+  height: 28px;
+  display: flex;
+  align-items: stretch;
+}
+.step-connector::before {
+  content: '';
+  display: block;
+  width: 1px;
+  background: var(--rule);
+  margin-left: -25px;
+}
+
+/* Step 1 — due parole affiancate */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 480px) { .two-col { grid-template-columns: 1fr; } }
+.word-col {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 12px 14px;
+}
+.word-col-name {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--ink);
+  display: block;
+  margin-bottom: 2px;
+}
+.word-col-frac {
+  font-family: var(--font-mono);
+  font-size: .40rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .10em;
+  display: block;
+  margin-bottom: 10px;
+}
+.mini-bar-row {
+  display: grid;
+  grid-template-columns: 72px 1fr 28px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.mini-bar-name {
+  font-family: var(--font-mono);
+  font-size: .42rem;
+  color: var(--muted);
+}
+.mini-track {
+  height: 3px;
+  background: var(--rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.mini-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ink);
+}
+.mini-val {
+  font-family: var(--font-mono);
+  font-size: .40rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* Step 2 — vicini semantici */
+.neighbors-col {
+  font-family: Georgia, serif;
+  font-style: italic;
+}
+.neighbor-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.neighbor-rel {
+  font-family: var(--font-mono);
+  font-size: .38rem;
+  color: var(--muted);
+  white-space: nowrap;
+  min-width: 50px;
+}
+.neighbor-word {
+  font-size: .84rem;
+  color: var(--ink);
+}
+
+/* Step 3 — intersezione */
+.bridge-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.bridge-chip {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: .80rem;
+  color: var(--ink);
+  padding: 4px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: #faf5ec;
+}
+
+/* Step 4 — firma combinata */
+.cmp-dim-row { margin-bottom: 10px; }
+.cmp-dim-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.cmp-dim-name {
+  font-family: var(--font-mono);
+  font-size: .56rem;
+  color: var(--ink);
+}
+.cmp-dim-delta {
+  font-family: var(--font-mono);
+  font-size: .40rem;
+  color: var(--muted);
+}
+.cmp-dim-delta.shift { color: #8a4a10; }
+.cmp-bars { display: flex; flex-direction: column; gap: 2px; }
+.cmp-bar-line {
+  display: grid;
+  grid-template-columns: 16px 1fr 32px;
+  align-items: center;
+  gap: 8px;
+}
+.cmp-bar-tag {
+  font-family: var(--font-mono);
+  font-size: .36rem;
+  color: var(--muted);
+  text-align: right;
+}
+.cmp-track {
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--rule);
+}
+.cmp-track.thin  { height: 2px; }
+.cmp-track.thick { height: 5px; }
+.cmp-fill { height: 100%; border-radius: 2px; transition: width .4s; }
+.cmp-fill.fa  { background: #b0a890; }
+.cmp-fill.fb  { background: #887860; }
+.cmp-fill.fc  { background: var(--ink); }
+.cmp-val {
+  font-family: var(--font-mono);
+  font-size: .42rem;
+  color: var(--muted);
+  text-align: right;
+}
+.cmp-val.fc { color: var(--ink); font-size: .48rem; }
+
+/* Step 5 — risposta */
+.risposta-box {
+  padding: 24px 28px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: #faf5ec;
+}
+.risposta-text {
+  font-family: Georgia, serif;
+  font-size: 1.30rem;
+  font-style: italic;
+  color: var(--ink);
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+.risposta-source {
+  font-family: var(--font-mono);
+  font-size: .42rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+.tagline {
+  margin-top: 36px;
+  font-family: var(--font-mono);
+  font-size: .50rem;
+  color: var(--muted);
+  letter-spacing: .08em;
+  text-align: center;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+</style>
+</head>
+<body>
+
+<div class="word-switcher">
+  <button class="word-btn active" onclick="switchWord('intelligenza')">intelligenza</button>
+  <button class="word-btn" onclick="switchWord('artificiale')">artificiale</button>
+  <button class="word-btn" onclick="switchWord('intelligenza artificiale')">intelligenza artificiale</button>
+</div>
+
+<h1 id="word-title">—</h1>
+<div class="meta-badges" id="meta-badges">
+  <div style="font-family:'JetBrains Mono', monospace;font-size:.58rem;color:var(--muted)">caricamento…</div>
+</div>
+
+<!-- FIRMA 8D -->
+<section id="sec-firma">
+  <div class="section-label">firma 8D</div>
+  <div class="section-desc">
+    La posizione della parola nello spazio semantico a otto dimensioni primitive.
+    Ogni valore (da 0 a 1) descrive una proprietà fondamentale del concetto —
+    non una definizione lessicale, ma la forma geometrica dell'idea nel campo del pensiero.
+    Da questi otto valori emergono sia il profilo motivazionale (Octalysis) sia il frattale
+    di appartenenza. I <strong>frattali</strong> sono le 64 regioni attrattive del campo,
+    basati sugli esagrammi dell'I Ching: zone tematiche verso cui i concetti gravitano
+    per affinità di forma, non di significato.
+  </div>
+  <div id="firma-rows"></div>
+</section>
+
+<!-- OCTALYSIS -->
+<section id="sec-oct">
+  <div class="section-label">profilo octalysis</div>
+  <div class="section-desc">
+    Gli otto drive motivazionali che emergono dalla firma.
+    Derivati dal framework Octalysis di Yu-kai Chou, descrivono quale energia
+    psicologica il concetto attiva in chi lo incontra.
+  </div>
+  <div id="oct-rows"></div>
+</section>
+
+<!-- RELAZIONI -->
+<section id="sec-rel">
+  <div class="section-label">relazioni semantiche</div>
+  <div class="section-desc">
+    Le connessioni logiche della parola nel Knowledge Graph.
+    Non statistiche di frequenza — relazioni reali: classificazione, causalità,
+    struttura, funzione, contrasto. Clicca su un tipo per vedere i concetti.
+  </div>
+  <div id="rel-blocks"></div>
+</section>
+
+<!-- PERCORSO DEL CAMPO (visibile solo in modalità combinata) -->
+<section id="sec-cmp-percorso" style="display:none">
+  <div class="section-label">il percorso del campo</div>
+  <p class="percorso-intro">
+    Prometeo non analizza una frase. Attiva due punti nello spazio semantico
+    e osserva cosa emerge dalla loro interferenza. Questo è il percorso.
+  </p>
+
+  <div class="step">
+    <span class="step-num">①</span>
+    <span class="step-title">due punti nel campo</span>
+    <p class="step-caption">ogni parola occupa una posizione precisa nello spazio 8D — non un significato, una geometria</p>
+    <div class="step-body two-col" id="step1-cols"></div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <span class="step-num">②</span>
+    <span class="step-title">il campo si espande</span>
+    <p class="step-caption">l'attivazione si propaga lungo gli archi del Knowledge Graph — i concetti vicini si accendono</p>
+    <div class="step-body two-col" id="step2-cols"></div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <span class="step-num">③</span>
+    <span class="step-title">le onde si incontrano</span>
+    <p class="step-caption">dove i due campi si sovrappongono l'attivazione si rinforza — nasce il territorio condiviso</p>
+    <div class="step-body" id="step3-bridge"></div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <span class="step-num">④</span>
+    <span class="step-title">il campo si stabilizza</span>
+    <p class="step-caption">il campo risultante non è la media delle due parole — è qualcosa di terzo. le dimensioni con ↑↓ si sono spostate significativamente</p>
+    <div class="step-body" id="step4-firma"></div>
+  </div>
+
+  <div class="step-connector"></div>
+
+  <div class="step">
+    <span class="step-num">⑤</span>
+    <span class="step-title">la risposta emerge</span>
+    <p class="step-caption">da questo stato del campo, non dalla frase in sé</p>
+    <div class="step-body">
+      <div class="risposta-box">
+        <div id="cmp-risposta-text" class="risposta-text">…</div>
+        <div class="risposta-source">generato da prometeo · campo topologico 8D</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tagline">prometeo non conosce la frase — conosce la geometria</div>
+</section>
+
+<script>
+const cache = {};
+let currentWord = 'intelligenza';
+const COMBINED_WORDS = ['intelligenza', 'artificiale'];
+
+// ── DIMENSIONI 8D ──────────────────────────────────────────
+const DIMS = [
+  { label: 'confine',      hint: 'quanto il concetto ha bordi netti, è definito rispetto agli altri' },
+  { label: 'valenza',      hint: 'carica emotiva: verso il negativo (0) o il positivo (1)' },
+  { label: 'intensità',    hint: 'forza di attivazione nel campo — quanto "pesa" il concetto' },
+  { label: 'definizione',  hint: 'chiarezza semantica: quanto il significato è stabile e univoco' },
+  { label: 'complessità',  hint: 'numero e varietà di relazioni con altri concetti' },
+  { label: 'permanenza',   hint: 'quanto il concetto resiste nel tempo senza trasformarsi' },
+  { label: 'agency',       hint: 'capacità di causare e agire (1) vs. subire e ricevere (0)' },
+  { label: 'tempo',        hint: 'orientamento: ancorato al passato (0) o proiettato nel futuro (1)' },
+];
+
+// ── FRATTALI — descrizioni specifiche ─────────────────────
+const FRACTAL_META = {
+  'ardore':        'energia intensa e ricorrente, impulso che si autoalimenta',
+  'pensiero':      'elaborazione interna: complessità e definizione alte',
+  'verita':        'certezza, alta definizione, resistenza al dubbio',
+  'conoscenza':    'acquisizione e sedimentazione del sapere',
+  'intuizione':    'comprensione immediata, oltre la sequenza logica',
+  'idea':          'forma del concetto ancora in divenire',
+  'espressione':   'manifestazione verso l\'esterno, comunicazione',
+  'creazione':     'genesi — il momento in cui qualcosa prende forma',
+  'energia':       'capacità di agire e trasformare',
+  'struttura':     'organizzazione stabile, alta permanenza',
+  'sistema':       'insieme coerente di relazioni interdipendenti',
+  'processo':      'trasformazione in atto nel tempo',
+  'mutamento':     'instabilità feconda, cambiamento continuo',
+  'caos':          'complessità non ancora ordinata',
+  'intreccio':     'connessioni molteplici, complessità massima',
+  'percezione':    'contatto diretto con il campo sensoriale',
+  'coscienza':     'consapevolezza di sé nel campo',
+  'vita':          'dinamismo fondamentale, apertura massima',
+  'materia':       'concretezza, bassa permanenza e complessità',
+  'storia':        'memoria nel tempo, narrazione sedimentata',
+  'esperienza':    'accumulo vissuto, sedimentazione emotiva',
+  'comprensione':  'integrazione profonda, senso trovato',
+  'cultura':       'sedimentazione collettiva del sapere',
+  'simbolo':       'condensazione di più significati in una forma',
+  'strategia':     'pianificazione orientata verso un fine',
+  'ecosistema':    'interdipendenza, equilibrio dinamico',
+  'amore':         'apertura totale verso l\'altro, connessione profonda',
+  'accordo':       'armonia emersa tra differenze',
+  'destino':       'tensione verso ciò che ancora deve accadere',
+  'crisi':         'punto di rottura — trasformazione urgente',
+  'soglia':        'confine tra stati diversi, luogo di passaggio',
+  'iniziativa':    'primo impulso verso l\'azione',
+  'radicamento':   'stabilità profonda, radici nel campo',
+  'risonanza':     'vibrazione condivisa tra concetti',
+  'ritmo':         'pulsazione regolare, cadenza',
+  'impatto':       'forza diretta, cambiamento immediato',
+  'passione':      'intensità emotiva sostenuta e orientata',
+  'evidenza':      'visibilità immediata, chiarezza percettiva',
+  'determinazione':'volontà sostenuta, direzione chiara',
+  'intenzione':    'orientamento prima dell\'azione',
+  'influenza':     'capacità di modificare il campo degli altri',
+  'dono':          'apertura verso l\'altro, eccesso che si condivide',
+  'realta':        'ciò che persiste e resiste alla trasformazione',
+  'nutrimento':    'ciò che sostiene e rigenera',
+  'sensazione':    'risposta immediata al contatto con il campo',
+  'durata':        'permanenza nel tempo, continuità',
+  'evoluzione':    'trasformazione orientata verso complessità crescente',
+};
+
+// ── OCTALYSIS ─────────────────────────────────────────────
+const CDS = [
+  { key: 'significato_epico',  label: 'significato epico',   hint: 'senso profondo, scopo più grande di sé' },
+  { key: 'realizzazione',      label: 'realizzazione',       hint: 'soddisfazione del compimento, del risultato' },
+  { key: 'creativita',         label: 'creatività',          hint: 'impulso a creare, sperimentare, combinare' },
+  { key: 'possesso',           label: 'possesso',            hint: 'attaccamento, desiderio di avere e mantenere' },
+  { key: 'influenza_sociale',  label: 'influenza sociale',   hint: 'connessione con gli altri, appartenenza' },
+  { key: 'scarsita',           label: 'scarsità',            hint: 'rarità, urgenza, ciò che non si può sempre avere' },
+  { key: 'curiosita',          label: 'curiosità',           hint: 'desiderio di esplorare l\'ignoto, l\'imprevedibile' },
+  { key: 'evitamento_perdita', label: 'evitamento perdita',  hint: 'paura di perdere, avversione al rischio' },
+];
+
+// ── RELAZIONI ─────────────────────────────────────────────
+const REL_META = {
+  IS_A:             { label: 'è un tipo di',       desc: 'classificazione',  color: '#2c4a8a' },
+  SIMILAR_TO:       { label: 'è simile a',          desc: 'vicinanza',        color: '#5a3a7a' },
+  HAS:              { label: 'possiede',            desc: 'attributo',        color: '#7a5520' },
+  PART_OF:          { label: 'fa parte di',         desc: 'composizione',     color: '#9a7030' },
+  CAUSES:           { label: 'causa',               desc: 'causalità',        color: '#1d5a2d' },
+  USED_FOR:         { label: 'viene usato per',     desc: 'funzione',         color: '#2d7a4f' },
+  DOES:             { label: 'compie',              desc: 'azione',           color: '#3d8a5f' },
+  OPPOSITE_OF:      { label: 'è opposto a',         desc: 'contrasto',        color: '#7a2a18' },
+  REQUIRES:         { label: 'richiede',            desc: 'prerequisito',     color: '#8a4a10' },
+  ENABLES:          { label: 'permette',            desc: 'abilitazione',     color: '#4a6a20' },
+  FEELS_AS:         { label: 'si percepisce come',  desc: 'esperienza',       color: '#6a3a5a' },
+  EXCLUDES:         { label: 'esclude',             desc: 'esclusione',       color: '#8a2a2a' },
+  TRANSFORMS_INTO:  { label: 'si trasforma in',     desc: 'trasformazione',   color: '#4a7a3a' },
+  WONDERS_ABOUT:    { label: 'si interroga su',     desc: 'interrogazione',   color: '#3a4a7a' },
+  CONTEXT_OF:       { label: 'è contesto di',       desc: 'contesto',         color: '#5a5a3a' },
+  IMPLIES:          { label: 'implica',             desc: 'implicazione',     color: '#3a5a5a' },
+  SYMBOLIZES:       { label: 'simboleggia',         desc: 'simbolo',          color: '#6a4a7a' },
+  EXPRESSES:        { label: 'esprime',             desc: 'espressione',      color: '#7a4a3a' },
+  COEXISTS:         { label: 'coesiste con',        desc: 'coesistenza',      color: '#4a6a6a' },
+  EQUIVALENT:       { label: 'equivale a',          desc: 'equivalenza',      color: '#4a4a8a' },
+  LEADS_TO:         { label: 'porta a',             desc: 'conseguenza',      color: '#2a5a3a' },
+  DEPENDS_ON:       { label: 'dipende da',          desc: 'dipendenza',       color: '#7a5a2a' },
+};
+
+function isSimple(word) {
+  return !word.includes('_') && !word.includes(' ');
+}
+
+async function load(word) {
+  if (cache[word]) { render(cache[word]); return; }
+  const r = await fetch(`/api/word_detail?word=${encodeURIComponent(word)}`);
+  const d = await r.json();
+  cache[word] = d;
+  render(d);
+}
+
+// La risposta del campo combinato viene caricata UNA SOLA VOLTA
+// (ogni chiamata cambia lo stato del campo — vogliamo la stessa risposta)
+let combinedFieldCache = null;
+
+async function loadCombined() {
+  setMode('combined');
+  document.getElementById('word-title').textContent = 'intelligenza artificiale';
+  document.getElementById('meta-badges').innerHTML =
+    `<div style="font-family:var(--font-mono);font-size:.52rem;color:var(--muted)">caricamento campo…</div>`;
+
+  const fetchWord = word =>
+    cache[word]
+      ? Promise.resolve(cache[word])
+      : fetch(`/api/word_detail?word=${encodeURIComponent(word)}`)
+          .then(r => r.json()).then(d => { cache[word] = d; return d; });
+
+  const fetchCombined = () =>
+    combinedFieldCache
+      ? Promise.resolve(combinedFieldCache)
+      : fetch('/api/input', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({text: 'intelligenza artificiale'})
+        }).then(r => r.json()).then(d => { combinedFieldCache = d; return d; });
+
+  const [dI, dA, dCmp] = await Promise.all([
+    fetchWord('intelligenza'),
+    fetchWord('artificiale'),
+    fetchCombined()
+  ]);
+
+  renderCombined(dI, dA, dCmp);
+}
+
+function setMode(mode) {
+  ['sec-firma','sec-oct','sec-rel'].forEach(id =>
+    document.getElementById(id).style.display = mode === 'single' ? '' : 'none');
+  document.getElementById('sec-cmp-percorso').style.display = mode === 'combined' ? '' : 'none';
+}
+
+function switchWord(word) {
+  currentWord = word;
+  document.querySelectorAll('.word-btn').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === word));
+  document.querySelectorAll('.rel-block.open').forEach(b => b.classList.remove('open'));
+
+  if (word === 'intelligenza artificiale') {
+    loadCombined();
+  } else {
+    setMode('single');
+    load(word);
+  }
+}
+
+function render(d) {
+  // Titolo
+  document.getElementById('word-title').textContent = d.word || WORD;
+
+  // Badge stabilità + esposizione + frattale
+  const stab   = (d.stability || 0);
+  const stabPct = Math.round(stab * 100);
+  const exp    = d.exposure || 0;
+  const frac   = d.fractal_name || '—';
+
+  document.getElementById('meta-badges').innerHTML = `
+    <div class="badge">
+      <span class="badge-label">cristallizzazione</span>
+      <span class="badge-value">${stabPct}%</span>
+      <span class="badge-desc">quanto è stabile e definito nel campo</span>
+    </div>
+    <div class="badge">
+      <span class="badge-label">frequenza nel pensiero</span>
+      <span class="badge-value">${exp.toLocaleString('it')}</span>
+      <span class="badge-desc">volte incontrata dal sistema</span>
+    </div>
+    <div class="badge">
+      <span class="badge-label">frattale</span>
+      <span class="badge-value">${frac}</span>
+      <span class="badge-desc">uno dei 64 attrattori del campo 8D — la zona tematica verso cui questo concetto gravita naturalmente${FRACTAL_META[frac.toLowerCase()] ? '<br>' + FRACTAL_META[frac.toLowerCase()] : ''}</span>
+    </div>`;
+
+  // Firma 8D
+  const firma = d.firma_8d || [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5];
+  document.getElementById('firma-rows').innerHTML = DIMS.map((dim, i) => {
+    const v   = firma[i] || 0;
+    const pct = (v * 100).toFixed(0);
+    return `<div class="dim-row">
+      <div class="dim-label-wrap">
+        <span class="dim-name">${dim.label}</span>
+        <span class="dim-hint">${dim.hint}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+      <div class="dim-val">${v.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+
+  // Octalysis
+  const oct = d.octalysis || {};
+  document.getElementById('oct-rows').innerHTML = CDS.map(cd => {
+    const v   = oct[cd.key] || 0;
+    const pct = (v * 100).toFixed(0);
+    return `<div class="cd-row">
+      <div>
+        <span class="cd-name">${cd.label}</span>
+        <span class="cd-hint">${cd.hint}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+      <div class="dim-val">${v.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+
+  // Relazioni
+  const byRel = {};
+  for (const e of (d.kg_out || [])) {
+    if (!isSimple(e.target)) continue;
+    const k = e.relation.toUpperCase();
+    if (!byRel[k]) byRel[k] = [];
+    byRel[k].push(e);
+  }
+  for (const k of Object.keys(byRel))
+    byRel[k].sort((a,b) => b.confidence - a.confidence);
+
+  const order = ['IS_A','SIMILAR_TO','CAUSES','HAS','PART_OF','USED_FOR','DOES','OPPOSITE_OF','REQUIRES','ENABLES'];
+  const keys  = [
+    ...order.filter(k => byRel[k]),
+    ...Object.keys(byRel).filter(k => !order.includes(k))
+  ];
+
+  document.getElementById('rel-blocks').innerHTML = keys.map(k => {
+    const items = byRel[k];
+    const meta  = REL_META[k] || { label: k.toLowerCase().replace(/_/g,' '), desc: '', color: '#9a9080' };
+    const few   = items.length <= 6;
+    const list  = items.map(e =>
+      `<li>${e.target}<span class="word-conf">${e.confidence.toFixed(2)}</span></li>`
+    ).join('');
+
+    return `<div class="rel-block" id="rb-${k}">
+      <div class="rel-header" onclick="toggle('${k}')">
+        <div class="rel-header-left">
+          <div class="rel-dot" style="background:${meta.color}"></div>
+          <span class="rel-name">${meta.label}</span>
+          <span class="rel-desc">${meta.desc}</span>
+        </div>
+        <div style="display:flex;align-items:center">
+          <span class="rel-count">${items.length}</span>
+          <span class="rel-arrow">›</span>
+        </div>
+      </div>
+      <div class="rel-body">
+        <ul class="word-list${few ? ' few' : ''}">${list}</ul>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggle(k) {
+  const el = document.getElementById('rb-' + k);
+  if (el) el.classList.toggle('open');
+}
+
+function renderCombined(dI, dA, dCmp) {
+  const firmaI = dI.firma_8d || Array(8).fill(0.5);
+  const firmaA = dA.firma_8d || Array(8).fill(0.5);
+  const firmaC = (dCmp.state && dCmp.state.field_signature) || Array(8).fill(0.5);
+
+  // Badge ridotto
+  document.getElementById('meta-badges').innerHTML = `
+    <div class="badge">
+      <span class="badge-label">stato del campo</span>
+      <span class="badge-value">${dCmp.valence_label || (dCmp.state && dCmp.state.vital && dCmp.state.vital.tension) || '—'}</span>
+      <span class="badge-desc">${(dCmp.stance || '')}${dCmp.intention ? ' · ' + dCmp.intention.toLowerCase() : ''}</span>
+    </div>`;
+
+  // ── PASSO 1: due parole affiancate con firma mini
+  const miniDims = [0,2,4,5,6]; // confine, intensità, complessità, permanenza, agency
+  const colHTML = (d, firma) => `
+    <div class="word-col">
+      <span class="word-col-name">${d.word}</span>
+      <span class="word-col-frac">frattale · ${d.fractal_name || '—'}</span>
+      ${miniDims.map(i => `
+        <div class="mini-bar-row">
+          <span class="mini-bar-name">${DIMS[i].label}</span>
+          <div class="mini-track"><div class="mini-fill" style="width:${(firma[i]*100).toFixed(0)}%"></div></div>
+          <span class="mini-val">${firma[i].toFixed(2)}</span>
+        </div>`).join('')}
+    </div>`;
+  document.getElementById('step1-cols').innerHTML = colHTML(dI, firmaI) + colHTML(dA, firmaA);
+
+  // ── PASSO 2: vicini semantici (top 7, ordine: CAUSES > HAS > IS_A > altri)
+  const relPriority = { CAUSES:0, HAS:1, IS_A:2, DOES:3, IMPLIES:4, ENABLES:5, USED_FOR:6, REQUIRES:7, SIMILAR_TO:8 };
+  const topNeighbors = (edges, n) => edges
+    .filter(e => isSimple(e.target))
+    .sort((a, b) => {
+      const pa = relPriority[a.relation.toUpperCase()] ?? 99;
+      const pb = relPriority[b.relation.toUpperCase()] ?? 99;
+      return pa !== pb ? pa - pb : b.confidence - a.confidence;
+    })
+    .slice(0, n);
+
+  const relShort = r => {
+    const m = { CAUSES:'causa', HAS:'ha', IS_A:'è un', DOES:'compie', IMPLIES:'implica',
+      ENABLES:'abilita', USED_FOR:'usato per', REQUIRES:'richiede',
+      SIMILAR_TO:'simile a', OPPOSITE_OF:'opposto di', PART_OF:'parte di',
+      TRANSFORMS_INTO:'diventa', COEXISTS:'coesiste', FEELS_AS:'si sente', SYMBOLIZES:'simboleggia' };
+    return m[r.toUpperCase()] || r.toLowerCase().replace(/_/g,' ');
+  };
+
+  const neighborColHTML = (d, edges) => `
+    <div class="word-col">
+      <span class="word-col-name" style="margin-bottom:10px">${d.word}</span>
+      ${topNeighbors(edges, 7).map(e => `
+        <div class="neighbor-item">
+          <span class="neighbor-rel">${relShort(e.relation)}</span>
+          <span class="neighbor-word">${e.target}</span>
+        </div>`).join('')}
+    </div>`;
+  document.getElementById('step2-cols').innerHTML =
+    neighborColHTML(dI, dI.kg_out || []) + neighborColHTML(dA, dA.kg_out || []);
+
+  // ── PASSO 3: intersezione
+  const setI = new Map();
+  for (const e of (dI.kg_out || []))
+    if (isSimple(e.target) && (!setI.has(e.target) || e.confidence > setI.get(e.target)))
+      setI.set(e.target, e.confidence);
+  const bridge = [];
+  for (const e of (dA.kg_out || []))
+    if (isSimple(e.target) && setI.has(e.target))
+      bridge.push({ word: e.target, conf: (e.confidence + setI.get(e.target)) / 2 });
+  bridge.sort((a, b) => b.conf - a.conf);
+
+  document.getElementById('step3-bridge').innerHTML = bridge.length
+    ? `<div class="bridge-list">${bridge.slice(0, 16).map(b =>
+        `<span class="bridge-chip">${b.word}</span>`).join('')}</div>`
+    : `<span style="font-family:var(--font-mono);font-size:.50rem;color:var(--muted)">nessuna sovrapposizione</span>`;
+
+  // ── PASSO 4: firma combinata con delta
+  const THRESH = 0.11;
+  document.getElementById('step4-firma').innerHTML = DIMS.map((dim, i) => {
+    const vI = firmaI[i], vA = firmaA[i], vC = firmaC[i];
+    const delta = vC - (vI + vA) / 2;
+    const shift = Math.abs(delta) >= THRESH;
+    const arrow = delta > 0 ? '↑' : '↓';
+    return `<div class="cmp-dim-row">
+      <div class="cmp-dim-header">
+        <span class="cmp-dim-name">${dim.label}</span>
+        ${shift ? `<span class="cmp-dim-delta shift">${arrow} ${delta > 0 ? '+' : ''}${delta.toFixed(2)}</span>` : ''}
+      </div>
+      <div class="cmp-bars">
+        <div class="cmp-bar-line">
+          <span class="cmp-bar-tag">I</span>
+          <div class="cmp-track thin"><div class="cmp-fill fa" style="width:${(vI*100).toFixed(0)}%"></div></div>
+          <span class="cmp-val">${vI.toFixed(2)}</span>
+        </div>
+        <div class="cmp-bar-line">
+          <span class="cmp-bar-tag">A</span>
+          <div class="cmp-track thin"><div class="cmp-fill fb" style="width:${(vA*100).toFixed(0)}%"></div></div>
+          <span class="cmp-val">${vA.toFixed(2)}</span>
+        </div>
+        <div class="cmp-bar-line">
+          <span class="cmp-bar-tag" style="color:var(--ink)">IA</span>
+          <div class="cmp-track thick"><div class="cmp-fill fc" style="width:${(vC*100).toFixed(0)}%"></div></div>
+          <span class="cmp-val fc">${vC.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── PASSO 5: risposta
+  document.getElementById('cmp-risposta-text').textContent =
+    `"${dCmp.generated_text || '…'}"`;
+}
+
+setMode('single');
+load('intelligenza');
+</script>
+</body>
+</html>

@@ -1,0 +1,2062 @@
+/* Font unico UI-R1: JetBrains Mono self-hosted.
+   @font-face inline qui: niente @import → nessun round-trip aggiuntivo. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/campovasto/fonts/jetbrains-mono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/campovasto/fonts/jetbrains-mono-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/campovasto/fonts/jetbrains-mono-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/campovasto/fonts/jetbrains-mono-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/campovasto/fonts/jetbrains-mono-400-italic.woff2') format('woff2');
+}
+
+/* CSS custom properties — fonte unica di verità: js/theme.js (vedi CLAUDE.md §1).
+   theme.js :: applyThemeToCss() le inietta al boot e può sovrascriverle al
+   cambio tema. Il blocco :root qui sotto duplica i default di Origine come
+   fallback dichiarativo: graceful degradation se JS non parte, e leggibilità
+   in DevTools. Se modifichi un valore in theme.js, riallinea la copia qui. */
+:root {
+  /* Sfondi / chrome */
+  --sfondo-scuro:  #0f0f1a;
+  --superficie:    #1a1a2e;
+  --bordo:         #2a2a4e;
+  --testo:         #e0e0e0;
+  --testo-chiaro:  #e0e0e0;
+  --testo-basso:   #888;
+
+  /* Spaziature */
+  --spazio-piccolo:      4px;
+  --spazio-medio:        8px;
+  --spazio-grande:       16px;
+  --spazio-molto-grande: 24px;
+
+  /* Transizioni */
+  --movimento-dolce:   0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+  --transition-smooth: 0.25s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+
+  /* 8 colori dimensione (alias I Ching usati nel CSS storico) */
+  --colore-cielo:    #5AAFE8;
+  --colore-terra:    #E89A3A;
+  --colore-fuoco:    #E04848;
+  --colore-acqua:    #A86EDB;
+  --colore-pietra:   #C8C4BC;
+  --colore-foresta:  #4AC880;
+  --colore-sole:     #E8D040;
+  --colore-tramonto: #E87AAA;
+
+  /* Tratti relazione (composti con il colore --testo-basso) */
+  --rel-strutturale:    5px dotted #888;
+  --rel-causale:        3px solid  #888;
+  --rel-semantica:      4px dashed #888;
+  --rel-fenomenologica: 2px dotted #888;
+  --rel-logica:         2px dashed #888;
+
+  /* Toolbar grafo (#graphToolbar) */
+  --color-toolbar-bg:     rgba(18, 20, 40, 0.88);
+  --color-toolbar-border: rgba(255,255,255,0.12);
+  --color-toolbar-hover:  rgba(255,255,255,0.10);
+  --color-toolbar-active: rgba(255,255,255,0.18);
+
+  /* Pannelli laterali (#filterPanel, #sentencePanel, …) */
+  --pannello-sfondo:    rgba(18, 18, 34, 0.85);
+  --bordo-hover:        #444;
+  --testo-tenue:        #555;
+  --chip-attivo-sfondo: rgba(255,255,255,0.12);
+  --cursore-pista:      rgba(255,255,255,0.10);
+  --cursore-ombra:      rgba(0,0,0,0.3);
+
+  /* Cursore (controllo lineare unificato — vedi regole di design.md §3) */
+  --polo-testo:    #fff;
+  --polo-ombra:    rgba(0,0,0,0.95);
+
+  /* Sidebar h3 */
+  --h3-color: rgba(120,140,200,.5);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Kit base box — bordo e angoli unificati per tutti i contenitori.
+   Le varianti e gli stati modificano per delta (regole di design.md §0, §11). */
+.box { border: 1px solid var(--bordo); border-radius: 8px; }
+
+/* Kit base button — tutti i button ereditano (regola del delta, §0).
+   Stile copiato dal bottone "+relazione" (card parola). */
+button {
+  border: 1px solid var(--bordo);
+  background: transparent;
+  color: var(--testo-basso);
+  cursor: pointer;
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  transition: all var(--movimento-dolce);
+}
+
+body {
+  background: var(--sfondo-scuro);
+  color: var(--testo-basso);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#graph {
+  flex: 1;
+  position: relative;
+  background: var(--sfondo-scuro);
+  order: 1;
+  /* Evita la selezione DOM "rubber-band" (rettangolo azzurro nativo del
+     browser) durante Shift+drag — il modifier in Windows/Linux attiva
+     la selezione estesa, e in alcuni browser disegna un rettangolo
+     traslucido sopra al canvas. user-select:none la spegne in toto;
+     non serve selezione testuale dentro al grafo. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Breadcrumb di navigazione (alto-destra del campo) */
+.breadcrumb {
+  position: absolute;
+  top: var(--spazio-grande);
+  right: var(--spazio-grande);
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  max-width: 55%;
+  font-size: 14px;
+  pointer-events: auto;
+}
+.breadcrumb:empty { display: none; }
+.breadcrumb-item {
+  padding: 4px 12px;
+  background: rgba(26, 26, 46, 0.78);
+  border: 1px solid #3a3a5e;
+  border-radius: 4px;
+  color: #ccc;
+  cursor: pointer;
+  transition: background var(--movimento-dolce), color var(--movimento-dolce), border-color var(--movimento-dolce);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.breadcrumb-item:hover {
+  background: rgba(42, 42, 78, 0.95);
+  color: #fff;
+  border-color: #5a5a8e;
+}
+.breadcrumb-item.current {
+  cursor: default;
+  color: #fff;
+  background: rgba(90, 175, 232, 0.15);
+  border-color: var(--colore-cielo);
+}
+.breadcrumb-sep {
+  color: #555;
+  font-size: 13px;
+  user-select: none;
+}
+
+#sidebar {
+  width: var(--sidebar-w, 510px);
+  min-width: 40px;
+  max-width: 80vw;
+  background: var(--superficie);
+  border-left: 1px solid var(--bordo);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  order: 2;
+  position: relative;
+}
+#sidebar.collapsed { width: 0 !important; min-width: 0 !important; border-left: none; }
+#sidebar.collapsed .sidebar-scroll { display: none; }
+
+/* Maniglia di ridimensionamento — sibling del sidebar, sul bordo sinistro */
+#sidebarResizer {
+  position: fixed;
+  right: var(--sidebar-w, 510px);
+  top: 0; bottom: 0; width: 5px;
+  cursor: ew-resize;
+  z-index: 12;
+  background: transparent;
+  transition: background 0.15s;
+  margin-right: -2px;
+}
+#sidebarResizer:hover, #sidebarResizer.dragging {
+  background: rgba(255,255,255,0.22);
+}
+body.sidebar-collapsed #sidebarResizer { display: none; }
+
+/* Bottoncino toggle — sibling, posizionato sul bordo */
+#sidebarToggle {
+  position: fixed;
+  right: var(--sidebar-w, 510px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 36px;
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  border-right: none;
+  color: var(--testo-basso);
+  border-radius: 6px 0 0 6px;
+  font-size: 11px; line-height: 34px; text-align: center;
+  cursor: pointer;
+  z-index: 14;
+  user-select: none;
+  padding: 0;
+  opacity: 0.5;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+#sidebarToggle:hover {
+  opacity: 1;
+  color: var(--testo-chiaro);
+  background: rgba(255,255,255,0.06);
+}
+body.sidebar-collapsed #sidebarToggle { right: 0; }
+
+.sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Sidebar — catena contestuale via tag semantici (regole di design.md §0).
+   <header>/<nav>/<section>/<footer> identificano gli oggetti senza classi.
+   Le sezioni sono separate da hairline, l'ultima senza divisore.
+   ════════════════════════════════════════════════════════════════════ */
+
+#sidebar header,
+#sidebar section,
+#sidebar footer {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--bordo);
+}
+#sidebar > .sidebar-scroll > *:last-child { border-bottom: 0; }
+
+#sidebar header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#sidebar h3 {
+  font-size: 11px;
+  color: var(--h3-color);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  margin-top: var(--spazio-grande);
+  margin-bottom: var(--spazio-piccolo);
+}
+
+/* Intro discorsivo in #scelta-campo: testo leggibile + spaziatura tra paragrafi */
+#intro {
+  margin-bottom: var(--spazio-grande);
+  color: var(--testo-chiaro);
+  font-size: 13px;
+  line-height: 1.45;
+}
+#intro p + p { margin-top: var(--spazio-medio); }
+
+.brand {
+  font: 600 18px/1 'JetBrains Mono', monospace;
+  letter-spacing: .25em;
+  color: rgba(160, 180, 255, 0.7);
+}
+
+#sidebar nav { display: flex; gap: var(--spazio-piccolo); }
+#sidebar nav button {
+  background: rgba(30,30,60,.8);
+  border: 1px solid #4a5280;
+  border-radius: 6px;
+  color: #c0ccff;
+  font-size: 18px;
+  padding: 7px 14px;
+  display: none;
+  line-height: 1;
+}
+#sidebar nav button:hover { background: #3a3a6e; }
+body.parola-selezionata #sidebar nav button { display: inline-flex; }
+
+/* Bottoni nav sempre visibili (override dell'hide-by-default) */
+#sidebar nav button.sempre { display: inline-flex; }
+
+#search {
+  width: 100%;
+  background: var(--sfondo-scuro);
+  border: 1px solid var(--bordo);
+  color: var(--testo-chiaro);
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 16px;
+  outline: none;
+}
+#search:focus { border-color: var(--colore-cielo); }
+
+/* Bottone-lente per la ricerca: collassato di default per non confondere con
+   un campo di scrittura (la collega scriveva la frase qui per errore).
+   Click sulla lente espande l'input, blur senza testo lo richiude. */
+#search-toggle.lente {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--bordo);
+  color: var(--testo-basso);
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, color 0.15s;
+}
+#search-toggle.lente:hover { border-color: var(--colore-cielo); color: var(--testo-chiaro); }
+#search-toggle.lente .icon { font-size: 14px; }
+#search-toggle.lente .label { flex: 1; }
+/* Quando l'input è aperto, nascondi il bottone-lente */
+#ricerca.aperto #search-toggle { display: none; }
+#ricerca.aperto #search { display: block !important; }
+
+.search-results {
+  max-height: 200px;
+  overflow-y: auto;
+  display: none;
+  margin-top: var(--spazio-medio);
+}
+.search-results:not(:empty) { display: block; }
+
+.search-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 15px;
+  border-left: 3px solid #333;
+  transition: background var(--movimento-dolce);
+}
+.search-item:hover { background: var(--bordo); }
+.search-item[data-dim="potere"] { border-left-color: var(--colore-cielo); }
+.search-item[data-dim="materia"] { border-left-color: var(--colore-terra); }
+.search-item[data-dim="ardore"] { border-left-color: var(--colore-fuoco); }
+.search-item[data-dim="divenire"] { border-left-color: var(--colore-acqua); }
+.search-item[data-dim="spazio"] { border-left-color: var(--colore-pietra); }
+.search-item[data-dim="intreccio"] { border-left-color: var(--colore-foresta); }
+.searchsi-itxem[data-dim="verità"] { border-left-color: var(--colore-sole); }
+.search-item[data-dim="armonia"] { border-left-color: var(--colore-tramonto); }
+
+/* .action-group: legacy wrapper rimosso da index.html — i bottoni del
+   footer azioni vivono ora direttamente in <footer class="azioni">. */
+/* Bottoni dentro qualsiasi .azioni — catena contestuale (regole §0). */
+.azioni button {
+  font-size: 13px;
+  background: var(--sfondo-scuro);
+  color: #aab;
+  padding: 5px 12px;
+}
+.azioni button:hover { background: var(--bordo); border-color: #5a5a8e; }
+
+.word-empty {
+  font-size: 15px;
+  color: #555;
+  font-style: italic;
+}
+
+/* Frase del campo medio nel pannello info */
+.medio-sentence {
+  padding: 4px 0;
+}
+.medio-sentence-label {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--testo-basso);
+  margin-bottom: 6px;
+}
+.medio-sentence-text {
+  font-size: 16px;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--colore-sole);
+  line-height: 1.4;
+  border-left: 2px solid var(--colore-sole);
+  padding-left: 10px;
+}
+/* .word-title rimosso — sostituito da .etichetta.titolo dentro .box.parola */
+
+#dim-bars {
+  max-width: 340px;
+  margin-right: auto;
+}
+.dim-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-medio);
+  margin-bottom: 5px;
+}
+.dim-name {
+  font-size: 14px;
+  width: 88px;
+  text-align: right;
+}
+.dim-name[data-dim="potere"] { color: var(--colore-cielo); }
+.dim-name[data-dim="materia"] { color: var(--colore-terra); }
+.dim-name[data-dim="ardore"] { color: var(--colore-fuoco); }
+.dim-name[data-dim="divenire"] { color: var(--colore-acqua); }
+.dim-name[data-dim="spazio"] { color: var(--colore-pietra); }
+.dim-name[data-dim="intreccio"] { color: var(--colore-foresta); }
+.dim-name[data-dim="verità"] { color: var(--colore-sole); }
+.dim-name[data-dim="armonia"] { color: var(--colore-tramonto); }
+
+.dim-bar-wrap {
+  flex: 1;
+  height: 18px;
+  background: var(--sfondo-scuro);
+  border-radius: 2px;
+  cursor: ew-resize;
+  position: relative;
+  overflow: hidden;
+}
+.dim-extreme {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(255,255,255,0.78);
+  pointer-events: none;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 3px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.85);
+  white-space: nowrap;
+  z-index: 1;
+}
+.dim-extreme.left  { left: 6px; }
+.dim-extreme.right { right: 6px; }
+.dim-extreme.single {
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-style: italic;
+  color: rgba(255,255,255,0.72);
+}
+.dim-bar {
+  height: 100%;
+  border-radius: 2px;
+  min-width: 2px;
+  transition: width var(--movimento-dolce);
+}
+.dim-bar[data-dim="potere"] { background: var(--colore-cielo); }
+.dim-bar[data-dim="materia"] { background: var(--colore-terra); }
+.dim-bar[data-dim="ardore"] { background: var(--colore-fuoco); }
+.dim-bar[data-dim="divenire"] { background: var(--colore-acqua); }
+.dim-bar[data-dim="spazio"] { background: var(--colore-pietra); }
+.dim-bar[data-dim="intreccio"] { background: var(--colore-foresta); }
+.dim-bar[data-dim="verità"] { background: var(--colore-sole); }
+.dim-bar[data-dim="armonia"] { background: var(--colore-tramonto); }
+
+.dim-val {
+  font-size: 14px;
+  width: 42px;
+  text-align: right;
+  color: #999;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  outline: none;
+  cursor: pointer;
+  padding: 0 2px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.dim-val:hover { border-bottom-color: #555; }
+.dim-val:focus { color: #fff; border-bottom-color: #888; cursor: text; }
+.dim-val::-webkit-inner-spin-button,
+.dim-val::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+#radar {
+  display: block;
+  margin: 0 auto 0 0;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+}
+
+/* .legend-section rimosso — ora è un secondo <h3> dentro #legenda
+   (eredita lo stile uniforme di #sidebar h3). */
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-medio);
+  padding: 3px 0;
+  font-size: 14px;
+  color: rgba(220,228,255,.85);
+}
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.legend-color[data-dim="potere"] { background: var(--colore-cielo); }
+.legend-color[data-dim="materia"] { background: var(--colore-terra); }
+.legend-color[data-dim="ardore"] { background: var(--colore-fuoco); }
+.legend-color[data-dim="divenire"] { background: var(--colore-acqua); }
+.legend-color[data-dim="spazio"] { background: var(--colore-pietra); }
+.legend-color[data-dim="intreccio"] { background: var(--colore-foresta); }
+.legend-color[data-dim="verità"] { background: var(--colore-sole); }
+.legend-color[data-dim="armonia"] { background: var(--colore-tramonto); }
+
+.legend-line {
+  width: 36px;
+  height: 0;
+  flex-shrink: 0;
+}
+.legend-line.structural { border-top: var(--rel-strutturale); }
+.legend-line.causal { border-top: var(--rel-causale); }
+.legend-line.semantic { border-top: var(--rel-semantica); }
+.legend-line.phenomenological { border-top: var(--rel-fenomenologica); }
+.legend-line.logical { border-top: var(--rel-logica); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Legenda interattiva delle relazioni (#relLegend, vedi rel-legend.js).
+   Ogni gruppo è una riga: toggle del gruppo + freccia che espande i
+   sotto-tipi cliccabili. Stato `attivo` = filtro on. `parziale` = alcuni
+   sotto-tipi off (gruppo non interamente attivo).
+   ════════════════════════════════════════════════════════════════════ */
+.rel-legend { display: flex; flex-direction: column; gap: 2px; }
+
+.rel-row { display: flex; align-items: center; gap: 4px; }
+
+.rel-row .rel-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-medio);
+  padding: 5px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--testo-basso);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+  opacity: 0.45;  /* default: spento → si "accende" via .attivo */
+}
+.rel-row .rel-toggle.attivo    { opacity: 1; color: var(--testo-chiaro); }
+.rel-row .rel-toggle.parziale  { opacity: 0.75; color: var(--testo-chiaro); }
+.rel-row .rel-toggle:hover     { background: rgba(255,255,255,0.04); }
+
+.rel-row .rel-expand {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--testo-basso);
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.rel-row .rel-expand:hover { background: rgba(255,255,255,0.04); color: var(--testo-chiaro); }
+
+.rel-subtypes {
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 6px 8px 50px;
+}
+.rel-subtypes.aperto { display: flex; }
+
+.rel-subtypes .rel-subtype {
+  background: transparent;
+  border: 1px solid var(--bordo);
+  color: var(--testo-basso);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.12s, border-color 0.12s, color 0.12s;
+}
+.rel-subtypes .rel-subtype.attivo {
+  opacity: 1;
+  color: var(--testo-chiaro);
+  border-color: var(--testo-basso);
+}
+.rel-subtypes .rel-subtype:hover { border-color: var(--colore-cielo); color: var(--testo-chiaro); }
+
+#stats {
+  position: absolute;
+  bottom: var(--spazio-medio);
+  right: var(--spazio-medio);
+  font: 13px 'JetBrains Mono', monospace;
+  color: #555;
+  z-index: 5;
+  pointer-events: none;
+}
+
+#loading {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+  font: 18px/1.6 'JetBrains Mono', monospace;
+  color: rgba(160,180,255,.6);
+  text-align: center;
+  z-index: 50;
+  background: var(--sfondo-scuro);
+  padding: 20px 40px;
+  border-radius: 12px;
+}
+
+#hover-label {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  display: none;
+  background: rgba(10,10,30,.92);
+  border: 1px solid rgba(80,100,220,.4);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font: 600 17px/1.3 'JetBrains Mono', monospace;
+  color: #fff;
+  white-space: nowrap;
+  box-shadow: 0 2px 12px rgba(0,0,20,.6);
+}
+#hover-label.visible { display: block; }
+
+.ctx-menu {
+  position: fixed;
+  z-index: 200;
+  display: none;
+  background: var(--superficie);
+  border: 1.5px solid #555;
+  box-shadow: 4px 4px 0 rgba(0,0,0,.5);
+  padding: 6px 0;
+  min-width: 220px;
+}
+.ctx-menu.open { display: block; }
+.ctx-item {
+  font-size: 16px;
+  padding: 8px 18px;
+  color: var(--testo-chiaro);
+  cursor: pointer;
+  transition: background var(--movimento-dolce);
+}
+.ctx-item:hover { background: var(--bordo); }
+.ctx-sep { height: 1px; background: #333; margin: 4px 0; }
+
+/* Trail di esplorazione — pannello in alto a destra del grafo che mostra la
+   catena di parole cliccate, con la relazione (e l'eventuale "tramite") che
+   lega ogni passo. Hover su un vicino → preview semi-trasparente. */
+.exploration-trail {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  max-width: 68%;
+  z-index: 50;
+  background: var(--pannello-sfondo);
+  border: 1px solid var(--color-toolbar-border);
+  border-radius: 9px;
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 15px;
+  font-family: 'JetBrains Mono', monospace;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+}
+.trail-word {
+  border-left: 3px solid var(--color-text-dim);
+  padding: 4px 11px 4px 10px;
+  background: var(--color-toolbar-hover);
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: 3px;
+  font-weight: 500;
+  transition: background var(--movimento-dolce);
+}
+.trail-word:hover { background: var(--color-toolbar-active); }
+.trail-word.preview {
+  opacity: 0.55;
+  cursor: default;
+  font-style: italic;
+}
+.trail-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-dim);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.trail-step.preview { opacity: 0.6; }
+.trail-step.empty { font-size: 17px; color: var(--testo-tenue); }
+.trail-arrow { color: var(--testo-tenue); font-weight: 600; font-size: 15px; }
+.trail-rel { color: var(--color-text); }
+.trail-via {
+  color: var(--colore-sole);
+  font-style: italic;
+  margin-left: 3px;
+}
+.trail-via em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--colore-sole);
+}
+.trail-close {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  font-size: 20px;
+  padding: 0 4px;
+  margin-left: 6px;
+  line-height: 1;
+}
+.trail-close:hover { color: var(--color-text); }
+
+/* Compatibilità con #graph: deve essere position: relative perché il trail
+   absoluto si posizioni rispetto al canvas, non al body. È già relative
+   tramite la regola esistente sul container del grafo. */
+
+.edit-panel {
+  position: fixed;
+  z-index: 150;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+  background: var(--superficie);
+  border: 1px solid var(--bordo);
+  padding: 18px;
+  min-width: 320px;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+  display: none;
+  box-shadow: 0 8px 40px rgba(0,0,0,.7);
+}
+.edit-panel.open { display: block; }
+.edit-panel h3 { font-size: 18px; margin-bottom: 14px; color: #fff; }
+
+/* Backdrop dell'edit-panel: click fuori chiude la modale (richiesto dalla
+   collega — prima il pannello restava aperto a oltranza). z-index appena
+   sotto il pannello stesso. */
+.edit-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 149;
+  background: rgba(0, 0, 0, 0.35);
+  display: none;
+  backdrop-filter: blur(1px);
+}
+.edit-panel-backdrop.open { display: block; }
+
+/* Modale generica per save/load collettivi */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.box.modale {
+    min-width: 380px;
+    max-width: 560px;
+    max-height: 80vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.7);
+}
+.box.modale h3 {
+    font-size: 15px; font-weight: 500;
+    margin: 0 0 4px; letter-spacing: .02em;
+}
+.box.modale .modal-subtitle {
+    font-size: 12px; color: var(--testo-basso);
+    margin-bottom: 14px;
+}
+.box.modale label {
+    display: block; font-size: 11px; color: var(--testo-basso);
+    margin: 10px 0 4px; letter-spacing: .03em;
+    text-transform: uppercase;
+}
+.box.modale input[type=text], .box.modale input[type=password] {
+    font-family: inherit; font-size: 13px;
+    padding: 8px 10px;
+    border-radius: 3px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.box.modale .modal-actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+    margin-top: 16px;
+}
+.box.modale button.primary {
+    color: var(--colore-cielo);
+}
+.box.modale .modal-status {
+    font-size: 12px; margin-top: 10px;
+    padding: 6px 10px; border-radius: 3px;
+}
+.box.modale .modal-status.ok {
+    background: rgba(103,180,126,0.14); color: #9ed8a9;
+}
+.box.modale .modal-status.err {
+    background: rgba(200,80,80,0.14); color: #e8a0a0;
+}
+.saved-list {
+  max-height: 300px; overflow: auto;
+  border: 1px solid var(--bordo);
+  border-radius: 3px; margin-top: 8px;
+}
+.saved-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--bordo);
+  cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: background 0.12s;
+}
+.saved-item:last-child { border-bottom: none; }
+.saved-item:hover { background: rgba(255,255,255,0.04); }
+.saved-item.selected { background: rgba(90,175,232,0.12); border-left: 3px solid var(--colore-cielo); }
+.saved-item .name { font-weight: 500; color: var(--testo-chiaro); }
+.saved-item .meta {
+  font-size: 10px; color: var(--testo-basso);
+}
+.saved-delete {
+  background: transparent; border: 1px solid rgba(200,80,80,0.35);
+  color: #d88; cursor: pointer;
+  width: 20px; height: 20px;
+  border-radius: 2px;
+  font-size: 11px; line-height: 1;
+  padding: 0;
+  transition: all 0.14s;
+}
+.saved-delete:hover {
+  background: rgba(200,80,80,0.15);
+  border-color: rgba(200,80,80,0.65);
+  color: #eaa;
+}
+.edit-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spazio-medio);
+  margin-bottom: var(--spazio-medio);
+}
+.edit-row label { width: 90px; font-size: 14px; text-align: right; }
+.edit-row input[type=range] { flex: 1; accent-color: var(--colore-cielo); }
+.edit-row .edit-val { width: 30px; font-size: 13px; color: #aaa; }
+
+/* Pannelli di editing — input/select/section */
+.edit-title { font-size: 16px; margin-bottom: 14px; color: var(--colore-cielo); }
+/* Messaggio di una modale di conferma (openConfirm/openChoice) — stile
+   leggibile multi-line, niente capslock né enfasi: il bottone primario
+   colorato basta a guidare l'utente. */
+.confirm-message {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--testo-chiaro);
+  margin: 0;
+}
+.edit-input {
+  flex: 1;
+  background: var(--sfondo-scuro);
+  color: #ccc;
+  border: 1px solid #3a3a5e;
+  padding: 6px 8px;
+  border-radius: 3px;
+  font-size: 14px;
+  font-family: inherit;
+}
+.edit-select {
+  flex: 1;
+  background: var(--sfondo-scuro);
+  color: #ccc;
+  border: 1px solid #3a3a5e;
+  padding: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.edit-section-title {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--testo-basso);
+}
+.oct-preview {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.6;
+}
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Tab interne alla modale "aggiungi parola" — vocabolario di §3 (oggetto
+   button + variante atomica). Stesso stile delle .tab di sidebar per
+   coerenza visiva, ma compatte. */
+.add-word-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 12px 0 8px;
+  border-bottom: 1px solid var(--bordo);
+}
+button.add-word-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: var(--testo-basso);
+  padding: 6px 12px;
+  border-radius: 4px 4px 0 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+button.add-word-tab:hover { color: var(--testo-chiaro); background: rgba(255,255,255,0.04); }
+button.add-word-tab.attivo {
+  color: var(--colore-cielo);
+  border-color: var(--bordo);
+  background: var(--sfondo-scuro);
+  margin-bottom: -1px;  /* "incolla" la tab al pannello sotto */
+}
+.add-word-tab-host { min-height: 200px; padding: 4px 0; }
+
+/* Indicatore visivo del linkMode: bordo dorato attorno al canvas per
+   segnalare "sei in modalità collega — trascina da una parola all'altra". */
+body.link-mode #graph {
+  outline: 2px dashed var(--colore-sole);
+  outline-offset: -4px;
+}
+body.link-focus #graph {
+  outline: 2px solid var(--colore-foresta);
+  outline-offset: -4px;
+}
+
+/* ========== MIGLIORAMENTI TRANSIZIONI MODALITÀ ========== */
+
+/* Overlay di transizione */
+#transition-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 15, 26, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  font-size: 24px;
+  color: rgba(160, 180, 255, 0.8);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+}
+
+/* (legacy `.action-btn.active` rimosso — i pulsanti modalità sono ora .tab.attivo) */
+
+/* Animazioni per transizioni nodi - SUPER MORBIDE */
+.vis-network .vis-node {
+  transition: all 0.5s cubic-bezier(0.2, 0.6, 0.3, 1.0);
+}
+
+/* Hover sui nodi - transizione ultra fluida */
+.vis-network .vis-node:hover {
+  transform: scale(1.08);
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.4, 1.2);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.4));
+}
+
+/* (legacy hover sweep su .action-btn[data-view] rimosso — ora .tab in #scelta-campo) */
+
+/* Miglioramento visualizzazione etichette dimensioni in modalità vuoto */
+.vis-node._dimLabel {
+  transition: opacity 0.5s cubic-bezier(0.2, 0.6, 0.3, 1.0);
+}
+
+/* Transizioni per cambio stato nodi (active, rosa, dimmed) */
+.vis-network .vis-node.node-state-change {
+  transition: all 0.6s cubic-bezier(0.2, 0.5, 0.3, 1.0);
+}
+
+/* Transizione per opacità quando i nodi si attenuano */
+.vis-network .vis-node.fading {
+  transition: opacity 0.7s cubic-bezier(0.2, 0.4, 0.3, 0.9);
+}
+
+/* Transizione per cambio dimensione nodi */
+.vis-network .vis-node.resizing {
+  transition: transform 0.5s cubic-bezier(0.2, 0.6, 0.3, 1.0),
+              width 0.5s cubic-bezier(0.2, 0.6, 0.3, 1.0),
+              height 0.5s cubic-bezier(0.2, 0.6, 0.3, 1.0);
+}
+
+/* Stile per nodi utente in modalità vuoto */
+.node-user-highlight {
+  filter: drop-shadow(0 0 6px rgba(90, 175, 232, 0.5));
+  border-width: 2px !important;
+}
+
+/* Indicatore modalità attiva nella sidebar */
+.mode-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.mode-indicator.vasto {
+  background-color: var(--colore-cielo);
+  box-shadow: 0 0 8px var(--colore-cielo);
+}
+
+.mode-indicator.vuoto {
+  background-color: var(--colore-foresta);
+  box-shadow: 0 0 8px var(--colore-foresta);
+}
+
+/* Statistiche migliorate */
+#stats {
+  background: rgba(15, 15, 26, 0.7);
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(90, 175, 232, 0.2);
+  transition: all 0.3s ease;
+}
+
+#stats.mode-vuoto {
+  border-color: rgba(74, 200, 128, 0.3);
+  color: rgba(74, 200, 128, 0.8);
+}
+
+/* (legacy tooltip su .action-btn[data-view] rimosso: il `content: attr() === '...'`
+   non era CSS valido. I bottoni modalità sono ora .tab e usano l'attributo
+   `title` HTML per il tooltip nativo del browser.) */
+
+/* ══════════════════════════════════════════════════════════════════════
+   Selettore modalità (vasto / nuovo / medio)
+   ════════════════════════════════════════════════════════════════════ */
+
+p { padding-top: 15px; }
+
+/* Tabs (selettore di campo in #scelta-campo) */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(10, 10, 22, 0.5);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--bordo);
+}
+button.tab {
+  flex: 1;
+  padding: 7px 6px;
+  background: transparent;
+  color: var(--testo-basso);
+  border: none;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+  transition: background var(--movimento-dolce), color var(--movimento-dolce);
+}
+button.tab:hover:not(:disabled) { color: var(--testo-chiaro); background: rgba(255,255,255,0.04); }
+button.tab.attivo {
+  background: var(--superficie);
+  color: var(--testo-chiaro);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+button.tab:disabled { opacity: 0.35; cursor: not-allowed; }
+/* Tab "crea il tuo campo": campo nuovo vuoto, l'utente vi clicca per
+   aprire il pannello frase. Stile invitante con bordo tratteggiato. */
+button.tab.empty {
+  border: 1px dashed var(--bordo);
+  color: var(--colore-cielo);
+  background: transparent;
+}
+button.tab.empty:hover:not(:disabled) {
+  background: rgba(90,175,232,0.08);
+  border-color: var(--colore-cielo);
+}
+/* Stato "vuoto" (il campo medio ancora non esiste): cliccabile ma tenue */
+button.tab.empty:not(.attivo) { opacity: 0.55; font-style: italic; }
+button.tab.empty:not(.attivo):hover { opacity: 1; font-style: normal; }
+
+/* Azioni di una sezione (es. azioni contestuali al campo, azzera filtri) */
+.azioni {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-top: 8px;
+}
+.azioni:empty { display: none; margin-top: 0; }
+.view-action-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.14);
+  color: var(--testo);
+  padding: 5px 10px; border-radius: 3px;
+  font-family: inherit; font-size: 12px;
+  cursor: pointer; letter-spacing: .01em;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.view-action-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--testo-chiaro);
+  border-color: rgba(255,255,255,0.22);
+}
+.view-action-btn.primary {
+  border-color: rgba(103,180,126,0.5);
+  color: #8ecb9c;
+}
+.view-action-btn.primary:hover {
+  background: rgba(103,180,126,0.09);
+  border-color: rgba(103,180,126,0.8);
+}
+.view-action-btn.danger {
+  border-color: rgba(200,80,80,0.35);
+  color: #d88;
+}
+.view-action-btn.danger:hover {
+  background: rgba(200,80,80,0.08);
+  color: #eaa;
+  border-color: rgba(200,80,80,0.65);
+}
+
+/* Toggle "dimensioni / relazioni" del campo nuovo: due bottoni accostati. */
+.view-action-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.view-action-toggle .toggle-seg {
+  border: none;
+  border-radius: 0;
+  padding: 5px 10px;
+}
+.view-action-toggle .toggle-seg + .toggle-seg {
+  border-left: 1px solid rgba(255,255,255,0.14);
+}
+.view-action-toggle .toggle-seg.attivo {
+  background: rgba(255,255,255,0.10);
+  color: var(--testo-chiaro);
+}
+
+/* Pannello "UI-R1 legge" — flottante in basso a sinistra del grafo,
+   non intralcia la visualizzazione, collassabile all'header */
+.understanding-panel {
+  position: absolute;
+  left: 16px; bottom: 16px;
+  width: clamp(320px, 34vw, 480px);
+  max-height: 56vh;
+  background: rgba(22, 22, 34, 0.94);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  display: flex; flex-direction: column;
+  color: var(--testo);
+  font-family: inherit;
+  z-index: 8;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+}
+.understanding-panel.empty { display: none; }
+.up-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer; user-select: none;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.up-header:hover { background: rgba(255,255,255,0.06); }
+.up-header-left {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--testo-basso);
+}
+.up-header-snippet {
+  text-transform: none; letter-spacing: 0;
+  font-size: 12px; font-style: italic; color: var(--testo-chiaro);
+  max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.up-header-right {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 10px; color: var(--testo-basso);
+}
+.up-badge {
+  padding: 1px 6px;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 2px;
+}
+.up-arrow {
+  font-size: 11px; color: var(--testo-basso);
+  transition: transform 0.2s;
+}
+.understanding-panel.collapsed .up-arrow { transform: rotate(180deg); }
+.up-body {
+  overflow: auto; padding: 10px 14px;
+  font-size: 12px; line-height: 1.5;
+  color: var(--testo-chiaro);
+}
+.understanding-panel.collapsed .up-body { display: none; }
+.understanding-panel.collapsed { max-height: 44px; }
+
+.up-section { margin-top: 10px; }
+.up-section:first-child { margin-top: 0; }
+.up-section-title {
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--testo-basso); margin-bottom: 4px;
+}
+.up-summary {
+  font-size: 12px; line-height: 1.55;
+  color: var(--testo-chiaro);
+}
+.up-unknown { color: #e57373; font-style: italic; font-size: 11px; }
+.up-hyp-row {
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.08);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.up-hyp-row:last-child { border-bottom: none; }
+.up-hyp-row.confirmed { opacity: 0.55; }
+.up-hyp-row.rejected { opacity: 0.4; }
+.up-hyp-claim {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  font-size: 12px;
+}
+.up-hyp-word { font-weight: 600; color: var(--testo-chiaro); }
+.up-hyp-rel {
+  font-size: 9px;
+  color: var(--testo-basso); padding: 1px 5px;
+  border: 1px solid rgba(255,255,255,0.16); border-radius: 2px;
+}
+.up-hyp-rationale {
+  font-size: 10px; color: var(--testo-basso);
+  padding-left: 2px;
+}
+.up-hyp-actions {
+  display: flex; gap: 6px; margin-top: 3px;
+}
+.up-btn {
+  font-family: inherit; font-size: 10px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 2px;
+  background: transparent; color: var(--testo-basso); cursor: pointer;
+  transition: all 0.14s;
+}
+.up-btn:hover { background: rgba(255,255,255,0.06); color: var(--testo-chiaro); }
+.up-btn.confirm { border-color: rgba(103,180,126,0.45); color: #8ecb9c; }
+.up-btn.confirm:hover { background: rgba(103,180,126,0.12); color: #a8e0b4; }
+.up-btn.reject { border-color: rgba(200,80,80,0.4); color: #d88; }
+.up-btn.reject:hover { background: rgba(200,80,80,0.1); color: #eaa; }
+.up-btn-done {
+  font-size: 9px;
+  padding: 2px 6px; border-radius: 2px; letter-spacing: .04em;
+}
+.up-btn-done.confirmed { color: #a8e0b4; background: rgba(103,180,126,0.15); }
+.up-btn-done.rejected { color: #eaa; background: rgba(200,80,80,0.12); }
+.up-conf {
+  color: var(--testo-basso); font-size: 9px;
+}
+
+/* Barra controlli animazione campo medio — flottante in basso al centro */
+#medioAnimBar {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: none;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 14px;
+  background: rgba(18, 20, 40, 0.88);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 100px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 22px rgba(0,0,0,0.45);
+  user-select: none;
+}
+#medioAnimBar button {
+  background: transparent;
+  border: none;
+  color: #d8e0ff;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  min-width: 30px;
+  height: 30px;
+  transition: background 0.15s, color 0.15s;
+}
+#medioAnimBar button:hover {
+  background: rgba(255,255,255,0.1);
+  color: #ffffff;
+}
+#medioAnimBar button:active { background: rgba(255,255,255,0.18); }
+#medioAnimBar #maCounter {
+  color: #b0bae0;
+  font-size: 12px;
+  letter-spacing: .05em;
+  padding: 0 6px;
+  min-width: 55px;
+  text-align: center;
+}
+
+/* Canvas dell'animazione "lettura → espansione" del campo medio.
+   Sovrapposto al #graph; creato/rimosso da js/components/expand-animation.js.
+   Riceve click dopo l'auto-cycle per riaprire la rosa di una parola
+   (Stadio 3 della roadmap UX §2). Mostra il cursore pointer sopra. */
+#medio-anim-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 8;
+  cursor: pointer;
+}
+
+/* Modalità "comprensione frase" — il campo vasto resta visibile sotto
+   l'animazione del medio con opacità ridotta. I satelliti della rosa
+   raggiungono le posizioni reali delle parole sul vasto. */
+/* Modalità comprensione frase: il vasto sottostante resta a piena opacità
+   (l'animazione canvas sopra evidenzia le parole della frase alle loro
+   posizioni 8D). Disabilitiamo pointer-events sul canvas vis-network così i
+   click dell'utente vanno al canvas dell'animazione e non al vasto sotto. */
+body.comprensione-frase #graph canvas:not(#medio-anim-canvas) {
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Dim overlay — 8 etichette dimensione (POTERE, MATERIA, …) come HTML
+   sopra il canvas, ancorate al viewport. Restano visibili durante zoom
+   e pan (a differenza dei nodi-label vis-network che uscivano fuori
+   quadro al primo zoom-in). Vedi js/components/dim-overlay.js.
+   ════════════════════════════════════════════════════════════════════ */
+.dim-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+.dim-overlay-label {
+  position: absolute;
+  font: 700 14px/1 'JetBrains Mono', monospace;
+  letter-spacing: .15em;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.85);
+  user-select: none;
+}
+
+/* Toolbar overlay strumenti grafo — bottom-right (vedi js/components/graph-toolbar.js) */
+#graphToolbar {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  display: none;
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-toolbar-bg);
+  border: 1px solid var(--color-toolbar-border);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 22px rgba(0,0,0,0.45);
+  user-select: none;
+}
+#graphToolbar button {
+  background: transparent;
+  border: 0;
+  color: var(--testo-chiaro);
+  font-size: 18px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-smooth), opacity var(--transition-smooth);
+}
+#graphToolbar button:hover:not(:disabled) { background: var(--color-toolbar-hover); }
+#graphToolbar button:active:not(:disabled) { background: var(--color-toolbar-active); }
+#graphToolbar button:disabled { opacity: 0.32; cursor: default; }
+
+/* Overlay di transizione al cambio modalità */
+#mode-overlay {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  background: rgba(15, 15, 26, 0.88);
+  color: var(--testo-chiaro);
+  border: 1px solid var(--bordo);
+  padding: 18px 34px;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  text-transform: lowercase;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1000;
+  transition: opacity 0.22s, transform 0.22s;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+#mode-overlay.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Hint quando il field è vuoto */
+#empty-hint {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--testo-basso);
+  font-size: 14px;
+  text-align: center;
+  background: rgba(15, 15, 26, 0.7);
+  padding: 14px 22px;
+  border-radius: 8px;
+  border: 1px dashed var(--bordo);
+  pointer-events: none;
+  max-width: 360px;
+}
+#empty-hint strong {
+  color: var(--colore-cielo);
+  font-weight: 600;
+}
+#empty-hint .hint-sub {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--testo-tenue);
+}
+
+/* Bottoni overlay nel canvas vasto: crea / carica il proprio campo.
+   Visibilità gestita da view-switcher.js (updateOverlayCtaVisibility). */
+.overlay-actions {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 6;
+  display: flex;
+  gap: 8px;
+}
+.overlay-cta {
+  background: rgba(15, 15, 26, 0.85);
+  color: var(--colore-cielo);
+  border: 1px solid var(--colore-cielo);
+  border-radius: 6px;
+  padding: 10px 18px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .03em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.overlay-cta:hover {
+  background: var(--colore-cielo);
+  color: var(--sfondo-scuro);
+}
+.overlay-cta.secondary {
+  color: var(--testo-chiaro);
+  border-color: var(--bordo);
+}
+.overlay-cta.secondary:hover {
+  background: var(--testo-chiaro);
+  color: var(--sfondo-scuro);
+  border-color: var(--testo-chiaro);
+}
+
+/* Toast effimero al completamento di una trasmissione personale → vasto. */
+.transmit-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 100;
+  background: rgba(15, 15, 26, 0.95);
+  color: var(--testo-chiaro);
+  border: 1px solid var(--bordo);
+  border-radius: 6px;
+  padding: 10px 18px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  letter-spacing: .02em;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+.transmit-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.transmit-toast.ok    { border-color: var(--colore-foresta); color: var(--colore-foresta); }
+.transmit-toast.err   { border-color: var(--colore-fuoco);   color: var(--colore-fuoco); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Visibilità contestuale tool del campo (#filtri, #relazioni)
+   — Fase A (vasto, nessuna parola): visibili
+   — Fase B (vasto + parola): nascosti (l'utente si concentra sulla parola)
+   — Fase C (personale): #filtri nascosto (vasto-specifico),
+     #relazioni nascosto se parola selezionata (declutter)
+   Gating tramite body.campo-vasto e body.parola-selezionata.
+   ════════════════════════════════════════════════════════════════════ */
+
+#filtri { display: none; }
+body.campo-vasto #filtri { display: block; }
+body.parola-selezionata #filtri { display: none; }
+body.parola-selezionata #relazioni { display: none; }
+
+/* Footer "+ parola" — nascosto in vasto (vista di sola consultazione del
+   vocabolario condiviso); mostrato in nuovo/medio dove ha senso editare. */
+body.campo-vasto #sidebar footer button[data-action="add-word"] { display: none; }
+
+/* (.box.pannello e #sentencePanel legacy rimossi — entrambi sono ora <section>
+   nella sidebar e seguono il section style contestuale.) */
+
+/* ══════════════════════════════════════════════════════════════════════
+   Card parola (#info-parola) — section dedicata alla parola selezionata.
+   Visibilità centralizzata sul body.parola-selezionata: appaiono insieme
+   #info-parola, #dimensioni, #spinte; sparisce #info-empty.
+   Vedi regole di design.md §3, §5, §8 (prossimità).
+   ════════════════════════════════════════════════════════════════════ */
+
+#info-parola, #dimensioni, #spinte { display: none; }
+body.parola-selezionata #info-parola,
+body.parola-selezionata #dimensioni,
+body.parola-selezionata #spinte { display: block; }
+body.parola-selezionata #info-empty { display: none; }
+
+/* Intesta di #info-parola: titolo grande colorato + badge campo */
+#info-parola .intesta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+#info-parola .etichetta.titolo {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--dim-color, var(--testo-chiaro));
+  text-transform: none;
+}
+
+/* Azioni in fondo a #info-parola — 3 bottoni che agiscono sulla parola */
+#info-parola .azioni button.elimina:hover {
+  color: var(--colore-fuoco);
+  border-color: var(--colore-fuoco);
+}
+
+/* Badge campo: piccola etichetta di provenienza */
+.segnale.campo {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--testo-basso);
+  padding: 2px 6px;
+  border: 1px solid var(--bordo);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* Intestazione */
+.intesta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.etichetta.titolo {
+  margin: 0;
+  font-size: 12px;
+  color: var(--testo-basso);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* Bottone chiudi (variante di button) */
+button.chiudi {
+  background: transparent;
+  color: var(--testo-basso);
+  border: 1px solid var(--bordo);
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--movimento-dolce);
+}
+button.chiudi:hover { color: var(--testo-chiaro); border-color: var(--bordo-hover); }
+
+/* Sezione interna a un pannello */
+.sezione { margin-bottom: 14px; }
+.sezione .etichetta {
+  font-size: 11px;
+  color: var(--testo-basso);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.etichetta .hint {
+  text-transform: none;
+  font-weight: 400;
+  color: var(--testo-tenue);
+  font-size: 10px;
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+
+/* Layout per le liste di chip */
+.griglia {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+.riga {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* Chip — base e varianti dim/dir, stato attivo */
+button.chip {
+  background: transparent;
+  border: 1px solid var(--bordo);
+  color: var(--testo-basso);
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--movimento-dolce);
+}
+button.chip:hover { background: var(--color-toolbar-hover); }
+button.chip.dim {
+  padding: 5px 8px;
+  text-align: left;
+  border-color: var(--chip-dim, var(--bordo));
+  color: var(--chip-dim, var(--testo-basso));
+}
+button.chip.dir {
+  flex: 1 1 0;
+  min-width: 60px;
+  text-align: center;
+}
+button.chip.attivo {
+  background: var(--chip-attivo-sfondo);
+  border-width: 1.5px;
+  border-color: var(--testo-chiaro);
+  color: var(--testo-chiaro);
+  font-weight: 600;
+}
+
+/* Bottone azzera (variante di button) */
+button.azzera {
+  background: transparent;
+  border: 1px solid var(--bordo);
+  color: var(--testo-basso);
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--movimento-dolce);
+}
+button.azzera:hover { color: var(--testo-chiaro); border-color: var(--bordo-hover); }
+
+/* Riga azioni in fondo al pannello */
+.azioni {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Riga del range firma — variante di .riga */
+.riga.firma {
+  display: grid;
+  grid-template-columns: 7em 1.5em 1fr 5em;  /* label · switch · cursore · lettura */
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+/* Etichetta dimensione — uniformata alle label del canvas (uppercase bold) */
+.riga.firma .nome {
+  font-size: 14px;
+  text-align: right;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--dim-color, var(--testo-chiaro));
+}
+
+/* Toggle di visibilità — variante di button (vedi §3).
+   Icona "switch": pallino a sinistra = inattivo, a destra = attivo.
+   Gli SVG sono in /icons/, applicati via CSS mask così il colore arriva
+   dal tema (background-color) e segxue dim-color quando attivo. */
+button.switch {
+  width: 1.8em;
+  height: 1.5em;
+  padding: 0;
+  border: 0;
+  background-color: var(--testo-basso);
+  cursor: pointer;
+  -webkit-mask: url('icons/switch-off.svg') no-repeat center / contain;
+          mask: url('icons/switch-off.svg') no-repeat center / contain;
+  transition: opacity var(--movimento-dolce);
+}
+button.switch:hover { opacity: 0.8; }
+button.switch.attivo {
+  opacity: 1;
+  -webkit-mask-image: url('icons/switch-on.svg');
+          mask-image: url('icons/switch-on.svg');
+}
+
+/* Riga firma con dimensione inattiva — barretta attenuata */
+.riga.firma.inattivo .cursore .riempi {
+  opacity: 0.15;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Cursore — controllo lineare unificato (regole di design.md §3).
+   Stesso shell visivo per .singolo (un valore) e .range (due valori):
+   track scuro full-width, fill colorato dim, poli sovrapposti, ew-resize.
+   ════════════════════════════════════════════════════════════════════ */
+
+.cursore {
+  position: relative;
+  height: 18px;
+  background: var(--sfondo-scuro);
+  border-radius: 2px;
+  cursor: ew-resize;
+  overflow: hidden;
+}
+.cursore .riempi {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--dim-color, var(--testo-basso));
+  border-radius: 2px;
+  min-width: 2px;
+  transition: width var(--movimento-dolce);
+  pointer-events: none;
+}
+.cursore.singolo .riempi { left: 0; }   /* range: left e width settati da JS */
+
+/* Etichette dei poli sovrapposte — invisibili al puntatore.
+   Halo a 4 livelli per leggibilità anche su fill chiari (giallo, beige). */
+.cursore .polo {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--polo-testo);
+  pointer-events: none;
+  letter-spacing: 0.02em;
+  text-shadow:
+    0 0 1px var(--polo-ombra),
+    0 0 2px var(--polo-ombra),
+    0 0 3px var(--polo-ombra),
+    0 0 5px var(--polo-ombra);
+  white-space: nowrap;
+  z-index: 1;
+}
+.cursore .polo.sinistra { left: 6px; }
+.cursore .polo.destra   { right: 6px; }
+
+/* Variante range — interazione mouse identica al .singolo: mousedown sul
+   container avvia il drag dell'estremo più vicino, mouseup commit-ta.
+   Vedi js/filters.js → _wireRangeDrag. Niente input nativi né thumb. */
+
+/* Lettura numerica del cursore — editabile (sia singolo che range) */
+.lettura {
+  font-size: 11px;
+  color: var(--testo-basso);
+  text-align: right;
+  letter-spacing: -.02em;
+}
+.lettura.range {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 1px;
+}
+.lettura input {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  outline: none;
+  width: 24px;
+  padding: 0 1px;
+  text-align: center;
+  cursor: pointer;
+  appearance: textfield;
+  -moz-appearance: textfield;
+  transition: border-color var(--movimento-dolce), color var(--movimento-dolce);
+}
+.lettura input:hover { border-bottom-color: var(--testo-tenue); }
+.lettura input:focus { color: var(--testo-chiaro); border-bottom-color: var(--testo-basso); cursor: text; }
+.lettura input::-webkit-inner-spin-button,
+.lettura input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Frase → campo medio
+   ════════════════════════════════════════════════════════════════════ */
+
+#sentencePanel textarea {
+  width: 100%;
+  background: rgba(10, 10, 20, 0.6);
+  color: var(--testo-chiaro);
+  border: 1px solid var(--bordo);
+  border-radius: 6px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+  min-height: 60px;
+  margin-bottom: 8px;
+}
+#sentencePanel textarea:focus { outline: none; border-color: var(--colore-cielo); }
+
+.sentence-hint {
+  font-size: 10px;
+  color: #555;
+  margin-top: 8px;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Badge "sconosciuta" (campo medio)
+   ════════════════════════════════════════════════════════════════════ */
+
+.unknown-badge {
+  display: inline-block;
+  background: rgba(255, 91, 91, 0.2);
+  color: #ff5b5b;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  margin-left: 4px;
+  vertical-align: middle;
+  cursor: pointer;
+  border: 1px solid rgba(255, 91, 91, 0.4);
+}
+.unknown-mini {
+  color: #ff5b5b;
+  font-style: normal;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Stats: indicatore di campo attivo
+   ════════════════════════════════════════════════════════════════════ */
+
+#stats.mode-nuovo { border-left: 3px solid var(--colore-foresta); }
+#stats.mode-medio { border-left: 3px solid var(--colore-tramonto); }
+#stats.mode-vasto { border-left: 3px solid var(--colore-cielo); }
+#stats strong { color: var(--testo-chiaro); font-weight: 600; }
+#stats em { font-style: normal; color: var(--colore-sole); }
+
+/* (.azioni button.on / .has-active-filter rimossi: il bottone filtro toggle
+   non esiste più — #filtri è una sezione permanente della sidebar.) */
+
+/* Bottoni di trasmissione/community: variant via classe sul button. */
+.azioni button.transmit {
+  background: rgba(232, 208, 64, 0.1);
+  border-color: var(--colore-sole);
+  color: var(--colore-sole);
+}
+.azioni button.transmit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.azioni button.community-send {
+  background: rgba(232, 122, 170, 0.1);
+  border-color: var(--colore-tramonto);
+  color: var(--colore-tramonto);
+}
+.azioni button.community-send:hover {
+  background: rgba(232, 122, 170, 0.18);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Edit panel: pulsante primario + empty rels
+   ════════════════════════════════════════════════════════════════════ */
+
+.empty-rels {
+  color: var(--testo-basso);
+  font-size: 12px;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.rel-edit-row { gap: 6px; flex-wrap: wrap; }
+.rel-dir { color: var(--testo-basso); font-size: 14px; }
+.rel-other { flex: 1; font-weight: 500; }
+.rel-via-input {
+  flex: 0 0 8em;
+  min-width: 6em;
+  font-size: 12px;
+  font-style: italic;
+}
+.delete-rel {
+  background: transparent;
+  border: 1px solid rgba(224, 72, 72, 0.4);
+  color: var(--colore-fuoco);
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.delete-rel:hover { background: rgba(224, 72, 72, 0.15); }
+
+/* Riga relazione multi-add (modale "Aggiungi relazioni"): autosave indicato
+   da .rel-saved-mark che cambia colore quando data-saved="1". */
+.rel-row-multi {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+.rel-row-multi.rel-row-saved {
+  border-color: rgba(74, 200, 128, 0.35);
+  background: rgba(74, 200, 128, 0.06);
+}
+.rel-row-multi .rel-saved-mark {
+  width: 10px; text-align: center;
+  font-size: 14px; line-height: 1;
+  color: var(--testo-tenue);
+  transition: color 0.15s;
+}
+.rel-row-multi.rel-row-saved .rel-saved-mark {
+  color: var(--colore-foresta);
+}
+.rel-row-multi .rel-row-del {
+  width: 22px; height: 22px;
+  padding: 0;
+  border: 1px solid var(--bordo);
+  background: transparent;
+  color: var(--testo-basso);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px; line-height: 1;
+}
+.rel-row-multi .rel-row-del:hover {
+  border-color: var(--colore-fuoco);
+  color: var(--colore-fuoco);
+}
+
+.ctx-title { pointer-events: none; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Quick-edit / Connect — intestazione with from → to colorati
+   ════════════════════════════════════════════════════════════════════ */
+.rel-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.rel-header .rel-arrow {
+  color: var(--testo-basso);
+  font-size: 20px;
+  font-weight: normal;
+}
+
+/* ---- Dialog di estrazione relazioni dal KG ---- */
+.extract-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0;
+}
+.extract-group-row {
+  display: grid;
+  grid-template-columns: 20px 110px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.extract-group-row:hover { background: rgba(255,255,255,0.04); }
+.extract-group-label {
+  color: var(--testo-chiaro);
+  font-weight: 500;
+  font-size: 13px;
+}
+.extract-group-desc {
+  color: var(--testo-basso);
+  font-size: 11px;
+  font-style: italic;
+}
+.extract-actions-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.edit-btn.small {
+  font-size: 11px;
+  padding: 4px 10px;
+}
