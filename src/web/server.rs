@@ -202,14 +202,6 @@ pub async fn run(port: u16) {
                     header::HeaderValue::from_static("no-cache, must-revalidate"),
                 ))
         )
-        .nest_service(
-            "/campovasto-mobile",
-            axum::Router::new().fallback_service(ServeDir::new("campovasto-mobile"))
-                .layer(SetResponseHeaderLayer::overriding(
-                    header::CACHE_CONTROL,
-                    header::HeaderValue::from_static("no-cache, must-revalidate"),
-                ))
-        )
         // PoC parallelo Cytoscape (sostituirà campovasto se la valutazione va bene).
         .nest_service(
             "/campovasto-cy",

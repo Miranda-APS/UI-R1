@@ -52,8 +52,9 @@ docs/
 ```
 
 > Nota: la cartella `docs/raw/futuro/` (8 documenti speculativi OS/hardware) è stata
-> spostata fuori dal tree wiki — sta ora in `roadmap_futuro/` a livello di progetto.
-> La wiki documenta lo **stato attuale**, non roadmap di lungo termine.
+> rimossa dal repo pubblico. Resta solo nel filesystem locale di Francesco (vedi
+> `.gitignore`). La wiki documenta lo **stato attuale** del sistema, non roadmap
+> speculative di lungo termine.
 
 ## Workflow d'uso
 

@@ -63,7 +63,14 @@ Index globale con 29 articoli su 6 topic. Log con cronologia degli ingest.
 ## [2026-05-13] structure | rimosso futuro/ dalla wiki
 Spostato `docs/raw/futuro/` (8 doc speculativi OS/hardware) a `roadmap_futuro/` al livello del
 progetto. Motivazione: la wiki documenta **lo stato attuale**, non le roadmap speculative.
-La cartella `roadmap_futuro/` resta versionata, ma fuori dal tree wiki.
+
+## [2026-05-13] cleanup | rimosso dal repo pubblico
+- `roadmap_futuro/`: untracked + gitignored. Resta solo locale.
+- `campovasto-mobile/` (variante mobile non mantenuta): untracked + gitignored.
+- `src/web/server.rs`: rimosso endpoint `/campovasto-mobile` orfano.
+
+Restano nel repo: `books/` (3 .txt usati da `read-books` binary, dominio pubblico) e
+`fractals/` (96 SVG I Ching usati da `fractal_visuals.rs` + endpoint web).
 
 ## [2026-05-13] update | metriche allineate al post-merge KG
 - `index.md`: header "Stato sistema" riallineato (lessico 25.602, KG 83.453 archi su 25.142 nodi,
