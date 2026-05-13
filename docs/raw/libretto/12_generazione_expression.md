@@ -38,7 +38,7 @@ Niente template. Niente lookup di risposte. La generazione come proprietà topol
 
 ## Capitolo 2 — Cosa fa effettivamente `compose()` (la realtà)
 
-La funzione vive in [expression.rs:172-279](../../src/topology/expression.rs). Ha **13 parametri** (Phase 67):
+La funzione vive in [expression.rs:172-279](../../src/topology/expression.rs). Aveva **13 parametri** in Phase 67; Phase 77 ne ha aggiunti **3** per il bridge al ciclo della comprensione (vedi Vol. 20). Firma corrente, **16 parametri**:
 
 ```rust
 pub fn compose(
@@ -52,10 +52,17 @@ pub fn compose(
     input_words: &[String],
     episodes: Option<&SemanticEpisodeLog>,
     is_question: bool,
-    other_in_distress: bool,     // Phase 62
-    response_intention: Option<&str>,  // Phase 67
+    other_in_distress: bool,         // Phase 62
+    response_intention: Option<&str>, // Phase 67
+    kg_proc:           Option<&KnowledgeGraph>,           // Phase 77 — il KG procedurale
+    action_decision:   Option<&ActionDecision>,          // Phase 77 — cosa fare (kind/anchors/target)
+    comprehension_report: Option<&ComprehensionReport>,  // Phase 77 — cosa ho capito
 ) -> Option<Expression>
 ```
+
+**Differenza sostanziale rispetto a Phase 67**: quando i tre parametri Phase 77 sono `Some`, `compose()` tenta **per prima cosa** `pattern_matcher::compose_from_pattern(report, kg_proc, action_decision)` — che legge il pattern dal [KG procedurale](../wiki/topologia/knowledge-graph-procedurale.md), istanzia gli slot grammaticali via match `IsA role + via`, e rende come voce italiana. Se quel path produce `Some(Expression)`, è la risposta. Se ritorna `None`, si cade ai nuclei (descritti sotto).
+
+Quindi: la pipeline che questo capitolo descrive — "extract_nuclei → strength → render" — non è più il path **principale** dal Phase 77 in poi. È il path **secondario**, attivato quando il pattern matcher non trova un pattern adeguato (es. domande sul mondo, asserzioni libere). Per la spiegazione del path primario vedi [Vol. 20 — Il ciclo della comprensione](20_ciclo_comprensione.md).
 
 Il flusso interno, passo per passo:
 
@@ -486,7 +493,7 @@ Quando `compose` pesca candidati, `amore` ha boost 1.15, `distruzione` 1.015. Di
 
 ### Esposto
 
-- `compose(...)` con 13 parametri — API principale
+- `compose(...)` con 16 parametri Phase 77 (era 13 in Phase 67) — API principale
 - `extract_nuclei(...)` con 8 parametri — comprensione + generation sub
 - `valence_weight(word, drives, lexicon)` — utile per debug
 - `SemanticNucleus`, `EntityVoice`, `ExpressionMood`, `Expression` — structs
@@ -509,8 +516,9 @@ Per `/api/admin/expression/*`:
 
 ## Sintesi del volume
 
-`compose()` (13 parametri Phase 67) è il cuore della generazione. Pipeline:
+`compose()` (16 parametri Phase 77; era 13 in Phase 67) è il cuore della generazione. Pipeline:
 
+0. **Phase 77 — pattern matcher primario**: se `kg_proc + action_decision + comprehension_report` sono `Some`, prima di qualsiasi nucleo si tenta `pattern_matcher::compose_from_pattern`. Legge il pattern dal KG procedurale (selezionato per risonanza in Phase 79), istanzia gli slot, rende come voce italiana. Se `Some(Expression)` → è la risposta. Se `None` → fallback ai punti seguenti. Vedi [Vol. 20](20_ciclo_comprensione.md).
 1. **Comprehension pool + candidates**: parole attive con act > 0.02, stability ≥ 0.25; candidates = pool − echo_exclude.
 2. **`extract_nuclei`**: coppie di parole con relazione KG 1-hop e 2-hop. Esclude SimilarTo (troppo debole). Strength = sqrt(a×o) × conf × hub_penalty × relation_weight × input_proximity × valence_boost × episodic_boost. Top-5.
 3. **`derive_voice`**: Person/Mood/Tense da valenza + frattali + codon + Phase 67 response_intention + Phase 62 other_in_distress.
@@ -518,7 +526,7 @@ Per `/api/admin/expression/*`:
 5. **Fallback `compose_from_field`**: se no nuclei → `express_from_drives` (se drive dominante > 0.15, template DRIVE_STATE_WORDS) o parola singola pescata per delta × valence.
 
 **La promessa**: generazione come proprietà topologica del campo 8D.
-**La realtà**: renderer di triple KG con coloring Octalysis + modulazione voce. Funziona, ma non è l'emergenza piena dichiarata.
+**La realtà (Phase 79)**: il path primario è ora pattern-matching dal KG procedurale (Phase 77+79). Quando funziona — saluti, articolazioni, riconoscimenti, identificazioni — la voce emerge dalla struttura dichiarata dei pattern, non da rendering di triple semantiche. Il path nuclei resta come fallback per asserzioni libere e domande sul mondo. La distanza dall'emergenza pura si è ridotta ma non chiusa: il pattern matcher è interpretato come una grammatica generativa esplicita, non come fisica del campo.
 
 **Quattro proposte concrete per chiudere la distanza**: (1) nuovo path `compose_from_topology` che genera dal profilo 8D senza triple, (2) uso delle fasi degli archi come indicatori di congiunzione grammaticale, (3) integrazione delle dimensioni emergenti dei frattali, (4) fallback vivo multi-parola senza template.
 

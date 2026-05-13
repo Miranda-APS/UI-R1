@@ -49,7 +49,7 @@ Workflow di rebuild:
 
 ## Differenziazione parole nuove
 
-Le parole nuove (4.166 su 25.875 non sono nel KG) partono dalla firma del contesto pura, senza rumore artificiale. Con poche esposizioni (5-10) rimangono quasi indistinguibili — la differenziazione è **fenomenologica** (esposizioni nel campo) o **strutturale** (Phase 63: aggiunte al KG + `rederive-signatures`).
+Le parole del lessico non presenti come nodi del KG (~460 su 25.602: 25.602 lessico − 25.142 nodi KG post-merge) partono dalla firma del contesto pura, senza rumore artificiale. Con poche esposizioni (5-10) rimangono quasi indistinguibili — la differenziazione è **fenomenologica** (esposizioni nel campo) o **strutturale** (Phase 63: aggiunte al KG + `rederive-signatures`).
 
 Questa è scelta consapevole: non si "fabbricano" differenze. Una parola che non si è mai incontrata davvero non ha geometria propria.
 

@@ -45,12 +45,15 @@ docs/
 │  ├─ generazione/         # expression, syntax, grammar
 │  └─ campovasto/          # frontend: arch, design system, medio-api, llm-wiki (questo)
 └─ raw/
-   ├─ libretto/            # 22 capitoli storici (raw immutabili)
+   ├─ libretto/            # 23 capitoli storici (raw immutabili)
    ├─ contesto/CLAUDE_phase79.md
    ├─ architettura/        # ARCHITECTURE, FILOSOFIA, olografica, AUDIT P67, refactor logs
-   ├─ frontend/            # campovasto: CLAUDE, FRONTEND, regole di design, roadmap UX
-   └─ futuro/              # 8 documenti OS/hardware speculativi
+   └─ frontend/            # campovasto: CLAUDE, FRONTEND, regole di design, roadmap UX
 ```
+
+> Nota: la cartella `docs/raw/futuro/` (8 documenti speculativi OS/hardware) è stata
+> spostata fuori dal tree wiki — sta ora in `roadmap_futuro/` a livello di progetto.
+> La wiki documenta lo **stato attuale**, non roadmap di lungo termine.
 
 ## Workflow d'uso
 

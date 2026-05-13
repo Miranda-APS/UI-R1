@@ -2,7 +2,9 @@
 
 > Wiki LLM-style (pattern Karpathy) di UI-R1.
 > Un articolo = un concetto, con cross-link relativi. Le fonti immutabili vivono in `../raw/`, gli articoli sintetizzati qui.
-> **Stato sistema**: Phase 79 — 580 test passanti, 25.142 parole, ~83.453 archi KG semantico, ~395 archi KG procedurale.
+> **Stato sistema**: Phase 79 — 580 test passanti, lessico 25.602 parole, KG semantico 83.453 archi su 25.142 nodi (post-merge UI-R1↔standalone), KG procedurale 396 archi (10 pattern, 9 percetti).
+>
+> **Aperto come vault Obsidian** (config in `.obsidian/`). Guida d'uso: [COME_USARE_OBSIDIAN.md](COME_USARE_OBSIDIAN.md).
 
 ## Come leggere
 

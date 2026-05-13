@@ -557,24 +557,18 @@ Entrambe vengono mantenute *sincronizzate manualmente* a ogni propagazione (vedi
 
 Già discusso in 2.3 (flusso C). La sostanza: la generazione è essenzialmente "trova triple KG tra parole attive, scegli le migliori usando la valenza, rendile come frase italiana". La promessa filosofica di "espressione come emergenza dal campo 8D" non è ancora mantenuta. Vol. 12 entra nel dettaglio onesto e Vol. 99 propone come superarlo.
 
-### 6.3 — Codice morto da rimuovere
+### 6.3 — Codice morto rimosso (Phase 68 + cleanup 2026-05-12)
 
-Tre artefatti del codebase sono dichiaratamente dead code (verificato empiricamente):
+> *Aggiornato Phase 79*: il debito tecnico segnalato qui è stato saldato. Lascio la
+> sezione come traccia storica perché spiega *perché* certe scelte sono state fatte.
 
-**`src/topology/dual_field.rs`** (12.5 KB) — esistente ma NON importato in `mod.rs`. Sostituito da `interlocutor.rs` in Phase 53. Solo riferimenti interni (auto) e un commento storico in `interlocutor.rs:13`.
+Tre artefatti del codebase erano dichiaratamente dead code:
 
-**`src/topology/llm_substrate.rs`** (33.7 KB) + **`src/topology/llm_substrate/`** (cartella vuota) + **`src/topology/llm_substrate_qwen35.rs`** (17.7 KB). Tutti gated `#[cfg(feature = "llm-substrate")]`. **Ma `llm-substrate` NON è una feature dichiarata in `Cargo.toml`**:
+**`src/topology/dual_field.rs`** — esistente ma NON importato in `mod.rs`. Sostituito da `interlocutor.rs` in Phase 53. **Rimosso fisicamente in Phase 68**.
 
-```toml
-[features]
-default = []
-web = ["axum", "tower", "tower-http", "http"]
-android = ["web", "jni"]
-```
+**`src/topology/llm_substrate.rs` + `llm_substrate/` + `llm_substrate_qwen35.rs`** — gated `#[cfg(feature = "llm-substrate")]` su una feature non dichiarata in `Cargo.toml`. Mai compilati in nessuna build. **Rimossi fisicamente in Phase 68**, insieme ai binari dipendenti `src/bin/llm_calibrate.rs` e `src/bin/llm_inhabited.rs`.
 
-Il modulo non viene MAI compilato in nessuna build. Sono ~52 KB di codice mai eseguito. Inoltre, due binari (`src/bin/llm_calibrate.rs` e `src/bin/llm_inhabited.rs`) dipendono da `llm_substrate` e quindi non possono compilare con la build di default.
-
-La posizione del progetto è chiara: nessun substrato LLM, mai, a runtime. Qwen3 si usa solo offline via Python in `data/external/` per costruire il KG. La presenza di `llm_substrate*.rs` è puro residuo storico — probabilmente un esperimento abbandonato. **Va rimosso fisicamente** per non confondere chi legge il codice. (Una proposta di pulizia è discussa in `appunti.md` — Francesco deciderà se farla prima del libretto o dopo.)
+La posizione del progetto resta chiara: nessun substrato LLM, mai, a runtime. Qwen3 si usa solo offline via Python in `data/external/` per costruire il KG. `inquiry.rs` può chiamare Ollama in background HTTP opzionale per gap semantici forti, ma non è un substrato — è un'inquiry esterna a-fonte-fissa.
 
 ---
 

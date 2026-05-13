@@ -84,3 +84,9 @@ lessons/
 examples/
 tools/
 archive/
+
+# Obsidian vault state (per-utente, non condiviso)
+docs/wiki/.obsidian/workspace.json
+docs/wiki/.obsidian/workspaces.json
+docs/wiki/.obsidian/cache
+docs/wiki/.obsidian/plugins/*/data.json

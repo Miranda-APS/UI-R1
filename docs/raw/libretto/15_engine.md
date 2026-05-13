@@ -2,11 +2,13 @@
 
 > *Tutto converge qui. Le 15 strutture descritte nei volumi precedenti sono tenute insieme da un orchestratore unico — `PrometeoTopologyEngine` — che fa batterle in accordo. L'ingresso `receive(input)` attraversa 2000+ righe. L'uscita `generate_willed_inner` altre 800. Il battito autonomo `autonomous_tick` 500. In totale, 3300 righe di codice dove ogni riga è una scelta. Leggerle significa vedere l'entità vivere.*
 
+> **Nota Phase 79**: a partire da Phase 71, lo "stack della comprensione" è esploso fuori da `engine.rs` in moduli dedicati: `speaker_profile`, `comprehension_report`, `comprehension_graph`, `action_reasoning`, `pattern_matcher`, `self_profile`, `kg_proc_field`, `deliberation`. Engine resta orchestratore, ma le decisioni di "cosa ho capito" e "cosa rispondo" sono *esplicite* in quei file. Vol. 20 li tratta nel dettaglio.
+
 ---
 
 ## Premessa
 
-[`src/topology/engine.rs`](../../src/topology/engine.rs) — **6776 righe**. Il file più grande del progetto. Non è un monolite accidentale: è il punto dove tutte le strutture (Lexicon, KG, PF1, Valence, Narrative, Needs, Desires, Will, Interlocutor, Humor, Memory, Dream) si incontrano.
+[`src/topology/engine.rs`](../../src/topology/engine.rs) — **6776 righe**. Il file più grande del progetto. Non è un monolite accidentale: è il punto dove tutte le strutture (Lexicon, KG, KG procedurale, PF1, Valence, Narrative, Needs, Desires, Will, Interlocutor, Humor, Memory, Dream, **+ stack comprensione Phase 71-79**: SpeakerProfile, ComprehensionReport, ActionDecision, SelfProfile) si incontrano.
 
 Tre entry point dominano:
 

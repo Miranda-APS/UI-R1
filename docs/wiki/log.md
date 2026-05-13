@@ -59,3 +59,27 @@ Compilati: `architettura-campovasto`, `design-system`, `medio-api`,
 
 ## [2026-05-12] update | index.md + log.md
 Index globale con 29 articoli su 6 topic. Log con cronologia degli ingest.
+
+## [2026-05-13] structure | rimosso futuro/ dalla wiki
+Spostato `docs/raw/futuro/` (8 doc speculativi OS/hardware) a `roadmap_futuro/` al livello del
+progetto. Motivazione: la wiki documenta **lo stato attuale**, non le roadmap speculative.
+La cartella `roadmap_futuro/` resta versionata, ma fuori dal tree wiki.
+
+## [2026-05-13] update | metriche allineate al post-merge KG
+- `index.md`: header "Stato sistema" riallineato (lessico 25.602, KG 83.453 archi su 25.142 nodi,
+  KG procedurale 396 archi).
+- `topologia/lexicon.md`: corretta differenza lessico/nodi KG (era citato "4.166 su 25.875",
+  ora "~460 su 25.602: 25.602 lessico − 25.142 nodi KG post-merge").
+- `campovasto/llm-wiki-pattern-applicato.md`: rimossa voce `futuro/` dalla descrizione struttura.
+
+## [2026-05-13] note | libretto in `docs/raw/libretto/` allineato fino a Phase 68
+Audit del libretto (23 capitoli, ~12K righe): Vol. 00 e 01 ancorati a Phase 63-68. Phase 71-79
+(ciclo della comprensione: speaker_profile / comprehension_report / action_reasoning / KG
+procedurale / pattern_matcher / self_profile / kg_proc_field) **non documentata nel libretto**.
+Fix mirati applicati ai 5 punti più obsoleti + aggiunto capitolo nuovo
+`20_ciclo_comprensione.md` per Phase 71-79. Il libretto resta sorgente primaria;
+gli articoli wiki "comprensione/" sono già allineati alla Phase 79.
+
+## [2026-05-13] vault | aggiunta configurazione Obsidian
+Creato `docs/wiki/.obsidian/` con config minimale per aprire la wiki come vault Obsidian.
+Graph view + backlinks + tag pane attivi. Guida d'uso in `docs/wiki/COME_USARE_OBSIDIAN.md`.

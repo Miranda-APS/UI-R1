@@ -1,0 +1,10 @@
+{
+  "accentColor": "#7c5cff",
+  "theme": "obsidian",
+  "cssTheme": "",
+  "baseFontSize": 16,
+  "interfaceFontFamily": "JetBrains Mono",
+  "textFontFamily": "JetBrains Mono",
+  "monospaceFontFamily": "JetBrains Mono",
+  "showViewHeader": true
+}

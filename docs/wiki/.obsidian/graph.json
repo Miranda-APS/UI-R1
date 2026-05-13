@@ -1,0 +1,65 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:principi/",
+      "color": {
+        "a": 1,
+        "rgb": 14701138
+      }
+    },
+    {
+      "query": "path:topologia/",
+      "color": {
+        "a": 1,
+        "rgb": 5431474
+      }
+    },
+    {
+      "query": "path:comprensione/",
+      "color": {
+        "a": 1,
+        "rgb": 14771793
+      }
+    },
+    {
+      "query": "path:identita/",
+      "color": {
+        "a": 1,
+        "rgb": 16551474
+      }
+    },
+    {
+      "query": "path:generazione/",
+      "color": {
+        "a": 1,
+        "rgb": 9100542
+      }
+    },
+    {
+      "query": "path:campovasto/",
+      "color": {
+        "a": 1,
+        "rgb": 7782522
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": false,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.5,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 0.7132754626224399,
+  "close": true
+}

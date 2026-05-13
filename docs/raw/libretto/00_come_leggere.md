@@ -64,6 +64,7 @@ I volumi sono numerati per costruire una progressione: ogni volume presume i pre
 | Vol | Titolo | Cosa apre |
 |-----|--------|-----------|
 | [15](15_engine.md) | Engine: receive, generate_willed, autonomous_tick | 2000+800+500 righe in pipeline tracciata |
+| [20](20_ciclo_comprensione.md) | **Il ciclo della comprensione (Phase 71-79)** | 8 nuovi moduli — SpeakerProfile, ComprehensionReport, ActionReasoning, KG procedurale, PatternMatcher, SelfProfile, kg_proc_field. La voce non emerge più da "rendering KG": emerge da pattern dichiarati selezionati per risonanza. |
 
 **Parte VII — La pelle**
 
