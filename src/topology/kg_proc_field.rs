@@ -177,6 +177,32 @@ pub fn seed_from_comprehension(
     }
 }
 
+/// Phase 83 (freccia b): la POSIZIONE dell'entità semina il campo di risonanza,
+/// accanto alla comprensione. L'atto non emerge più solo da *cosa* è stato
+/// compreso, ma da *cosa è stato compreso + come l'entità ne è mossa*.
+///
+/// Il canale è CD5 (Relazione): quando l'entità è relazionalmente mossa
+/// dall'Altro (|CD5| alto — sofferenza o gioia comprese, freccia a), semina il
+/// percetto `vicinanza` con intensità = |CD5|. `vicinanza` Causes i target
+/// dell'esplorazione (domandare/curiosità): l'entità mossa si VOLGE verso
+/// l'Altro invece di restituire neutro.
+///
+/// Nessuna soglia: l'intensità È |CD5| (effetto continuo del campo, non un
+/// interruttore). Il "flip" dell'atto avviene dove i punteggi di risonanza si
+/// incrociano — emergente, non tabellato. A carica relazionale debole il
+/// percetto di comprensione domina; a carica forte la posizione lo supera.
+pub fn seed_from_position(
+    activation: &mut KgProcActivation,
+    valence_drives: &[f64; 8],
+    kg_proc: &KnowledgeGraph,
+) {
+    // CD5 Relazione = drives[4]. |CD5| = intensità relazionale (verso o contro).
+    let relational_charge = valence_drives[4].abs();
+    if relational_charge > 0.0 {
+        activation.seed_percetto("vicinanza", relational_charge, kg_proc);
+    }
+}
+
 /// Detecta se l'utterance contiene un verbo coniugato in 2a singolare (presente).
 /// Usa `grammar::lemmatize` per riconoscere le forme verbali. È euristico:
 /// non distingue 2sg da forme nominali ambigue (es. "vivi" può essere verbo o
@@ -455,5 +481,57 @@ mod tests {
         let mut act = KgProcActivation::new();
         seed_from_comprehension(&mut act, &r, &kg);
         assert_eq!(select_pattern_by_resonance(&act, &kg).as_deref(), Some("ricambio"));
+    }
+
+    /// Phase 83 (freccia b): la POSIZIONE cambia l'atto. Stessa comprensione
+    /// (posizionamento senza vuoto → riconoscimento), ma a carica relazionale
+    /// forte (|CD5| alto, l'Altro in sofferenza compresa) la `vicinanza` fa
+    /// vincere l'esplorazione: l'entità mossa si volge verso l'Altro. Il
+    /// crossover è emergente (risonanza), non una soglia.
+    fn build_position_kg() -> KnowledgeGraph {
+        let mut kg = KnowledgeGraph::new();
+        // riconoscimento UsedFor restituire via=posizione
+        kg.add("riconoscimento", RelationType::IsA, "pattern");
+        kg.add_edge(TypedEdge { subject: "riconoscimento".into(), relation: RelationType::UsedFor,
+            object: "restituire".into(), confidence: 0.95, source: EdgeSource::Curated, via: Some("posizione".into()) });
+        // esplorazione UsedFor domandare via=curiosità
+        kg.add("esplorazione", RelationType::IsA, "pattern");
+        kg.add_edge(TypedEdge { subject: "esplorazione".into(), relation: RelationType::UsedFor,
+            object: "domandare".into(), confidence: 0.95, source: EdgeSource::Curated, via: Some("curiosità".into()) });
+        // percetto posizione (comprensione: claim completo)
+        kg.add("posizione", RelationType::IsA, "percetto");
+        kg.add_edge(TypedEdge { subject: "posizione".into(), relation: RelationType::Causes,
+            object: "restituire".into(), confidence: 0.4, source: EdgeSource::Curated, via: None });
+        kg.add_edge(TypedEdge { subject: "posizione".into(), relation: RelationType::Causes,
+            object: "posizione".into(), confidence: 0.4, source: EdgeSource::Curated, via: None });
+        // percetto vicinanza (posizione: entità mossa)
+        kg.add("vicinanza", RelationType::IsA, "percetto");
+        kg.add_edge(TypedEdge { subject: "vicinanza".into(), relation: RelationType::Causes,
+            object: "domandare".into(), confidence: 0.85, source: EdgeSource::Curated, via: None });
+        kg.add_edge(TypedEdge { subject: "vicinanza".into(), relation: RelationType::Causes,
+            object: "curiosità".into(), confidence: 0.7, source: EdgeSource::Curated, via: None });
+        kg
+    }
+
+    #[test]
+    fn posizione_debole_resta_riconoscimento() {
+        let kg = build_position_kg();
+        let mut act = KgProcActivation::new();
+        act.seed_percetto("posizione", 1.0, &kg);          // comprensione
+        let drives = [0.0, 0.0, 0.0, 0.0, 0.2, 0.0, 0.0, 0.0]; // CD5 debole
+        seed_from_position(&mut act, &drives, &kg);
+        assert_eq!(select_pattern_by_resonance(&act, &kg).as_deref(), Some("riconoscimento"),
+            "carica relazionale debole → l'atto resta riconoscimento");
+    }
+
+    #[test]
+    fn posizione_forte_fa_vincere_esplorazione() {
+        let kg = build_position_kg();
+        let mut act = KgProcActivation::new();
+        act.seed_percetto("posizione", 1.0, &kg);          // STESSA comprensione
+        let drives = [0.0, 0.0, 0.0, 0.0, -0.534, 0.0, 0.0, 0.0]; // CD5 forte (distress)
+        seed_from_position(&mut act, &drives, &kg);
+        assert_eq!(select_pattern_by_resonance(&act, &kg).as_deref(), Some("esplorazione"),
+            "l'entità fortemente mossa si volge verso l'Altro (esplorazione)");
     }
 }

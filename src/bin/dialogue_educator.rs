@@ -292,6 +292,66 @@ fn show_scene_understanding(engine: &PrometeoTopologyEngine) {
     println!("{}", "═".repeat(60));
 }
 
+/// Phase 80: cosa UI-r1 ha capito del parlante (SpeakerProfile) e
+/// cosa ha fatto lei stessa (SelfProfile). È la "memoria del dialogo".
+fn show_speaker(engine: &PrometeoTopologyEngine) {
+    let sp = &engine.speaker_profile;
+    println!("  ── SpeakerProfile (cosa UI-r1 ha capito del parlante) ──");
+    println!("    Turni osservati: {}", sp.turn_count);
+    match &sp.name {
+        Some(n) => println!("    Nome:            {}", n),
+        None    => println!("    Nome:            (non dichiarato)"),
+    }
+    if sp.self_facts.is_empty() {
+        println!("    Self-facts:      (nessuno — il parlante non si è posizionato)");
+    } else {
+        println!("    Self-facts ({}):", sp.self_facts.len());
+        for f in sp.self_facts.iter().take(10) {
+            println!("      [t{}] {:?}: \"{}\"", f.turn, f.kind, f.predicate);
+        }
+    }
+    if !sp.entity_facts.is_empty() {
+        println!("    Entity-facts ({}) — cosa il parlante dice di UI-r1:", sp.entity_facts.len());
+        for f in sp.entity_facts.iter().take(5) {
+            println!("      [t{}] {:?}: \"{}\"", f.turn, f.kind, f.predicate);
+        }
+    }
+    let open_q: Vec<_> = sp.unresolved_questions().take(5).collect();
+    if !open_q.is_empty() {
+        println!("    Domande aperte ({}):", open_q.len());
+        for q in open_q {
+            println!("      [t{}] \"{}\"", q.turn, q.raw_input);
+        }
+    }
+    let open_g: Vec<_> = sp.open_gaps().take(5).collect();
+    if !open_g.is_empty() {
+        println!("    Gap aperti ({}) — vuoti non articolati:", open_g.len());
+        for g in open_g {
+            println!("      [t{}] {} su \"{}\"", g.turn, g.gap_kind, g.trigger);
+        }
+    }
+    let top = sp.top_mentioned(6);
+    if !top.is_empty() {
+        let s: Vec<String> = top.iter().map(|(w, c)| format!("{}×{}", w, c)).collect();
+        println!("    Più menzionati: {}", s.join(", "));
+    }
+
+    println!("  ── SelfProfile (cosa UI-r1 ha FATTO nel dialogo) ──");
+    let sf = &engine.self_profile;
+    if sf.decisions.is_empty() {
+        println!("    (nessuna decisione registrata)");
+    } else {
+        println!("    Decisioni registrate: {}", sf.decisions.len());
+        for d in sf.decisions.iter().rev().take(6).collect::<Vec<_>>().iter().rev() {
+            let gap = d.gap_attended.as_ref()
+                .map(|g| format!(" gap={}/{}", g.from, g.missing))
+                .unwrap_or_default();
+            println!("      [t{}] {} ({:?}){}",
+                d.turn, d.kind.as_str(), d.narrative_subject, gap);
+        }
+    }
+}
+
 fn show_introspect(engine: &mut PrometeoTopologyEngine) {
     println!("{}", "═".repeat(60));
     println!("  STATO INTERNO — UI-r1");
@@ -420,6 +480,9 @@ fn main() {
                 ":recurring" => {
                     show_recurring(&engine);
                 }
+                ":speaker" | ":sp" => {
+                    show_speaker(&engine);
+                }
                 ":introspect" | ":i" => {
                     show_introspect(&mut engine);
                 }
@@ -525,6 +588,34 @@ fn main() {
                 d.shape.as_str(),
                 target_str,
                 d.anchor_words.iter().take(6).cloned().collect::<Vec<_>>().join(", "));
+        }
+
+        // ── Phase 81 debug: SentenceProposition (la frase come triple) ──
+        // Mostra come l'utterance è stata letta strutturalmente prima dei nuclei.
+        // Es. "ho paura del futuro" → Speaker FeelsAs paura via=futuro (+) [obj✓ via✓]
+        if let Some(p) = engine.last_sentence_proposition.as_ref() {
+            use prometeo::topology::sentence_proposition::{SubjectRef, ObjectRef};
+            let subj = match &p.subject {
+                SubjectRef::Speaker     => "Speaker".to_string(),
+                SubjectRef::Entity      => "Entity".to_string(),
+                SubjectRef::World(s)    => format!("World({})", s),
+                SubjectRef::Variable(w) => format!("?{}", w),
+            };
+            let obj = match &p.object {
+                None                        => "_".to_string(),
+                Some(ObjectRef::Word(w))    => w.clone(),
+                Some(ObjectRef::Variable(w)) => format!("?{}", w),
+            };
+            let via = p.via.as_deref().map(|v| format!(" via={}", v)).unwrap_or_default();
+            let pol = if p.polarity { "+" } else { "-" };
+            let conf = engine.last_kg_confrontation.as_ref()
+                .map(|c| format!(" [obj{} via{}{}]",
+                    if c.object_in_kg { "✓" } else { "✗" },
+                    if c.via_in_kg    { "✓" } else { "✗" },
+                    if !c.contradictions.is_empty() { " contra" } else { "" }))
+                .unwrap_or_default();
+            println!("  ╰ PROP: {} {:?} {}{} ({}){}",
+                subj, p.relation, obj, via, pol, conf);
         }
 
         // Hint interno: stance + drives dominanti (formato compatto)

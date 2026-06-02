@@ -5,7 +5,7 @@
 
 ## Overview
 
-Il `Lexicon` (`src/topology/lexicon.rs`) è il dizionario delle parole che UI-R1 conosce. Stato corrente: **25.602 parole** con stabilità 0.5-0.9. Ogni parola ha una firma 8D ([frattali I Ching](frattali-iching.md)), POS tag, exposure count, ed è il punto di accesso per il [PF1](pf1.md).
+Il `Lexicon` (`src/topology/lexicon.rs`) è il dizionario delle parole che UI-R1 conosce (conteggio corrente nell'[index](../index.md)), con stabilità 0.5-0.9. Ogni parola ha una firma 8D ([frattali I Ching](frattali-iching.md)), POS tag, exposure count, ed è il punto di accesso per il [PF1](pf1.md).
 
 ## Anatomia di una parola
 

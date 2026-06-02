@@ -602,6 +602,56 @@ fn render_riconoscimento(
     })
 }
 
+/// Phase 80: rendering del pattern `presentazione` — risposta all'auto-
+/// presentazione del parlante ("mi chiamo X"). Schema (dal kg_proc):
+/// presentazione UsedFor introdurre via=nome, Requires pronome via=riflessivo,
+/// Requires verbo via=denominativo, Requires nome via=proprio.
+///
+/// Forma espressiva semplice: "Piacere, <Nome>." — riconoscimento simbolico
+/// dell'introduzione, senza simulare gioia o relazione. Il nome è il
+/// predicato del claim (capitalizzato come nome proprio).
+fn render_presentazione(
+    decision: &ActionDecision,
+) -> Option<Expression> {
+    let nome = match &decision.target {
+        ActionTarget::Claim { predicate, .. } => predicate.clone(),
+        _ => decision.anchor_words.first().cloned()?,
+    };
+    if nome.is_empty() { return None; }
+    let nome_cap = capitalize(&nome);
+    let text = format!("Piacere, {}.", nome_cap);
+    Some(Expression {
+        text,
+        words_used: vec!["piacere".to_string(), nome],
+    })
+}
+
+/// Phase 83 (freccia b): rendering del pattern `esplorazione` quando vince per
+/// risonanza grazie alla POSIZIONE (l'entità relazionalmente mossa, |CD5| alto).
+/// L'entità non cataloga il claim dell'Altro (riconoscimento) — si VOLGE verso
+/// di lui ed esplora la sua esperienza. Domanda di curiosità in 2a persona,
+/// COSTRUITA sull'emozione compresa (non un template fisso): "Cosa vedi, oltre
+/// la paura?". L'articolo è derivato col genere corretto da grammar.
+fn render_esplorazione(
+    decision: &ActionDecision,
+    report: &ComprehensionReport,
+) -> Option<Expression> {
+    let emotion = match &report.closes_prior_gap {
+        Some(c) => c.trigger.clone(),
+        None => match &decision.target {
+            ActionTarget::Claim { predicate, .. } => predicate.clone(),
+            _ => decision.anchor_words.first().cloned()?,
+        },
+    };
+    if emotion.is_empty() { return None; }
+    let art = grammar::with_definite_article(&emotion);
+    let text = format!("Cosa vedi, oltre {}?", art);
+    Some(Expression {
+        text,
+        words_used: vec!["vedere".to_string(), emotion],
+    })
+}
+
 /// Dispatch del rendering in base al nome del pattern.
 pub fn render(
     inst: &InstantiatedPattern,
@@ -614,6 +664,8 @@ pub fn render(
         "articolazione"  => render_articolazione(inst, decision, report),
         "identificazione" => render_identificazione(inst, decision, report, lexicon, kg_proc),
         "riconoscimento" => render_riconoscimento(inst, decision, report),
+        "presentazione"  => render_presentazione(decision),
+        "esplorazione"   => render_esplorazione(decision, report),
         // ricambio + asserzione + altri: lasciati al path esistente
         // (compose_word_response per ricambio, nuclei semantici per asserzione).
         // Restituisce None ⇒ fallback al pipeline corrente di compose().
@@ -635,12 +687,18 @@ pub fn compose_from_pattern(
     kg_proc: &KnowledgeGraph,
     word_topology: &WordTopology,
     lexicon: &Lexicon,
+    valence_drives: Option<&[f64; 8]>,
 ) -> Option<Expression> {
-    use crate::topology::kg_proc_field::{KgProcActivation, seed_from_comprehension, select_pattern_by_resonance};
+    use crate::topology::kg_proc_field::{KgProcActivation, seed_from_comprehension, seed_from_position, select_pattern_by_resonance};
 
-    // Costruzione del campo procedurale dal report (percetti → concetti).
+    // Campo procedurale dal report (percetti → concetti) E dalla posizione
+    // dell'entità (freccia b): l'atto emerge da comprensione + posizione,
+    // per risonanza nello stesso campo.
     let mut activation = KgProcActivation::new();
     seed_from_comprehension(&mut activation, report, kg_proc);
+    if let Some(drives) = valence_drives {
+        seed_from_position(&mut activation, drives, kg_proc);
+    }
 
     // Selezione per risonanza (sostituisce il dispatch pattern_name_for).
     let pattern_name = select_pattern_by_resonance(&activation, kg_proc)?;
@@ -658,11 +716,15 @@ pub fn compose_from_pattern_with_trace(
     kg_proc: &KnowledgeGraph,
     word_topology: &WordTopology,
     lexicon: &Lexicon,
+    valence_drives: Option<&[f64; 8]>,
 ) -> (Option<Expression>, Option<String>, Vec<(String, f64)>) {
-    use crate::topology::kg_proc_field::{KgProcActivation, seed_from_comprehension, select_pattern_by_resonance, pattern_scores};
+    use crate::topology::kg_proc_field::{KgProcActivation, seed_from_comprehension, seed_from_position, select_pattern_by_resonance, pattern_scores};
 
     let mut activation = KgProcActivation::new();
     seed_from_comprehension(&mut activation, report, kg_proc);
+    if let Some(drives) = valence_drives {
+        seed_from_position(&mut activation, drives, kg_proc);
+    }
 
     let scores = pattern_scores(&activation, kg_proc);
     let pattern_name = select_pattern_by_resonance(&activation, kg_proc);
@@ -955,7 +1017,7 @@ mod tests {
         // attivare il percetto "apertura" (che risuona con articolazione).
         let mut report = make_report("ho paura", "posizionamento", "Speaker");
         add_gap(&mut report, "oggetto", "paura");
-        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex).unwrap();
+        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None).unwrap();
         // Atteso: "Di cosa hai paura?" (oppure simile con verbo coerente)
         assert!(expr.text.starts_with("Di cosa"), "Got: {}", expr.text);
         assert!(expr.text.contains("paura"));
@@ -981,7 +1043,7 @@ mod tests {
         };
         let mut report = make_report("sono triste", "posizionamento", "Speaker");
         add_gap(&mut report, "causa", "tristezza");
-        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex).unwrap();
+        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None).unwrap();
         // "perché" non vuole preposizione: deve iniziare direttamente con "Perché"
         assert!(expr.text.starts_with("Perché"), "Got: {}", expr.text);
         assert!(expr.text.ends_with("?"));
@@ -1006,7 +1068,7 @@ mod tests {
         };
         // Phase 79: subject=Self_ attiva il boost identità → identificazione vince.
         let report = make_report("chi sei?", "interrogazione", "Self_");
-        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex).unwrap();
+        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None).unwrap();
         assert!(expr.text.starts_with("Sono"), "Got: {}", expr.text);
         assert!(expr.text.contains("entità"));
         // Articolo indeterminativo: "Sono un'entità." (vocale → un')
@@ -1034,7 +1096,7 @@ mod tests {
         };
         // Phase 79: posizionamento senza vuoto → percetto "posizione" → riconoscimento.
         let report = make_report("io sono felice", "posizionamento", "Speaker");
-        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex).unwrap();
+        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None).unwrap();
         assert!(expr.text.contains("felice"), "Got: {}", expr.text);
         // Verbo coniugato in 2a singolare presente
         assert!(expr.text.starts_with("Senti") || expr.text.starts_with("Hai"),

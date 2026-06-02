@@ -80,6 +80,56 @@ struct MetaSection {
     semantic_episodes: Option<crate::topology::semantic_episode::SemanticEpisodeLog>,
 }
 
+/// Phase 83 fallback — MetaSection pre-P83. Identica al formato corrente
+/// MA il `complex` usa `ComplexSnapshotPreP83` (simplessi senza i 3 campi
+/// grammaticali). I .bin salvati prima del Phase 83 non possono essere
+/// deserializzati come MetaSection corrente perché bincode è strict-positional.
+/// Questa è la prima opzione di fallback nella catena.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct MetaSectionPreP83 {
+    version: String,
+    total_perturbations: u64,
+    dream_cycles: u64,
+    complex: crate::topology::persistence::ComplexSnapshotPreP83,
+    memory: MemorySnapshot,
+    locus: Option<LocusSnapshot>,
+    curriculum: Option<CurriculumProgress>,
+    semantic_axes: Option<Vec<SemanticAxisSnapshot>>,
+    knowledge: Option<KnowledgeSnapshot>,
+    episodes: Option<crate::topology::episodic::EpisodeSnapshot>,
+    instance_born: Option<u64>,
+    identity: Option<crate::topology::identity::IdentitySnapshot>,
+    narrative: Option<crate::topology::narrative::NarrativeSnapshot>,
+    desire: Option<crate::topology::desire::DesireSnapshot>,
+    interlocutor: Option<crate::topology::interlocutor::InterlocutorSnapshot>,
+    self_model: Option<crate::topology::self_model::SelfModelSnapshot>,
+    semantic_episodes: Option<crate::topology::semantic_episode::SemanticEpisodeLog>,
+}
+
+impl From<MetaSectionPreP83> for MetaSection {
+    fn from(l: MetaSectionPreP83) -> Self {
+        MetaSection {
+            version: l.version,
+            total_perturbations: l.total_perturbations,
+            dream_cycles: l.dream_cycles,
+            complex: l.complex.into(), // ComplexSnapshotPreP83 → ComplexSnapshot
+            memory: l.memory,
+            locus: l.locus,
+            curriculum: l.curriculum,
+            semantic_axes: l.semantic_axes,
+            knowledge: l.knowledge,
+            episodes: l.episodes,
+            instance_born: l.instance_born,
+            identity: l.identity,
+            narrative: l.narrative,
+            desire: l.desire,
+            interlocutor: l.interlocutor,
+            self_model: l.self_model,
+            semantic_episodes: l.semantic_episodes,
+        }
+    }
+}
+
 /// MetaSection pre-Phase58 — senza semantic_episodes.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct MetaSectionPreP58 {
@@ -261,6 +311,11 @@ impl From<MetaSectionPreP52> for MetaSection {
             faces: s.faces,
             face_descriptions: s.face_descriptions,
             source_words: None,
+            // Phase 83 — backward compat: snapshot pre-P83 non hanno simplessi
+            // grammaticali, tutti semantici.
+            category: None,
+            ordered: false,
+            function_fractal: None,
         }).collect();
         MetaSection {
             version: l.version,
@@ -446,12 +501,17 @@ impl SimplDB {
     /// Converte il SimplDB in PrometeoState (per compatibilità con restore_lexicon).
     pub fn to_state(&self) -> Result<PrometeoState, String> {
         // Catena fallback — bincode è posizionale, #[serde(default)] non basta.
-        // 1. Formato corrente (Phase 58+: semantic_episodes)
-        // 2. Pre-Phase58 (Phase 54+: desire/interlocutor/self_model, senza semantic_episodes)
-        // 3. Pre-Phase54 (Phase 52+: source_words, senza desire/interlocutor/self_model)
-        // 4. Pre-Phase52 (con instance_born/identity/narrative, senza source_words)
-        // 5. Legacy originale (senza instance_born/identity/narrative)
+        // 1. Formato corrente (Phase 83+: simplessi con category/ordered/function_fractal)
+        // 2. Pre-Phase83 (Phase 58+: simplessi senza i 3 campi grammaticali)
+        // 3. Pre-Phase58 (Phase 54+: desire/interlocutor/self_model, senza semantic_episodes)
+        // 4. Pre-Phase54 (Phase 52+: source_words, senza desire/interlocutor/self_model)
+        // 5. Pre-Phase52 (con instance_born/identity/narrative, senza source_words)
+        // 6. Legacy originale (senza instance_born/identity/narrative)
         let meta: MetaSection = bincode::deserialize(&self.meta_data)
+            .or_else(|_| {
+                bincode::deserialize::<MetaSectionPreP83>(&self.meta_data)
+                    .map(MetaSection::from)
+            })
             .or_else(|_| {
                 bincode::deserialize::<MetaSectionPreP58>(&self.meta_data)
                     .map(MetaSection::from)

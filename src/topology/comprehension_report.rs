@@ -254,13 +254,15 @@ pub fn build_report(
     utterance: &str,
     kg_facts: &KgFacts,
     speaker_claim: Option<&SpeakerClaim>,
+    prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
     syllogisms: &[crate::topology::comprehension_graph::Syllogism],
     kg: &KnowledgeGraph,
     closes_prior_gap: Option<PriorGapClosure>,
+    grammar_signals: &[(String, crate::topology::fractal::FractalId)],
 ) -> ComprehensionReport {
     let speech_act = match &closes_prior_gap {
         Some(c) => derive_speech_act_for_closure(c),
-        None => derive_speech_act(kg_facts, speaker_claim),
+        None => derive_speech_act(kg_facts, speaker_claim, prop, grammar_signals),
     };
     let symbolic_positions = match &closes_prior_gap {
         Some(c) => derive_symbolic_positions_with_closure(&kg_facts.roots, c, kg),
@@ -273,7 +275,7 @@ pub fn build_report(
     let gaps = if closes_prior_gap.is_some() {
         Vec::new()
     } else {
-        derive_gaps(&kg_facts.roots, speaker_claim, kg)
+        derive_gaps(speaker_claim, prop)
     };
     let inferences = derive_inferences(syllogisms);
     let self_relevance = match &closes_prior_gap {
@@ -297,10 +299,22 @@ pub fn build_report(
 fn derive_speech_act(
     facts: &KgFacts,
     claim: Option<&SpeakerClaim>,
+    prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
+    grammar_signals: &[(String, crate::topology::fractal::FractalId)],
 ) -> SpeechAct {
+    use crate::topology::sentence_proposition::{ObjectRef, SubjectRef};
+    // Phase 83 (#5b): la PROP è l'arbitro. Se la frase è strutturalmente un
+    // CLAIM (soggetto Speaker/Entity, oggetto-parola saturo), NON è una
+    // domanda — anche se contiene un "che" relativo o un "?" mal posto. Solo
+    // un oggetto-Variabile (chi/cosa/...) o l'assenza di claim aprono
+    // l'interrogazione. Toglie la 2ª copia del bug "che" che viveva qui.
+    let prop_is_claim = prop.map(|p|
+        matches!(p.subject, SubjectRef::Speaker | SubjectRef::Entity)
+        && matches!(p.object, Some(ObjectRef::Word(_)))
+    ).unwrap_or(false);
     // Tipo di atto, derivato strutturalmente dai KgFacts e dal claim.
     let (kind, subject, description, expectation) =
-        if facts.has_question_marker || facts.has_interrogative_pronoun {
+        if (facts.has_question_marker || facts.has_interrogative_pronoun) && !prop_is_claim {
             let subj = if facts.self_referenced { "Speaker (su Entity)" } else { "Speaker" };
             (
                 "interrogazione".to_string(),
@@ -313,10 +327,16 @@ fn derive_speech_act(
                 ClaimAgent::Speaker => "Speaker",
                 ClaimAgent::Entity => "Entity",
             };
-            let kind_label = match sc.kind {
-                ClaimKind::Identity => "denominazione",
-                ClaimKind::Feeling  => "posizionamento",
-                ClaimKind::Action   => "dichiarazione-di-azione",
+            // Phase 80: usa verb_category per distinguere atti di Identity:
+            //   denominativo ("mi chiamo X") → "denominazione" (presentazione di sé)
+            //   copula       ("io ho un cane") → "descrizione"  (predicazione di possesso/identità)
+            // ClaimKind da solo non basta: "mi chiamo X" e "ho un cane" sono entrambi
+            // Identity ma chiamano percetti diversi (introduzione vs niente).
+            let kind_label = match (&sc.kind, sc.verb_category.as_deref()) {
+                (ClaimKind::Identity, Some("denominativo")) => "denominazione",
+                (ClaimKind::Identity, _)                    => "descrizione",
+                (ClaimKind::Feeling, _)                     => "posizionamento",
+                (ClaimKind::Action, _)                      => "dichiarazione-di-azione",
             };
             let descr = match (sc.agent.clone(), sc.kind.clone()) {
                 (ClaimAgent::Speaker, ClaimKind::Identity) =>
@@ -357,6 +377,44 @@ fn derive_speech_act(
                 "riconoscimento dell'asserzione".to_string(),
             )
         };
+
+    // Phase 83b — i simplessi grammaticali curati (Phase 83) hanno
+    // matchato sull'utterance: il segnale `(category, function_fractal)`
+    // dice strutturalmente *come* l'utterance è composta al di là dei
+    // token. NON è dispatch — è informazione strutturale del campo che
+    // sovrascrive l'inferenza basata sui soli KgFacts dove più precisa.
+    let (kind, description, expectation) = if grammar_signals.iter()
+        .any(|(c, _)| c == "preposizione_composta")
+    {
+        let is_question = facts.has_question_marker || facts.has_interrogative_pronoun;
+        if is_question {
+            (
+                "richiesta-di-specifica-asse".to_string(),
+                "il parlante chiede di specificare un asse relativo (preposizione composta riconosciuta nell'utterance)".to_string(),
+                "rivelazione dell'asse relativo (rispetto a cosa, in base a cosa, riguardo a cosa)".to_string(),
+            )
+        } else {
+            (
+                "specificazione-di-asse".to_string(),
+                "il parlante porta un asse relativo per qualcosa già detto (preposizione composta riconosciuta)".to_string(),
+                "presa d'atto dell'asse e ri-orientamento del discorso".to_string(),
+            )
+        }
+    } else if grammar_signals.iter().any(|(c, _)| c == "locuzione_fatica") {
+        (
+            "atto-fatico".to_string(),
+            "il parlante apre un canale comunicativo (locuzione fatica riconosciuta)".to_string(),
+            "ricambio simbolico nello stesso registro".to_string(),
+        )
+    } else if grammar_signals.iter().any(|(c, _)| c == "costrutto_modale") {
+        (
+            "modulazione".to_string(),
+            "il parlante introduce una modalità (necessità/possibilità riconosciuta)".to_string(),
+            "presa d'atto della modalità e risposta orientata".to_string(),
+        )
+    } else {
+        (kind, description, expectation)
+    };
 
     SpeechAct {
         kind,
@@ -404,62 +462,51 @@ fn derive_symbolic_positions(
     out
 }
 
+// Phase 83 (#5): i vuoti del DIALOGO nascono dagli SLOT NON SATURI della
+// proposizione, non dal fan-out di ogni arco `Requires` di ogni concetto
+// attivato. Il fan-out produceva rumore ("la solitudine è una scelta" apriva
+// 7 vuoti irrilevanti) e confondeva due cose diverse: la curiosità strutturale
+// "X richiede Y che non hai detto" è materia del CANALE-PENSIERO (esplorazione
+// autonoma), non un vuoto dialogico da colmare chiedendo all'interlocutore.
+//
+// Oggi un solo vuoto dialogico, letto dalla PROP: un'emozione posizionata
+// SENZA il suo oggetto. "sono felice" (via assente) → soglia aperta;
+// "ho paura del futuro" / "mi manca mia madre" (via satura) → niente vuoto,
+// l'oggetto è già articolato. La PROP è l'occhio; qui finalmente la mano legge.
 fn derive_gaps(
-    roots: &[String],
     claim: Option<&SpeakerClaim>,
-    kg: &KnowledgeGraph,
+    prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
 ) -> Vec<SignifierGap> {
-    let mut out = Vec::new();
-    let speaker_mentions: std::collections::HashSet<&str> =
-        roots.iter().map(|s| s.as_str()).collect();
-
-    for r in roots {
-        // Gap "Requires" — significanti richiesti dal KG ma non articolati.
-        // `missing` è la parola singola del KG (es. "oggetto", "causa") —
-        // così la join col KG procedurale (cosa UsedFor chiedere VIA oggetto)
-        // funziona direttamente senza traduzioni.
-        for (req, _) in kg.query_objects_weighted(r, RelationType::Requires)
-            .into_iter().take(3)
-        {
-            if speaker_mentions.contains(req) { continue; }
-            out.push(SignifierGap {
-                missing: req.to_string(),
-                from: r.clone(),
-                relation: "Requires".to_string(),
-                context: None,
-                description: format!(
-                    "\"{}\" rinvia strutturalmente a \"{}\" (il KG lo richiede), ma il parlante non lo ha portato al significante",
-                    r, req,
-                ),
-            });
-        }
-        // Gap dell'oggetto quando il parlante afferma un'emozione senza dire
-        // di cosa. `missing` resta "oggetto" (parola singola atomica per join
-        // col KG procedurale); il contesto "emozione" va nel campo `context`.
-        if claim.map(|c| matches!(c.kind, ClaimKind::Feeling)).unwrap_or(false) {
-            let parents: Vec<String> = kg.query_objects_weighted(r, RelationType::IsA)
-                .into_iter().map(|(t, _)| t.to_string()).collect();
-            let is_emotion = parents.iter().any(|p|
-                ["emozione", "sentimento", "stato_d_animo", "sensazione", "affetto", "bisogno"]
-                    .contains(&p.as_str()));
-            if is_emotion
-                && !speaker_mentions.contains("oggetto")
-                && !out.iter().any(|g| g.from == *r && g.missing == "oggetto")
-            {
-                out.push(SignifierGap {
-                    missing: "oggetto".to_string(),
-                    from: r.clone(),
-                    relation: "Requires".to_string(),
-                    context: Some("emozione".to_string()),
-                    description: format!(
-                        "il parlante si è posizionato in stato di \"{}\" senza articolare l'oggetto: una soglia si apre",
-                        r,
-                    ),
-                });
-            }
-        }
+    use crate::topology::sentence_proposition::ObjectRef;
+    let feeling = claim.map(|c| matches!(c.kind, ClaimKind::Feeling)).unwrap_or(false);
+    let via_saturated = prop.map(|p| p.via.is_some()).unwrap_or(false);
+    // Phase 83: un'emozione NEGATA ("non ho paura") non apre la soglia
+    // dell'oggetto — il parlante esclude lo stato, non vi si posiziona dentro.
+    let positive = prop.map(|p| p.polarity).unwrap_or(true);
+    if !feeling || via_saturated || !positive {
+        return Vec::new();
     }
-    out
+    // L'emozione = oggetto della proposizione (o, in mancanza di PROP, il
+    // predicato del claim — già validato come stato interno da input_reading).
+    let emotion = prop
+        .and_then(|p| match &p.object {
+            Some(ObjectRef::Word(w)) => Some(w.clone()),
+            _ => None,
+        })
+        .or_else(|| claim.map(|c| c.predicate.clone()));
+    match emotion {
+        Some(em) => vec![SignifierGap {
+            missing: "oggetto".to_string(),
+            from: em.clone(),
+            relation: "Requires".to_string(),
+            context: Some("emozione".to_string()),
+            description: format!(
+                "il parlante si è posizionato in stato di \"{}\" senza articolare l'oggetto: una soglia si apre",
+                em,
+            ),
+        }],
+        None => Vec::new(),
+    }
 }
 
 fn derive_inferences(
@@ -626,7 +673,7 @@ mod tests {
     fn speech_act_for_question_form() {
         let mut f = empty_facts();
         f.has_question_marker = true;
-        let sa = derive_speech_act(&f, None);
+        let sa = derive_speech_act(&f, None, None, &[]);
         assert_eq!(sa.kind, "interrogazione");
     }
 
@@ -637,8 +684,10 @@ mod tests {
             agent: ClaimAgent::Speaker,
             kind: ClaimKind::Feeling,
             predicate: "paura".to_string(),
+            verb_category: Some("copula".to_string()),
+            complement: None,
         };
-        let sa = derive_speech_act(&f, Some(&sc));
+        let sa = derive_speech_act(&f, Some(&sc), None, &[]);
         assert_eq!(sa.kind, "posizionamento");
         assert_eq!(sa.subject, "Speaker");
         assert!(sa.description.contains("paura"));
@@ -650,7 +699,7 @@ mod tests {
         f.content_word_count = 1;
         f.specific_class = Some("saluto".to_string());
         f.class_siblings_count = 5;
-        let sa = derive_speech_act(&f, None);
+        let sa = derive_speech_act(&f, None, None, &[]);
         assert_eq!(sa.kind, "atto-fatico");
         assert!(sa.description.contains("saluto"));
     }
@@ -669,25 +718,33 @@ mod tests {
     }
 
     #[test]
-    fn gap_requires_when_speaker_did_not_mention_required() {
-        let mut kg = KnowledgeGraph::new();
-        kg.add("fuoco", RelationType::Requires, "ossigeno");
-        let gaps = derive_gaps(&["fuoco".to_string()], None, &kg);
-        assert!(gaps.iter().any(|g| g.missing == "ossigeno" && g.relation == "Requires"));
+    fn no_requires_fanout_gap() {
+        // Phase 83 (#5): il fan-out Requires è uscito dal dialogo (è materia
+        // del canale-pensiero). Senza un claim emotivo non c'è vuoto dialogico.
+        let gaps = derive_gaps(None, None);
+        assert!(gaps.is_empty());
     }
 
     #[test]
-    fn gap_emotion_object_when_speaker_feeling_emotion() {
-        let mut kg = KnowledgeGraph::new();
-        kg.add("paura", RelationType::IsA, "emozione");
+    fn gap_emotion_object_when_via_absent() {
+        // "sono felice" / "ho paura": emozione posizionata senza il suo
+        // oggetto (via assente nella PROP) → soglia aperta.
+        use crate::topology::sentence_proposition::{SentenceProposition, SubjectRef, ObjectRef};
         let sc = SpeakerClaim {
             agent: ClaimAgent::Speaker,
             kind: ClaimKind::Feeling,
             predicate: "paura".to_string(),
+            verb_category: Some("copula".to_string()),
+            complement: None,
         };
-        let gaps = derive_gaps(&["paura".to_string()], Some(&sc), &kg);
-        // Phase 76: missing è ora "oggetto" (parola singola atomica)
-        // con context "emozione" — fa join col KG procedurale.
+        let prop = SentenceProposition {
+            subject: SubjectRef::Speaker,
+            relation: RelationType::FeelsAs,
+            object: Some(ObjectRef::Word("paura".to_string())),
+            via: None,
+            polarity: true,
+        };
+        let gaps = derive_gaps(Some(&sc), Some(&prop));
         assert!(gaps.iter().any(|g|
             g.missing == "oggetto"
             && g.context.as_deref() == Some("emozione")
@@ -695,15 +752,26 @@ mod tests {
     }
 
     #[test]
-    fn no_redundant_gap_when_speaker_already_mentioned_required() {
-        let mut kg = KnowledgeGraph::new();
-        kg.add("fuoco", RelationType::Requires, "ossigeno");
-        // Il parlante ha menzionato sia fuoco che ossigeno
-        let gaps = derive_gaps(
-            &["fuoco".to_string(), "ossigeno".to_string()],
-            None, &kg,
-        );
-        assert!(!gaps.iter().any(|g| g.missing == "ossigeno"));
+    fn no_gap_when_via_saturated() {
+        // "ho paura del futuro" / "mi manca mia madre": la via è satura,
+        // l'oggetto è già articolato → nessun vuoto dialogico (Phase 83 #5).
+        use crate::topology::sentence_proposition::{SentenceProposition, SubjectRef, ObjectRef};
+        let sc = SpeakerClaim {
+            agent: ClaimAgent::Speaker,
+            kind: ClaimKind::Feeling,
+            predicate: "paura".to_string(),
+            verb_category: Some("copula".to_string()),
+            complement: None,
+        };
+        let prop = SentenceProposition {
+            subject: SubjectRef::Speaker,
+            relation: RelationType::FeelsAs,
+            object: Some(ObjectRef::Word("paura".to_string())),
+            via: Some("futuro".to_string()),
+            polarity: true,
+        };
+        let gaps = derive_gaps(Some(&sc), Some(&prop));
+        assert!(gaps.is_empty(), "via satura → nessun vuoto dialogico");
     }
 
     #[test]
@@ -719,8 +787,10 @@ mod tests {
             agent: ClaimAgent::Speaker,
             kind: ClaimKind::Feeling,
             predicate: "paura".to_string(),
+            verb_category: Some("copula".to_string()),
+            complement: None,
         };
-        let report = build_report("ho paura", &f, Some(&sc), &[], &kg, None);
+        let report = build_report("ho paura", &f, Some(&sc), None, &[], &kg, None, &[]);
         let text = report.compose_text();
         assert!(text.contains("ENUNCIATO RICEVUTO"));
         assert!(text.contains("ATTO DI PAROLA"));
@@ -747,7 +817,7 @@ mod tests {
             closing_word: "buio".to_string(),
             opened_at_turn: 1,
         };
-        let report = build_report("del buio", &f, None, &[], &kg, Some(closure));
+        let report = build_report("del buio", &f, None, None, &[], &kg, Some(closure), &[]);
         // Speech act: continuation (posizionamento), non asserzione.
         assert_eq!(report.speech_act.kind, "posizionamento");
         assert!(report.speech_act.description.contains("turno 1"));

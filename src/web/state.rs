@@ -15,6 +15,12 @@ pub struct AppState {
     pub broadcast_tx: broadcast::Sender<String>,
     /// Store conversazioni — accessibile sia dagli handler che dall'engine loop
     pub conv_store: std::sync::Arc<std::sync::Mutex<super::conversations::ConversationStore>>,
+    /// Phase 82 — Memoria-sfera di haiku. Vive nel web layer (NON dentro
+    /// Engine) perché è un organo nuovo, persistente su file separato
+    /// `haiku_memory.json`, ispezionabile/curabile indipendentemente.
+    /// Gli handler axum accedono diretto via Mutex; ogni `deposit`
+    /// sincronizza il salvataggio su disco.
+    pub haiku_memory: std::sync::Arc<std::sync::Mutex<crate::topology::haiku_memory::HaikuMemory>>,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -388,6 +394,28 @@ pub enum EngineCommand {
         limit: usize,
         reply: oneshot::Sender<RecentEpisodesDto>,
     },
+    /// Phase 83 — Insegna un simplesso grammaticale tipizzato.
+    /// Aggiunge al complesso un simplesso con `source_words` curato,
+    /// `category` (es. "preposizione_composta") e `function_fractal` (id 0-63
+    /// risolto lato server dal nome). Quando la sequenza di words appare
+    /// nell'input in ordine adiacente, il simplesso si attiva e semina il
+    /// frattale-funzione nel campo. Persistente nel `.bin`.
+    AddGrammarSimplex {
+        words: Vec<String>,
+        category: String,
+        function_fractal_name: String,
+        reply: oneshot::Sender<Result<AddGrammarSimplexResponse, String>>,
+    },
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct AddGrammarSimplexResponse {
+    pub simplex_id: u64,
+    pub function_fractal_id: u32,
+    pub function_fractal_name: String,
+    pub category: String,
+    pub words: Vec<String>,
+    pub total_grammar_simplices: usize,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -700,6 +728,15 @@ pub struct InputResponse {
     /// Phase 74: la decisione di azione esplicita. Cosa UI-r1 ha scelto
     /// di fare in risposta, perché, con quale forma e quali ancore.
     pub action_decision: Option<ActionDecisionDto>,
+    /// Phase 81: la frase letta come triple strutturale
+    /// (`subject + relation + object + via + polarity`) — la PROP, l'unità
+    /// di lettura dell'utterance come sotto-grafo del kg_sem.
+    pub sentence_proposition: Option<SentencePropositionDto>,
+    /// Phase 81: il confronto fra la PROP e il kg_sem. Dice se la triple
+    /// esiste già nel kg_sem (matches), se i suoi slot hanno radici nel KG
+    /// (object_in_kg / via_in_kg), e quali contraddizioni `OppositeOf`
+    /// emergono. È l'ancoraggio strutturale della frase al mondo.
+    pub kg_confrontation: Option<KgConfrontationDto>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -801,6 +838,93 @@ pub struct KnowledgeGapDto {
     pub trigger: String,
     pub gap_kind: String,
     pub turn: usize,
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Phase 81 — La frase come proposizione + confronto col kg_sem.
+// ──────────────────────────────────────────────────────────────────────
+
+/// La frase letta come triple strutturale. Riflette `SentenceProposition`
+/// in `src/topology/sentence_proposition.rs`. Il `subject` e l'`object`
+/// sono spezzati in `kind` + `name` per essere consumabili facilmente
+/// lato client (JS/LLM) senza bisogno di deserializzare enum tagged.
+///
+/// Mappature:
+/// - `subject_kind`: "Speaker" | "Entity" | "World" | "Variable"
+/// - `subject_name`: nome della parola del mondo o della variabile
+///                   interrogativa; vuoto per Speaker/Entity.
+/// - `object_kind`:  "Word" | "Variable" | "" (vuoto se l'object è None,
+///                   es. "ciao" non ha oggetto strutturale).
+/// - `object_name`:  predicato/variabile; vuoto se object_kind=="".
+/// - `relation`:     nome canonico della `RelationType` (IsA, Has, Causes,
+///                   FeelsAs, Does, Expresses, OppositeOf, SimilarTo,
+///                   PartOf, UsedFor, …).
+/// - `via`:          parola dopo preposizione di specificazione
+///                   ("ho paura **del futuro**" → via=Some("futuro")).
+///                   None se l'object non è ancora ancorato al mondo.
+/// - `polarity`:     false se l'utterance contiene "non" prima del verbo.
+#[derive(Serialize, Clone, Debug)]
+pub struct SentencePropositionDto {
+    pub subject_kind: String,
+    pub subject_name: String,
+    pub relation: String,
+    pub object_kind: String,
+    pub object_name: String,
+    pub via: Option<String>,
+    pub polarity: bool,
+}
+
+/// Confronto fra la PROP e il kg_sem. Vedi
+/// `src/topology/sentence_proposition.rs::KgConfrontation`.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct KgConfrontationDto {
+    /// La triple esiste già nel kg_sem (solo per subject=World).
+    pub matches: bool,
+    /// L'object ha almeno un arco IsA/Has/Causes/SimilarTo/OppositeOf/
+    /// PartOf/Does/UsedFor nel kg_sem.
+    pub object_in_kg: bool,
+    /// Idem per via.
+    pub via_in_kg: bool,
+    /// Coppie (a, b) tali che `a OppositeOf b` esiste nel kg_sem e
+    /// rendono la proposizione strutturalmente in tensione.
+    pub contradictions: Vec<(String, String)>,
+}
+
+pub fn sentence_proposition_to_dto(
+    prop: &crate::topology::sentence_proposition::SentenceProposition,
+) -> SentencePropositionDto {
+    use crate::topology::sentence_proposition::{ObjectRef, SubjectRef};
+    let (subject_kind, subject_name) = match &prop.subject {
+        SubjectRef::Speaker => ("Speaker".to_string(), String::new()),
+        SubjectRef::Entity => ("Entity".to_string(), String::new()),
+        SubjectRef::World(w) => ("World".to_string(), w.clone()),
+        SubjectRef::Variable(v) => ("Variable".to_string(), v.clone()),
+    };
+    let (object_kind, object_name) = match &prop.object {
+        Some(ObjectRef::Word(w)) => ("Word".to_string(), w.clone()),
+        Some(ObjectRef::Variable(v)) => ("Variable".to_string(), v.clone()),
+        None => (String::new(), String::new()),
+    };
+    SentencePropositionDto {
+        subject_kind,
+        subject_name,
+        relation: format!("{:?}", prop.relation),
+        object_kind,
+        object_name,
+        via: prop.via.clone(),
+        polarity: prop.polarity,
+    }
+}
+
+pub fn kg_confrontation_to_dto(
+    conf: &crate::topology::sentence_proposition::KgConfrontation,
+) -> KgConfrontationDto {
+    KgConfrontationDto {
+        matches: conf.matches,
+        object_in_kg: conf.object_in_kg,
+        via_in_kg: conf.via_in_kg,
+        contradictions: conf.contradictions.clone(),
+    }
 }
 
 #[derive(Serialize, Clone, Debug)]

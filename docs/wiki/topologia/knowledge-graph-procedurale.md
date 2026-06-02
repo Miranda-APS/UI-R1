@@ -5,7 +5,7 @@
 
 ## Overview
 
-A partire da Phase 75, UI-R1 ha **due KG paralleli**, non uno fuso: il [KG semantico](knowledge-graph-semantico.md) per la conoscenza del mondo, e il **KG procedurale** (`prometeo_kg_procedurale.json`, ~395 archi, 10 pattern, 9 percetti) per grammatica e pattern espressivi. Aree distinte del "cervello" linguistico. La selezione del pattern emerge per risonanza tra percetti seminati dal ComprehensionReport e i target dei pattern (Phase 79).
+A partire da Phase 75, UI-R1 ha **due KG paralleli**, non uno fuso: il [KG semantico](knowledge-graph-semantico.md) per la conoscenza del mondo, e il **KG procedurale** (`prometeo_kg_procedurale.json`, 10 pattern, 9 percetti — conteggio archi corrente nell'[index](../index.md)) per grammatica e pattern espressivi. Aree distinte del "cervello" linguistico. La selezione del pattern emerge per risonanza tra percetti seminati dal ComprehensionReport e i target dei pattern (Phase 79).
 
 ## Perché separato
 
@@ -13,7 +13,7 @@ Il KG semantico contiene fatti del mondo (`cane IS_A animale`, `acqua Causes bag
 
 ## Struttura
 
-File: `prometeo_kg_procedurale.json` (~395 archi, ~220 nodi). Costruito idempotentemente da `curate_kg_procedurale.py` (sezioni §A-§H.quinquies). Aggiungere nuovi pattern qui, **MAI** in Rust.
+File: `prometeo_kg_procedurale.json` (~220 nodi; conteggio archi corrente nell'[index](../index.md)). Costruito idempotentemente da `curate_kg_procedurale.py` (sezioni §A-§H.quinquies). Aggiungere nuovi pattern qui, **MAI** in Rust.
 
 Tre tipi di nodi:
 

@@ -279,6 +279,16 @@ impl SpeakerProfile {
             // diversa dal trigger (paura) e contiene una parola-contenuto,
             // consideralo chiuso.
             if gap.gap_kind == "emotion_object" {
+                // Phase 80: se il turno corrente porta un PROPRIO claim del
+                // parlante (un nuovo posizionamento), non è una chiusura del
+                // gap precedente — è un cambio di tema. Il vecchio gap resta
+                // aperto (verrà scartato dalla finestra temporale), ma questo
+                // turno NON è la sua articolazione.
+                // Caso d'uso: "sono triste" → "mi chiamo francesco":
+                //   il gap "oggetto-di-triste" non va chiuso da "francesco".
+                if speaker_claim.is_some() {
+                    continue;
+                }
                 let has_other = current_roots.iter().any(|r| **r != gap.trigger);
                 if has_other && kg_facts.content_word_count >= 1 {
                     gap.closed = true;
@@ -365,6 +375,8 @@ mod tests {
             agent: ClaimAgent::Speaker,
             kind: ClaimKind::Feeling,
             predicate: "paura".to_string(),
+            verb_category: Some("copula".to_string()),
+            complement: None,
         };
         p.observe_turn("ho paura", &f, Some(&sc), &kg);
         assert_eq!(p.self_facts.len(), 1);
@@ -381,6 +393,8 @@ mod tests {
             agent: ClaimAgent::Entity,
             kind: ClaimKind::Identity,
             predicate: "bello".to_string(),
+            verb_category: Some("copula".to_string()),
+            complement: None,
         };
         p.observe_turn("tu sei bello", &f, Some(&sc), &kg);
         assert_eq!(p.entity_facts.len(), 1);
@@ -408,6 +422,8 @@ mod tests {
             agent: ClaimAgent::Speaker,
             kind: ClaimKind::Feeling,
             predicate: "paura".to_string(),
+            verb_category: Some("copula".to_string()),
+            complement: None,
         };
         p.observe_turn("ho paura", &f, Some(&sc), &kg);
         assert!(p.open_gaps().any(|g| g.trigger == "paura" && g.gap_kind == "emotion_object"),
@@ -425,6 +441,8 @@ mod tests {
             agent: ClaimAgent::Speaker,
             kind: ClaimKind::Feeling,
             predicate: "paura".to_string(),
+            verb_category: Some("copula".to_string()),
+            complement: None,
         };
         p.observe_turn("ho paura", &f1, Some(&sc), &kg);
         // Turn 2: "del buio" — gap dovrebbe chiudersi (l'oggetto della paura è specificato)

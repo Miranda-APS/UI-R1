@@ -87,6 +87,63 @@ pub struct ComplexSnapshot {
     pub activation_threshold: f64,
 }
 
+/// Phase 83 fallback — snapshot del complesso PRIMA dell'aggiunta dei
+/// campi grammaticali ai simplessi (`category`, `ordered`, `function_fractal`).
+/// Usato per deserializzare .bin pre-P83 e convertirli al formato corrente
+/// con tutti i simplessi default-semantici.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ComplexSnapshotPreP83 {
+    pub simplices: Vec<SimplexSnapshotPreP83>,
+    pub next_id: SimplexId,
+    pub activation_threshold: f64,
+}
+
+/// Phase 83 fallback — snapshot simplesso pre-P83 (senza category/ordered/
+/// function_fractal). bincode è strict-positional: deserializzare un .bin
+/// vecchio con la struct nuova fallisce sui campi aggiunti. Questo struct
+/// rispecchia il formato pre-P83 esatto.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SimplexSnapshotPreP83 {
+    pub id: SimplexId,
+    pub vertices: Vec<FractalId>,
+    pub dimension: usize,
+    pub persistence: f64,
+    pub plasticity: f64,
+    pub activation_count: u64,
+    #[serde(default)]
+    pub faces: Vec<SharedFaceSnapshot>,
+    #[serde(default)]
+    pub face_descriptions: Vec<String>,
+    #[serde(default)]
+    pub source_words: Option<Vec<String>>,
+}
+
+impl From<ComplexSnapshotPreP83> for ComplexSnapshot {
+    fn from(l: ComplexSnapshotPreP83) -> Self {
+        let simplices = l.simplices.into_iter().map(|s| SimplexSnapshot {
+            id: s.id,
+            vertices: s.vertices,
+            dimension: s.dimension,
+            persistence: s.persistence,
+            plasticity: s.plasticity,
+            activation_count: s.activation_count,
+            faces: s.faces,
+            face_descriptions: s.face_descriptions,
+            source_words: s.source_words,
+            // Phase 83 — backward compat: simplessi del .bin pre-P83 sono
+            // tutti semantici (Phase 49-52), nessuno grammaticale.
+            category: None,
+            ordered: false,
+            function_fractal: None,
+        }).collect();
+        ComplexSnapshot {
+            simplices,
+            next_id: l.next_id,
+            activation_threshold: l.activation_threshold,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SimplexSnapshot {
     pub id: SimplexId,
@@ -104,6 +161,18 @@ pub struct SimplexSnapshot {
     /// Phase 52: parole sorgente (proposizioni inscritte). Default None per retrocompat.
     #[serde(default)]
     pub source_words: Option<Vec<String>>,
+    /// Phase 83: categoria del simplesso (es. "preposizione_composta",
+    /// "locuzione_fatica"). None = semantico (default, backward compat).
+    #[serde(default)]
+    pub category: Option<String>,
+    /// Phase 83: se true, source_words devono attivarsi in ordine adiacente.
+    /// Default false per backward compat (simplessi semantici Phase 49-52).
+    #[serde(default)]
+    pub ordered: bool,
+    /// Phase 83: frattale-funzione attivato dal simplesso quando emerge.
+    /// None = simplesso semantico (no effetto strutturale al campo).
+    #[serde(default)]
+    pub function_fractal: Option<FractalId>,
 }
 
 /// Snapshot serializzabile della memoria.
@@ -335,6 +404,10 @@ impl PrometeoState {
                     faces,
                     face_descriptions: vec![], // legacy vuoto
                     source_words: s.source_words.clone(),
+                    // Phase 83 — simplessi grammaticali persistenti
+                    category: s.category.clone(),
+                    ordered: s.ordered,
+                    function_fractal: s.function_fractal,
                 }
             })
             .collect();
@@ -565,6 +638,9 @@ impl PrometeoState {
                 ss.plasticity,
                 ss.activation_count,
                 ss.source_words.clone(),
+                ss.category.clone(),
+                ss.ordered,
+                ss.function_fractal,
             );
         }
 

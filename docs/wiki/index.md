@@ -2,16 +2,42 @@
 
 > Wiki LLM-style (pattern Karpathy) di UI-R1.
 > Un articolo = un concetto, con cross-link relativi. Le fonti immutabili vivono in `../raw/`, gli articoli sintetizzati qui.
-> **Stato sistema**: Phase 79 — 580 test passanti, lessico 25.602 parole, KG semantico 83.453 archi su 25.142 nodi (post-merge UI-R1↔standalone), KG procedurale 396 archi (10 pattern, 9 percetti).
 >
 > **Aperto come vault Obsidian** (config in `.obsidian/`). Guida d'uso: [COME_USARE_OBSIDIAN.md](COME_USARE_OBSIDIAN.md).
 
+## Stato sistema (fonte unica dei numeri)
+
+> Questo blocco è l'**unico posto** dove vivono i conteggi correnti. Gli articoli linkano qui invece di ripeterli.
+
+| Metrica | Valore | Fonte |
+|---------|--------|-------|
+| Fase corrente | **Phase 82** — MCP substrate + memoria-sfera di haiku | CLAUDE.md |
+| Test | **599 passanti**, 0 falliti, 2 skipped | `cargo test --release` |
+| Lessico | **25.602 parole** (stabilità 0.5–0.9) | — |
+| KG semantico | **83.453 archi** su 25.142 nodi (post-merge UI-R1↔standalone) | `prometeo_kg.json` |
+| KG procedurale | **584 archi** (~220 nodi, 10 pattern, 9 percetti) | `prometeo_kg_procedurale.json` |
+
+**Phase 82** rende UI-R1 abitabile da un LLM client via [Model Context Protocol](interfacce/mcp-substrate.md) (12 tool, `comprehend` = turno reale) e introduce la [memoria-sfera di haiku](interfacce/memoria-haiku.md) (cristalli come cerchi tangenti sui 64 attrattori, persistente). **Phase 81** ha introdotto `SentenceProposition` (la [frase come triple](comprensione/frase-come-proposizione.md) confrontabile col kg_sem); **Phase 80** la riscrittura strutturale di `detect_speaker_claim` (zero liste hardcoded di verbi).
+
+## Architettura in una pipeline (per chi legge in fretta)
+
+Ogni `receive()` / `comprehend()` attraversa questi stadi — è la spina dorsale del sistema:
+
+```
+input → SpeakerClaim → SpeakerProfile → ComprehensionReport → SentenceProposition (P81)
+      → closure detection → modulazioni di stato → ActionDecision
+      → seed_from_comprehension → select_pattern_by_resonance → pattern_matcher → italiano
+```
+
+Dettaglio completo: [pipeline di comprensione](comprensione/pipeline-comprensione.md).
+
 ## Come leggere
 
-- **Punto di ingresso consigliato**: [principi inviolabili](principi/principi-inviolabili.md) → ti dà il framework concettuale in 15 minuti.
-- **Vuoi capire l'architettura corrente**: [pipeline di comprensione](comprensione/pipeline-comprensione.md) (è la novità Phase 71-79).
-- **Vuoi modificare il frontend**: [architettura campovasto](campovasto/architettura-campovasto.md) + [design system](campovasto/design-system.md).
-- **Vuoi capire il pattern wiki stesso**: [LLM Wiki pattern applicato](campovasto/llm-wiki-pattern-applicato.md).
+- **Punto di ingresso concettuale**: [principi inviolabili](principi/principi-inviolabili.md) → il framework in 15 minuti.
+- **Architettura corrente (comprensione)**: [pipeline di comprensione](comprensione/pipeline-comprensione.md).
+- **Abitare UI-R1 da un LLM**: [MCP substrate](interfacce/mcp-substrate.md).
+- **Modificare il frontend**: [architettura campovasto](campovasto/architettura-campovasto.md) + [design system](campovasto/design-system.md).
+- **Il pattern wiki stesso**: [LLM Wiki pattern applicato](campovasto/llm-wiki-pattern-applicato.md).
 
 ---
 
@@ -22,6 +48,7 @@ I 9 principi inviolabili che governano l'architettura di UI-R1 e i filtri operat
 | Articolo | Sommario | Aggiornato |
 |----------|----------|------------|
 | [Principi inviolabili](principi/principi-inviolabili.md) | I 9 principi stratificati: no template, una parola per nodo, no empatia simulata, lo strumento libera, capire prima, educare non hardcodare, curare al meccanismo, continuità via SpeakerProfile, riferimento Rovelli+Lacan | 2026-05-12 |
+| [Posizionamento teorico](principi/posizionamento-teorico.md) | Mappa delle parentele: Gärdenfors + Petitot/Thom (geometria e morfodinamica del senso), Rovelli, Lacan, Peirce/Eco (semiosi), Wittgenstein, Austin/Searle (atti linguistici), NSM/Wierzbicka (primi semantici), Bergson, Bohm/Pribram (mente olografica: parte-ripiega-tutto, recall per risonanza, il sé come rottura di simmetria), Merleau-Ponty, Varela, I Ching, Leibniz, CCRU, world models, Quillian (spreading activation). Posizione esplicita sull'asse simbolico↔sub-simbolico↔neuro-simbolico (post-simbolico interpretabile), sulle SNN/neuromorphic (paralleli, componibili) e su IIT/Tononi (perché non misuriamo la coscienza con una Φ-like metric) | 2026-05-30 |
 | [Test pre-proposta](principi/test-pre-proposta.md) | Le 3 domande operative: forma o trigger? numeri-magici? spiegazione dello stato? Caso canonico Phase 78 trap | 2026-05-12 |
 | [Capire prima, generare dopo](principi/capire-prima-generare-dopo.md) | Il principio architettonico Phase 71-79: ComprehensionReport e ActionDecision esplicite prima di una sola parola di output | 2026-05-12 |
 | [Educare, non hardcodare](principi/educare-non-hardcodare.md) | Rust = meccanismi generici; dati (grammatica, pattern) = KG procedurale. Casi: is_function_word, pattern_name_for, Priority 0 closure | 2026-05-12 |
@@ -53,6 +80,16 @@ Il nucleo architetturale Phase 71-79: come UI-R1 capisce, decide, e istanzia la 
 | [Action reasoning](comprensione/action-reasoning.md) | Decisione esplicita con reasoning testuale italiano. Self-reference detection, extract_main_verb. Phase 74+77+79 | 2026-05-12 |
 | [Pattern matcher](comprensione/pattern-matcher.md) | Legge pattern dal KG procedurale, istanzia slot. Phase 79: select_pattern_by_resonance + is_function_word strutturale. 11 pattern raggiungibili | 2026-05-12 |
 | [Self profile e closure perception](comprensione/self-profile-closure-perception.md) | Phase 78: SelfProfile.decisions registra le proprie ActionDecision come fatti. detect_closure cross-referenzia con SpeakerProfile. Il dialogo come continuità di organi tipizzati | 2026-05-12 |
+| [La frase come proposizione](comprensione/frase-come-proposizione.md) | Phase 81: SentenceProposition (subject + relation + object + via + polarity) come unità di lettura retroattiva. Bridge kg_proc → kg_sem. Confronto leggero (object_in_kg / via_in_kg / contradictions) | 2026-05-15 |
+
+## interfacce
+
+Phase 82: come UI-R1 si lascia abitare da un LLM esterno e come ricorda tra le sessioni.
+
+| Articolo | Sommario | Aggiornato |
+|----------|----------|------------|
+| [MCP substrate](interfacce/mcp-substrate.md) | Phase 82: `prometeo-mcp` espone UI-R1 a un LLM client (Claude Desktop/Code) via Model Context Protocol. 12 tool, HTTP-wrapper su `prometeo-web`, `comprehend` = turno reale. Stack invertito: UI-R1 pensa, LLM è voce vincolata | 2026-05-27 |
+| [Memoria-sfera di haiku](interfacce/memoria-haiku.md) | Phase 82: organo di memoria persistente. Cristalli come cerchi tangenti sui 64 attrattori I Ching. Recall geometrico (β=5.0 ancore > α=1.0 frattale). Persistenza separata `haiku_memory.json`, ispezionabile | 2026-05-27 |
 
 ## identita
 

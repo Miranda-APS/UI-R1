@@ -10,7 +10,7 @@ use axum::{
     Json,
 };
 use axum::http::{StatusCode, header};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
 use super::state::*;
@@ -276,6 +276,8 @@ pub async fn post_input(
             speaker_profile: None,
             comprehension_report: None,
             action_decision: None,
+            sentence_proposition: None,
+            kg_confrontation: None,
         }),
     }
 }
@@ -1925,4 +1927,182 @@ pub async fn get_recent_episodes(
             total_count: 0,
         }),
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase 82 — Memoria-sfera di haiku
+// ═══════════════════════════════════════════════════════════════════
+//
+// Ogni evento cognitivo (osservazione, comprensione, atto di
+// nominazione) può essere cristallizzato come haiku: tre versi densi
+// posizionati su uno dei 64 attrattori frattali I Ching. Le tangenze
+// (cerchi che si toccano sulla sfera) emergono per ancore lessicali
+// condivise (≥2) o per trigramma I Ching in comune.
+//
+// La memoria è PERSISTENTE su `haiku_memory.json` accanto al `.bin`.
+// Vive nel web layer (AppState), non dentro Engine — è organo nuovo,
+// ispezionabile/curabile/cancellabile indipendentemente dal sostrato
+// cognitivo principale. Ogni `deposit` sincronizza il salvataggio.
+
+use crate::topology::haiku_memory::{HaikuCristallizzato, HaikuMemoryStats};
+
+const HAIKU_MEMORY_PATH: &str = "haiku_memory.json";
+
+#[derive(Deserialize)]
+pub struct DepositHaikuBody {
+    pub verses: [String; 3],
+    pub fractal_id: u32,
+    pub anchors: Vec<String>,
+    pub source: Option<String>,
+    pub note: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct DepositHaikuResponse {
+    pub id: String,
+    pub tangencies: Vec<String>,
+    pub total: usize,
+}
+
+/// POST /api/haiku/deposit
+pub async fn post_haiku_deposit(
+    State(state): State<AppState>,
+    Json(body): Json<DepositHaikuBody>,
+) -> Json<DepositHaikuResponse> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let haiku = HaikuCristallizzato {
+        id: String::new(),
+        verses: body.verses,
+        fractal_id: body.fractal_id & 0x3F, // clamp 0..=63
+        anchors: body.anchors,
+        tangencies: Vec::new(),
+        timestamp: ts,
+        source: body.source.unwrap_or_else(|| "claude".to_string()),
+        note: body.note,
+    };
+    let (id, tangencies, total) = {
+        let mut mem = state.haiku_memory.lock().unwrap();
+        let id = mem.deposit(haiku);
+        let tangencies = mem
+            .get(&id)
+            .map(|h| h.tangencies.clone())
+            .unwrap_or_default();
+        let total = mem.len();
+        // Save sincrono — file piccolo, write veloce.
+        if let Err(e) = mem.save_to_file(std::path::Path::new(HAIKU_MEMORY_PATH)) {
+            eprintln!("[haiku-memory] save failed: {}", e);
+        }
+        (id, tangencies, total)
+    };
+    Json(DepositHaikuResponse {
+        id,
+        tangencies,
+        total,
+    })
+}
+
+#[derive(Deserialize)]
+pub struct RecallHaikuBody {
+    pub fractal_id: u32,
+    #[serde(default)]
+    pub anchors: Vec<String>,
+    pub n: Option<usize>,
+}
+
+#[derive(Serialize)]
+pub struct RecallHaikuResponse {
+    pub crystals: Vec<HaikuCristallizzato>,
+    pub total_in_memory: usize,
+}
+
+/// POST /api/haiku/recall
+///
+/// Recall geometrico sulla sfera. Combina distanza frattale + ancore
+/// condivise (le ancore dominano: β=5.0 vs α=1.0).
+pub async fn post_haiku_recall(
+    State(state): State<AppState>,
+    Json(body): Json<RecallHaikuBody>,
+) -> Json<RecallHaikuResponse> {
+    let n = body.n.unwrap_or(5).min(50);
+    let mem = state.haiku_memory.lock().unwrap();
+    let crystals: Vec<HaikuCristallizzato> = mem
+        .recall_by_proximity(body.fractal_id & 0x3F, &body.anchors, n)
+        .into_iter()
+        .cloned()
+        .collect();
+    Json(RecallHaikuResponse {
+        crystals,
+        total_in_memory: mem.len(),
+    })
+}
+
+/// GET /api/haiku/stats
+pub async fn get_haiku_stats(State(state): State<AppState>) -> Json<HaikuMemoryStats> {
+    let mem = state.haiku_memory.lock().unwrap();
+    Json(mem.snapshot_stats())
+}
+
+#[derive(Deserialize)]
+pub struct HaikuListQuery {
+    pub limit: Option<usize>,
+}
+
+#[derive(Serialize)]
+pub struct HaikuListResponse {
+    pub crystals: Vec<HaikuCristallizzato>,
+    pub total: usize,
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Phase 83 — Simplessi grammaticali (educazione live)
+// ═══════════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+pub struct AddGrammarSimplexBody {
+    /// Sequenza di parole-perno (es. ["rispetto", "a"]).
+    pub words: Vec<String>,
+    /// Categoria libera (es. "preposizione_composta", "locuzione_fatica").
+    /// Non è un dispatch — è etichetta per ispezione/curation.
+    pub category: String,
+    /// Nome del frattale-funzione che il simplesso attiva quando emerge
+    /// (es. "RELAZIONE", "SALUTO", "POSSIBILITA"). Risolto via FractalRegistry.
+    pub function_fractal_name: String,
+}
+
+/// POST /api/grammar_simplex — insegna un simplesso grammaticale.
+/// La modifica è persistente: viene salvata al prossimo `save_to_binary`.
+/// Vedi `Engine::add_grammar_simplex` e Phase 83 in CLAUDE.md.
+pub async fn post_grammar_simplex(
+    State(state): State<AppState>,
+    Json(body): Json<AddGrammarSimplexBody>,
+) -> Json<Result<AddGrammarSimplexResponse, String>> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::AddGrammarSimplex {
+        words: body.words,
+        category: body.category,
+        function_fractal_name: body.function_fractal_name,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_else(|_| Err("engine channel closed".into())))
+}
+
+/// GET /api/haiku/all?limit=N — dump cristalli (più recenti prima).
+pub async fn get_haiku_all(
+    State(state): State<AppState>,
+    Query(q): Query<HaikuListQuery>,
+) -> Json<HaikuListResponse> {
+    let limit = q.limit.unwrap_or(50).min(500);
+    let mem = state.haiku_memory.lock().unwrap();
+    let mut all: Vec<HaikuCristallizzato> = mem.haikus.clone();
+    all.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    let total = all.len();
+    all.truncate(limit);
+    Json(HaikuListResponse {
+        crystals: all,
+        total,
+    })
 }

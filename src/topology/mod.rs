@@ -88,6 +88,10 @@ pub mod action_reasoning;
 pub mod pattern_matcher;
 pub mod self_profile;
 pub mod kg_proc_field;
+pub mod sentence_proposition;
+/// Phase 82 — Memoria-sfera di haiku come geometria sferica di cerchi
+/// tangenti sulla sfera I Ching. Vedi `src/topology/haiku_memory.rs`.
+pub mod haiku_memory;
 
 pub use primitive::{PrimitiveCore, Dim};
 pub use fractal::{

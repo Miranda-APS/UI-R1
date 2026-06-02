@@ -33,11 +33,21 @@ sha2 = { version = "0.10", optional = true }
 # JNI — solo per build Android
 jni = { version = "0.21", features = [], optional = true }
 
+# Phase 82 — MCP (Model Context Protocol) integration: prometeo-mcp espone
+# UI-r1 come server MCP via stdio, in modo che un LLM client (Claude Desktop,
+# Claude Code, etc.) possa abitare UI-r1 come substrato cognitivo strutturato.
+# HTTP-wrapper: prometeo-mcp parla MCP con il client e fa requests REST al
+# server prometeo-web (che deve essere acceso). Single engine, single state.
+rmcp = { version = "1.7", features = ["server", "macros", "transport-io"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+
 [features]
 default = []
 web = ["axum", "tower", "tower-http", "http", "sha2"]
 # android: cdylib con server embedded — compila con cargo-ndk
 android = ["web", "jni"]
+# Phase 82: MCP server binary
+mcp = ["rmcp", "reqwest"]
 
 [lib]
 name = "prometeo"
@@ -101,3 +111,10 @@ path = "src/bin/reset_simplices.rs"
 [[bin]]
 name = "rederive-signatures"
 path = "src/bin/rederive_signatures.rs"
+
+# Phase 82 — MCP server: espone UI-r1 come substrato strutturato a LLM client
+# via Model Context Protocol (stdio transport). Richiede `--features mcp`.
+[[bin]]
+name = "prometeo-mcp"
+path = "src/bin/prometeo_mcp.rs"
+required-features = ["mcp"]

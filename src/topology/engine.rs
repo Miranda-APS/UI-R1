@@ -4,7 +4,7 @@
 /// L'engine non e un monolite — e un coordinatore.
 
 use crate::topology::fractal::{FractalRegistry, FractalId, bootstrap_fractals};
-use crate::topology::simplex::{SimplicialComplex, bootstrap_complex};
+use crate::topology::simplex::{SimplicialComplex, SimplexId, bootstrap_complex};
 use crate::topology::context::{
     Context, EmergentResponse,
     activate_context, create_perturbation, apply_perturbation, emerge_response,
@@ -572,6 +572,26 @@ pub struct PrometeoTopologyEngine {
     /// Non serializzata — stato di sessione.
     pub last_input_reading: Option<crate::topology::input_reading::InputReading>,
 
+    /// Phase 81: la proposizione che l'utterance porta come triple strutturale
+    /// (subject + relation + object + via + polarity). Letta dal kg_proc; è
+    /// l'unità minima di comprensione su cui derive_speech_act/derive_gaps
+    /// possono operare invece di ri-parsare token. Non serializzata.
+    pub last_sentence_proposition: Option<crate::topology::sentence_proposition::SentenceProposition>,
+
+    /// Phase 81: confronto della proposizione col kg_sem (matches, object/via
+    /// ancorati, contraddizioni leggere via OppositeOf). Calcolato a valle di
+    /// `last_sentence_proposition`. Non serializzato.
+    pub last_kg_confrontation: Option<crate::topology::sentence_proposition::KgConfrontation>,
+
+    /// Phase 83 — segnali grammaticali rilevati dal match dei simplessi
+    /// grammaticali sul turno corrente. Coppie `(category, function_fractal_id)`
+    /// es. `[("preposizione_composta", 45)]` quando il simplesso `[rispetto, a]`
+    /// ha matchato. Letti da `derive_speech_act` (Phase 81b) per produrre
+    /// atti di parola che riflettono la struttura grammaticale curata
+    /// invece di re-parsare token. Reset a ogni `receive()`.
+    /// Non serializzato (è segnale di turno corrente, non stato persistente).
+    pub last_grammar_signals: Vec<(String, FractalId)>,
+
     // ── NarrativeSelf — identità narrativa deliberativa ────────────────────────
     /// Il soggetto che attraversa il ciclo deliberativo:
     /// "Ho ricevuto X → capisco Y → mi posiziono Z → voglio fare W"
@@ -792,6 +812,9 @@ impl PrometeoTopologyEngine {
             last_archetype_used: String::new(),
             conversation_window: std::collections::VecDeque::new(),
             last_input_reading: None,
+            last_sentence_proposition: None,
+            last_kg_confrontation: None,
+            last_grammar_signals: Vec::new(),
             narrative_self: crate::topology::narrative::NarrativeSelf::new(),
             kg: KnowledgeGraph::new(),
             self_model: crate::topology::self_model::SelfModel::bootstrap(),
@@ -904,6 +927,9 @@ impl PrometeoTopologyEngine {
             last_archetype_used: String::new(),
             conversation_window: std::collections::VecDeque::new(),
             last_input_reading: None,
+            last_sentence_proposition: None,
+            last_kg_confrontation: None,
+            last_grammar_signals: Vec::new(),
             narrative_self: crate::topology::narrative::NarrativeSelf::new(),
             kg: KnowledgeGraph::new(),
             self_model: crate::topology::self_model::SelfModel::bootstrap(),
@@ -2216,6 +2242,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             &current_raw_words,
             &self.lexicon,
             Some(&self.kg),
+            Some(&self.kg_procedural),
         );
 
         // Parole strutturali da sopprimere se presente uno speaker_claim:
@@ -2600,6 +2627,16 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             self.identity_seed_field_scaled(20.0);
         }
 
+        // Phase 83 — match dei simplessi grammaticali curati contro l'input.
+        // Per ogni simplesso grammaticale (es. `[rispetto, a]` con
+        // function_fractal=RELAZIONE), se le sue source_words sono presenti
+        // nell'ordine e in adiacenza nell'input, attiva il simplesso E
+        // semina la regione del campo intorno al `function_fractal`. Phase 81
+        // a valle legge dai frattali attivi per decidere ruoli grammaticali
+        // (RELAZIONE → asse-relativo, SALUTO → atto fatico, ecc.) anziché
+        // fare lookup di triple kg_proc. Niente template — geometria del campo.
+        let _activated_grammar = self.match_grammar_simplices(&current_raw_words);
+
         self.propagate_field_words();
         tick!("propagate_pf1");
 
@@ -2774,7 +2811,28 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             &self.knowledge_base,
             &self.lexicon,
             Some(&self.kg),
+            Some(&self.kg_procedural),
         ));
+
+        // 14d-bis. Phase 81: estrazione della proposizione che la frase porta.
+        // Lettura retroattiva dell'utterance come triple (subject + relation +
+        // object + via + polarity). Riusa lo speaker_claim appena calcolato
+        // e legge le preposizioni di specificazione dal kg_proc. La triple
+        // così ottenuta è confrontata col kg_sem per stabilire se object/via
+        // sono ancorati al mondo che UI-r1 già conosce.
+        {
+            let claim_opt = self.last_input_reading.as_ref()
+                .and_then(|r| r.speaker_claim.as_ref());
+            let proposition = crate::topology::sentence_proposition::extract_proposition(
+                &self.last_input_words,
+                claim_opt,
+                Some(&self.kg_procedural),
+            );
+            self.last_kg_confrontation = proposition.as_ref().map(|p| {
+                crate::topology::sentence_proposition::confront_with_kg(p, &self.kg)
+            });
+            self.last_sentence_proposition = proposition;
+        }
 
         // 14e. SpeakerClaim: amplifica il predicato del claim DOPO read_input.
         // Le parole strutturali (io/essere) sono già a forza minima (0.02) grazie
@@ -3020,11 +3078,17 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
 
         self.last_compound_states = compounds;
 
+        // Phase 62/83: valenza emotiva dell'Altro per QUESTO turno, derivata da
+        // catena logica (parole input → IS_A → radici emotive nel KG, negate
+        // escluse). NON una media — il valore fresco del turno corrente. Hoisted
+        // al corpo di receive() così alimenta sia l'interlocutore sia
+        // direttamente la Valence (freccia a: comprendere l'Altro muove la
+        // posizione, senza simulazione di persistenza).
+        let other_ev = self.compute_other_emotional_valence(&self.last_input_words.clone(), &negated_words);
+
         // Phase 53: registra l'interlocutore e rileva umorismo
         {
             let post_input_sig = self.env_biased_field_sig();
-            // Phase 62: valenza emotiva dell'input (IS_A chain sulle parole)
-            let other_ev = self.compute_other_emotional_valence(&self.last_input_words.clone(), &negated_words);
 
             // Phase 69 B.3: snapshot pre-register per rilevare shift interlocutore.
             let prev_emo = self.interlocutor.emotional_valence;
@@ -3143,6 +3207,12 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 humor_incongruity: self.last_humor_state.incongruity_score,
                 dialogue_novelty,
                 dominant_desire_intensity,
+                // Phase 83 (freccia a): la valenza emotiva COMPRESA dell'Altro
+                // entra direttamente nel calcolo della valenza dell'entità.
+                // Valore FRESCO del turno (catena logica IS_A), non la media
+                // mobile — la posizione segue ciò che si comprende ORA, la
+                // persistenza vive nei fatti (SpeakerProfile), non in un decay.
+                other_emotional_valence: other_ev,
             };
             let valence = crate::topology::valence::Valence::compute(&valence_input);
 
@@ -3465,6 +3535,16 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             &self.speaker_profile,
             self.speaker_profile.turn_count,
         );
+        // Phase 83: una closure NON scatta su un turno che è esso stesso una
+        // domanda. "chi sei?" non articola un vuoto emotivo aperto prima —
+        // apre un nuovo atto. Senza questa guardia la closure agganciava
+        // "chi sei?" a un gap "triste"/"nostalgia" residuo di turni lontani.
+        // (Complementare alla guardia Phase 80 sul claim proprio del turno.)
+        let current_is_question = matches!(
+            self.last_sentence_proposition.as_ref().and_then(|p| p.object.as_ref()),
+            Some(crate::topology::sentence_proposition::ObjectRef::Variable(_))
+        );
+        let closure = if current_is_question { None } else { closure };
         let prior_gap_closure = closure.as_ref().map(|c| {
             crate::topology::comprehension_report::PriorGapClosure {
                 trigger: c.gap_trigger.clone(),
@@ -3523,9 +3603,11 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 input,
                 &deliberation.kg_facts,
                 speaker_claim_clone.as_ref(),
+                self.last_sentence_proposition.as_ref(),
                 &syllogisms,
                 &self.kg,
                 prior_gap_closure,
+                &self.last_grammar_signals,
             );
             self.last_comprehension_report = Some(report);
         }
@@ -5974,6 +6056,166 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         }
     }
 
+    // ──────────────────────────────────────────────────────────────────
+    // Phase 83 — Simplessi grammaticali: matching ordinato + attivazione
+    // del function_fractal nel campo. Vedi `Simplex::new_grammatical`.
+    // ──────────────────────────────────────────────────────────────────
+
+    /// Phase 83 — Insegna un nuovo simplesso grammaticale tipizzato.
+    /// Risolve `function_fractal_name` via `FractalRegistry` (case-insensitive),
+    /// aggiunge il simplesso al complesso con `Simplex::new_grammatical` e
+    /// restituisce `(simplex_id, function_fractal_id)`. Il simplesso è
+    /// persistente: viene salvato al prossimo `save_to_binary`.
+    ///
+    /// I `vertices` del simplesso sono `[function_fractal_id]` — singolo
+    /// vertex. Questo permette a `SimplicialComplex::activate_region` (chiamato
+    /// in `match_grammar_simplices`) di trovarlo via `simplices_of(function_fractal)`.
+    pub fn add_grammar_simplex(
+        &mut self,
+        words: Vec<String>,
+        category: String,
+        function_fractal_name: &str,
+    ) -> Result<(SimplexId, FractalId), String> {
+        if words.is_empty() {
+            return Err("source_words vuoto".into());
+        }
+        if category.trim().is_empty() {
+            return Err("category vuota".into());
+        }
+        // Risolvi il nome del frattale (case-insensitive, accent-insensitive
+        // sarebbe meglio ma per ora basta lowercase).
+        let needle = function_fractal_name.to_lowercase();
+        let function_fractal: FractalId = self.registry.iter()
+            .find(|(_, f)| f.name.to_lowercase() == needle)
+            .map(|(id, _)| *id)
+            .ok_or_else(|| format!("function_fractal_name '{}' non trovato nel FractalRegistry", function_fractal_name))?;
+
+        // Vertices: solo il function_fractal. Permette ad activate_region(ff)
+        // di trovare questo simplesso (poiché simplices_of(ff) lo include).
+        let vertices = vec![function_fractal];
+        // shared_faces vuoto: non è un simplesso di co-occorrenza semantica
+        // ma di costruzione grammaticale curata.
+        let shared_faces = Vec::new();
+
+        // Genera id manualmente (l'API SimplicialComplex::add_simplex genera id
+        // automaticamente; per simplessi grammaticali serve un costruttore
+        // diverso. Usiamo l'id corrente del prossimo libero).
+        let id = self.complex.add_simplex(vec![function_fractal], shared_faces.clone());
+        // Subito dopo add_simplex, mutiamo per impostare i campi grammaticali.
+        // Il pattern non è elegantissimo: in Phase 84+ si potrà aggiungere
+        // SimplicialComplex::add_grammar_simplex come API dedicata.
+        if let Some(s) = self.complex.get_mut(id) {
+            s.source_words = Some(words.iter().map(|w| w.to_lowercase()).collect());
+            s.category = Some(category);
+            s.ordered = true;
+            s.function_fractal = Some(function_fractal);
+            s.persistence = 0.7;
+            s.plasticity = 0.3;
+        }
+        let _ = vertices;
+        Ok((id, function_fractal))
+    }
+
+    /// Phase 83 — Quanti simplessi grammaticali ci sono nel complesso.
+    pub fn count_grammar_simplices(&self) -> usize {
+        self.complex.iter().filter(|(_, s)| s.is_grammatical()).count()
+    }
+
+    /// Phase 83 — Top-N parole del lessico con maggior affinità a `fractal`.
+    /// Soglia minima 0.3 per evitare di pescare rumore di fondo. Usato da
+    /// `match_grammar_simplices` per far emergere il function_fractal nel
+    /// campo (Phase 55 voting) attivando le sue parole-radice.
+    fn top_words_for_fractal(&self, fractal: FractalId, n: usize) -> Vec<(String, f64)> {
+        let mut scored: Vec<(String, f64)> = self.lexicon.patterns_iter()
+            .filter_map(|(_, pat)| {
+                pat.fractal_affinities.get(&fractal).map(|&aff| (pat.word.clone(), aff))
+            })
+            .filter(|(_, aff)| *aff > 0.3)
+            .collect();
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(n);
+        scored
+    }
+
+    /// Scansiona i simplessi grammaticali del complesso (`is_grammatical()`).
+    /// Per ognuno, verifica se le sue `source_words` sono presenti
+    /// nell'input `raw_words` nell'ordine e in adiacenza (se `ordered=true`),
+    /// oppure in una finestra adiacente (se `ordered=false`). Quando un
+    /// simplesso matcha:
+    ///   1. Lo attiva (`Simplex::activate`)
+    ///   2. Semina la regione del campo intorno al suo `function_fractal`
+    ///      via `SimplicialComplex::activate_region` (che propaga ai
+    ///      simplessi che lo contengono → source_words → PF1 nella
+    ///      risonanza successiva)
+    /// Restituisce i `function_fractal` attivati per logging.
+    fn match_grammar_simplices(&mut self, raw_words: &[String]) -> Vec<FractalId> {
+        // Reset segnali grammaticali per il nuovo turno. Si popolano qui sotto
+        // quando un simplesso grammaticale matcha: il parser di Phase 81b
+        // (derive_speech_act) li legge per produrre atti di parola che
+        // riflettono la struttura curata invece di ri-parsare token.
+        self.last_grammar_signals.clear();
+        if raw_words.is_empty() { return Vec::new(); }
+        let raw_lower: Vec<String> = raw_words.iter().map(|w| w.to_lowercase()).collect();
+
+        // Snapshot dei candidati prima di mutare il complesso. Tiene anche
+        // la `category` per popolare i segnali grammaticali.
+        let candidates: Vec<(SimplexId, Vec<String>, FractalId, bool, String)> = self.complex
+            .iter()
+            .filter(|(_, s)| s.is_grammatical())
+            .map(|(id, s)| (
+                *id,
+                s.source_words.clone().unwrap_or_default(),
+                s.function_fractal.unwrap(),
+                s.ordered,
+                s.category.clone().unwrap_or_default(),
+            ))
+            .collect();
+
+        let mut activated = Vec::new();
+        for (sid, source_words, function_fractal, ordered, category) in candidates {
+            if source_words.is_empty() { continue; }
+            let matched = if ordered {
+                grammar_simplex_find_ordered(&raw_lower, &source_words)
+            } else {
+                // finestra = len(source_words) + 2 per tolleranza piccola
+                grammar_simplex_find_unordered_window(
+                    &raw_lower, &source_words, source_words.len() + 2,
+                )
+            };
+            if matched {
+                if let Some(s) = self.complex.get_mut(sid) {
+                    s.activate(0.6);
+                }
+                // Semina la regione simpliciale intorno al function_fractal
+                // (attiva i simplessi che lo contengono).
+                self.complex.activate_region(function_fractal, 0.5);
+                // Phase 83 — Fa EMERGERE il function_fractal come attivo nel
+                // PF1 via voting (Phase 55 top-3): attiva nel campo le top-3
+                // parole con maggior affinità a quel frattale. Senza questo,
+                // l'attivazione resta nei simplessi e non risale al campo
+                // parole — i sistemi a valle (generazione, parser PROP,
+                // top active_fractals) non la vedrebbero.
+                let top_words = self.top_words_for_fractal(function_fractal, 3);
+                for (word, _aff) in &top_words {
+                    self.pf_activation.activate_by_name(&self.pf_field, word, 0.25_f32);
+                }
+                // Phase 83b — registra il segnale grammaticale per il parser
+                // Phase 81 a valle. La category è l'etichetta curata
+                // dell'insegnamento, NON un dispatch: il parser legge la
+                // coppia (category, function_fractal) come informazione
+                // strutturale del campo, non come regola if/then.
+                if !category.is_empty() {
+                    self.last_grammar_signals.push((category, function_fractal));
+                }
+                activated.push(function_fractal);
+            }
+        }
+        if !activated.is_empty() {
+            eprintln!("[gram-83] simplessi grammaticali matched → function_fractals attivati: {:?}", activated);
+        }
+        activated
+    }
+
     ///   PF1.propagate() è O(parole_attive × 8) con accesso array.
     ///   Con 100 parole attive su 6751: 800 operazioni invece di 50.000+.
     ///   Il campo cresce → routing più preciso, non più lento. Come le sinapsi.
@@ -8216,5 +8458,80 @@ mod tests {
         let result = engine.autonomous_tick();
         let _ = result;
         assert!(true, "autonomous_tick con bias Self deve completare senza errori");
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Phase 83 — Helpers per il matching dei simplessi grammaticali.
+// Funzioni libere (non metodi di Engine) per evitare borrow checker issues
+// quando match_grammar_simplices muta self.complex in iterazione.
+// ──────────────────────────────────────────────────────────────────────
+
+/// Cerca `pattern` come sottosequenza contigua *case-insensitive* in `words`.
+/// Entrambe le slice sono già lower-cased dal caller per efficienza.
+fn grammar_simplex_find_ordered(words: &[String], pattern: &[String]) -> bool {
+    if pattern.is_empty() || pattern.len() > words.len() { return false; }
+    'outer: for start in 0..=(words.len() - pattern.len()) {
+        for (i, p) in pattern.iter().enumerate() {
+            if words[start + i] != *p {
+                continue 'outer;
+            }
+        }
+        return true;
+    }
+    false
+}
+
+/// Cerca tutte le parole di `pattern` presenti in una qualsiasi finestra
+/// contigua di `words` di larghezza `window`. Ordine non significativo.
+fn grammar_simplex_find_unordered_window(
+    words: &[String],
+    pattern: &[String],
+    window: usize,
+) -> bool {
+    if pattern.is_empty() { return false; }
+    if pattern.len() > window { return false; }
+    let needed: std::collections::HashSet<&str> = pattern.iter().map(|s| s.as_str()).collect();
+    if words.len() < pattern.len() { return false; }
+    for start in 0..words.len() {
+        let end = (start + window).min(words.len());
+        let local: std::collections::HashSet<&str> = words[start..end].iter().map(|s| s.as_str()).collect();
+        if needed.iter().all(|p| local.contains(*p)) {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod grammar_simplex_tests {
+    use super::*;
+
+    #[test]
+    fn ordered_matches_contiguous_subseq() {
+        let words = vec!["io".into(), "rispetto".into(), "a".into(), "te".into()];
+        let pattern = vec!["rispetto".into(), "a".into()];
+        assert!(grammar_simplex_find_ordered(&words, &pattern));
+    }
+
+    #[test]
+    fn ordered_rejects_reversed_order() {
+        let words = vec!["a".into(), "rispetto".into()];
+        let pattern = vec!["rispetto".into(), "a".into()];
+        assert!(!grammar_simplex_find_ordered(&words, &pattern));
+    }
+
+    #[test]
+    fn ordered_rejects_separated_words() {
+        let words = vec!["rispetto".into(), "molto".into(), "a".into()];
+        let pattern = vec!["rispetto".into(), "a".into()];
+        assert!(!grammar_simplex_find_ordered(&words, &pattern));
+    }
+
+    #[test]
+    fn unordered_within_window_matches() {
+        let words = vec!["ho".into(), "molto".into(), "rispetto".into(), "per".into()];
+        let pattern = vec!["rispetto".into(), "molto".into()];
+        assert!(grammar_simplex_find_unordered_window(&words, &pattern, 4));
     }
 }

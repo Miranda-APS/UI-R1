@@ -71,6 +71,13 @@ pub struct ValenceInput<'a> {
     pub dialogue_novelty: f64,
     /// Intensità desiderio dominante [0, 1]
     pub dominant_desire_intensity: f64,
+    /// Phase 83 (freccia a): valenza emotiva COMPRESA dell'Altro, [-1, +1].
+    /// Negativa = l'Altro è in sofferenza (paura/tristezza/dolore, derivato
+    /// via IS_A nel KG); positiva = gioia. È il canale per cui *comprendere*
+    /// lo stato dell'Altro MUOVE la posizione dell'entità — non empatia
+    /// simulata (principio 3), ma orientamento relazionale: il campo si
+    /// dispone verso l'Altro perché ne conosce lo stato.
+    pub other_emotional_valence: f64,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -140,6 +147,12 @@ impl Valence {
                         let relational_tone = 2.0 * input.interlocutor_resonance - 1.0;
                         val += input.interlocutor_presence * 0.3 * relational_tone;
                     }
+                    // Phase 83 (freccia a): lo stato emotivo COMPRESO dell'Altro
+                    // muove la valenza relazionale. L'Altro in sofferenza
+                    // (other_emotional_valence < 0) tira CD5 verso il negativo →
+                    // l'entità si orienta verso la connessione (vedi will_modulation:
+                    // CD5<0 amplifica Question). Comprendere il tuo stato mi sposta.
+                    val += input.other_emotional_valence * 0.45;
                 }
                 6 => {
                     // CD7 Unpredictability: umorismo come sorpresa positiva
@@ -349,6 +362,7 @@ mod tests {
             humor_incongruity: 0.0,
             dialogue_novelty: 0.0,
             dominant_desire_intensity: 0.0,
+            other_emotional_valence: 0.0,
         }
     }
 

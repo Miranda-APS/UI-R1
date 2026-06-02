@@ -38,7 +38,7 @@ Layout configurato in `.obsidian/workspace.json`:
 
 ### A — Graph view (la cosa più sorprendente)
 
-`Ctrl + G` apre il grafo dei link interni. 29 nodi (uno per articolo) colorati per topic:
+`Ctrl + G` apre il grafo dei link interni — un nodo per articolo (conteggio corrente nell'[index](index.md)), colorati per topic:
 
 | Colore | Topic |
 |--------|-------|
@@ -48,6 +48,7 @@ Layout configurato in `.obsidian/workspace.json`:
 | arancione caldo | identità |
 | blu | generazione |
 | viola | campovasto |
+| viola lavanda | interfacce (Phase 82) |
 
 Trascina i nodi per riordinarli. Cluster naturali emergono: *principi* tira tutto verso
 di sé, *comprensione* è densamente intra-collegata (Phase 71-79), *campovasto* è

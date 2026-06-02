@@ -65,6 +65,19 @@ pub struct SpeakerClaim {
     pub kind: ClaimKind,
     /// La parola che porta il predicato (la prima parola-contenuto dopo il verbo)
     pub predicate: String,
+    /// Phase 80: categoria del verbo letta strutturalmente dal kg_proc.
+    /// Valori: "copula" / "percettivo" / "cognitivo" / "comunicativo" /
+    /// "denominativo" / "azione". Permette a `derive_speech_act` di
+    /// distinguere casi che il ClaimKind da solo non separa:
+    /// Identity+denominativo ("mi chiamo X") vs Identity+copula ("ho un cane").
+    /// `None` quando il verbo non è classificato (lessico esterno al kg_proc).
+    pub verb_category: Option<String>,
+    /// Phase 83: complemento/tema della costruzione, quando il frame del verbo
+    /// lo separa dal predicato. Per i verbi dativi ("mi manca mia madre")
+    /// `predicate` porta l'emozione lessicalizzata nel verbo ("mancanza") e
+    /// `complement` porta il tema ("madre"). `None` per il frame nominativo
+    /// di default. Fluisce nello slot `via` della proposizione.
+    pub complement: Option<String>,
 }
 
 /// Lettura strutturata dell'input corrente.
@@ -103,6 +116,7 @@ pub fn read_input(
     knowledge_base: &KnowledgeBase,
     lexicon: &Lexicon,
     kg: Option<&KnowledgeGraph>,
+    kg_proc: Option<&KnowledgeGraph>,
 ) -> InputReading {
     // ── Parola più stabile dell'input ────────────────────────────────────────
     let salient_word = raw_words.iter()
@@ -175,7 +189,7 @@ pub fn read_input(
     // Rileva "io sono/ho/sento X" e "tu sei/hai X" come claim espliciti.
     // Non è parsing completo: è pattern matching sui costrutti più frequenti.
     // Robusto per frasi semplici; sufficiente per orientare stance e risposta.
-    let speaker_claim = detect_speaker_claim(raw_words, lexicon, kg);
+    let speaker_claim = detect_speaker_claim(raw_words, lexicon, kg, kg_proc);
 
     // ── Classificazione (ordine di priorità) ─────────────────────────────────
     // I claim emozionali del parlante ("io sono triste") elevano Declaration
@@ -200,140 +214,286 @@ pub fn read_input(
     InputReading { act, intensity, salient_word, speaker_claim, perceived_properties: vec![], comprehension_depth: 0 }
 }
 
-/// Rileva un claim strutturale soggetto/predicato nell'input.
+/// Phase 80: rileva un claim strutturale soggetto/predicato nell'input.
 ///
-/// Pattern riconosciuti (ordine di ricerca: io/tu → verbo → predicato):
-///   "io sono/ero/mi sento/sento/provo/ho X"  → Speaker claim
-///   "tu sei/eri/hai/senti X"                 → Entity claim
-///   "io voglio/penso/credo X"                → Speaker Action
+/// L'identificazione del verbo, della sua categoria semantica e del kind del
+/// claim è completamente STRUTTURALE — legge dal kg_proc le triple
+/// `<verbo> IsA verbo`, `<verbo> IsA copula|percettivo|cognitivo|comunicativo|
+/// denominativo|azione`. Nessuna lista hardcoded di verbi italiani in Rust.
+/// Aggiungere/rimuovere verbi è curation, mai modifica di codice.
 ///
-/// Restituisce None se nessun pattern viene riconosciuto.
+/// Pipeline:
+///   1. Pronome esplicito (io/mi → Speaker; tu/ti → Entity), se presente.
+///   2. Per ogni token, prova a lemmatizzarlo come verbo (irregolari coperti
+///      da `grammar::lemmatize`, regolari coperti da fallback morfologico
+///      validato sul kg_proc).
+///   3. Il primo verbo lemmatizzato che ha categoria nota nel kg_proc è il
+///      verbo del claim. La sua categoria determina il ClaimKind:
+///        denominativo → Identity (presentazione)
+///        percettivo   → Feeling  (validato: predicato deve essere stato interno)
+///        cognitivo    → Action
+///        comunicativo → Action
+///        azione       → Action
+///        copula       → Identity se predicato non è stato interno,
+///                       Feeling   se predicato è stato interno
+///   4. L'agente è determinato dal pronome esplicito (se presente) o dalla
+///      persona del verbo (1sg → Speaker, 2sg → Entity).
+///   5. Il predicato è la prima parola-contenuto dopo il verbo, saltando
+///      le function-word identificate strutturalmente dal kg_proc.
+///
+/// Restituisce None se nessun verbo classificato emerge dall'input.
 pub fn detect_speaker_claim(
     raw_words: &[String],
     lexicon: &Lexicon,
     kg: Option<&KnowledgeGraph>,
+    kg_proc: Option<&KnowledgeGraph>,
 ) -> Option<SpeakerClaim> {
     if raw_words.is_empty() { return None; }
 
-    let words_lc: Vec<&str> = raw_words.iter().map(|w| w.as_str()).collect();
+    // ── 1. Pronome esplicito ─────────────────────────────────────────────
+    // "io"/"mi"/"noi"/"ci" → Speaker. "tu"/"ti"/"voi"/"vi" → Entity.
+    let explicit_agent: Option<ClaimAgent> = raw_words.iter()
+        .find_map(|w| match w.as_str() {
+            "io" | "mi" | "noi" | "ci" => Some(ClaimAgent::Speaker),
+            "tu" | "ti" | "voi" | "vi" => Some(ClaimAgent::Entity),
+            _ => None,
+        });
 
-    // Verbi copulativi/di stato per il parlante (1a persona)
-    const SPEAKER_IDENTITY: &[&str] = &["sono", "ero", "sarò"];
-    const SPEAKER_FEELING:  &[&str] = &["sento", "provo", "ho", "mi", "sto"];
-    const SPEAKER_ACTION:   &[&str] = &["voglio", "penso", "credo", "so", "capisco", "devo"];
+    // ── 2. Trova il primo verbo classificato ─────────────────────────────
+    let mut verb_match: Option<(usize, String, crate::topology::grammar::Person, &'static str)> = None;
+    for (pos, w) in raw_words.iter().enumerate() {
+        if let Some((infinitive, person)) = lemma_of_verb(w, kg_proc) {
+            if let Some(category) = verb_category(&infinitive, kg_proc) {
+                verb_match = Some((pos, infinitive, person, category));
+                break;
+            }
+        }
+    }
+    let (verb_pos, infinitive, person, category) = verb_match?;
 
-    // Verbi per l'entità (2a persona)
-    const ENTITY_VERBS: &[&str] = &["sei", "eri", "sarai", "hai", "senti", "provi"];
-
-    // Cerca "io" come soggetto esplicito
-    let has_io = words_lc.iter().any(|&w| w == "io");
-    // Cerca "mi" (mi sento, mi chiamo) — soggetto implicito
-    let has_mi = words_lc.iter().any(|&w| w == "mi");
-    // Cerca "tu" o "ti" come riferimento all'entità
-    let has_tu = words_lc.iter().any(|&w| w == "tu" || w == "ti");
-    // Cerca verbi di prima persona che implicano il soggetto parlante senza pronome esplicito.
-    // In italiano "ho paura" è inequivocabilmente prima persona — "ho" non esiste in 3a persona.
-    // Questi verbi sono sufficienti come indicatori del soggetto senza "io".
-    const IMPLICIT_SPEAKER_VERBS: &[&str] = &["ho", "sono", "sto", "voglio", "penso", "credo", "sento", "provo", "devo", "so"];
-    let has_implicit_speaker = !has_io && !has_mi && !has_tu
-        && words_lc.iter().any(|&w| IMPLICIT_SPEAKER_VERBS.contains(&w));
-
-    if !has_io && !has_mi && !has_tu && !has_implicit_speaker {
-        return None;
+    // ── 2.bis Frame di costruzione: i verbi dativi rimappano i ruoli ──────
+    //   "mi manca mia madre" → esperiente=clitico (mi→Speaker), emozione
+    //   lessicalizzata nel verbo (Expresses→"mancanza"), tema=nome dopo il
+    //   verbo ("madre"). Nessun caso Rust verbo-specifico: il frame e
+    //   l'emozione vivono nel kg_proc come dato.
+    if verb_frame(&infinitive, kg_proc).as_deref() == Some("dativo") {
+        return build_dative_claim(raw_words, verb_pos, &infinitive, explicit_agent, kg_proc);
     }
 
-    // Trova la posizione del verbo e classifica il claim
-    let (agent, kind, verb_pos) = if has_io || has_mi || has_implicit_speaker {
-        // Cerca verbi del parlante
-        if let Some(pos) = words_lc.iter().position(|&w| SPEAKER_IDENTITY.contains(&w)) {
-            (ClaimAgent::Speaker, ClaimKind::Identity, pos)
-        } else if let Some(pos) = words_lc.iter().position(|&w| SPEAKER_FEELING.contains(&w)) {
-            (ClaimAgent::Speaker, ClaimKind::Feeling, pos)
-        } else if let Some(pos) = words_lc.iter().position(|&w| SPEAKER_ACTION.contains(&w)) {
-            (ClaimAgent::Speaker, ClaimKind::Action, pos)
-        } else if has_implicit_speaker {
-            // Verbo implicito speaker ma non in nessuna lista → usa posizione del verbo implicito
-            if let Some(pos) = words_lc.iter().position(|&w| IMPLICIT_SPEAKER_VERBS.contains(&w)) {
-                (ClaimAgent::Speaker, ClaimKind::Feeling, pos)
+    // ── 3. Agente: pronome vince; altrimenti deduzione dalla persona ─────
+    use crate::topology::grammar::Person;
+    let agent = match explicit_agent {
+        Some(a) => a,
+        None => match person {
+            Person::First  | Person::FirstPlural  => ClaimAgent::Speaker,
+            Person::Second | Person::SecondPlural => ClaimAgent::Entity,
+            Person::Third  | Person::ThirdPlural  => return None, // 3sg/pl non sono claim diretti
+        },
+    };
+
+    // ── 4. Estrai il predicato — prima parola-contenuto dopo il verbo ────
+    let predicate = raw_words.iter()
+        .skip(verb_pos + 1)
+        .find(|w| !is_kg_proc_function_word(w, kg_proc))
+        .cloned()?;
+
+    // ── 5. ClaimKind dalla categoria del verbo ───────────────────────────
+    //   La mappa categoria→kind è strutturale (lettura della IsA chain),
+    //   non un dispatch: ogni categoria denota un modo di posizionarsi che
+    //   ClaimKind classifica con le sue 3 varianti.
+    let kind = match category {
+        "denominativo" => ClaimKind::Identity,    // "mi chiamo X"
+        "percettivo"   => {
+            // "sento/provo X" è Feeling solo se X è stato interno.
+            // "sento la voce" → percezione esterna, non claim: rifiuta.
+            if is_inner_state(&predicate, lexicon, kg) {
+                ClaimKind::Feeling
             } else {
                 return None;
             }
-        } else {
-            return None;
         }
-    } else {
-        // has_tu: cerca verbi dell'entità
-        if let Some(pos) = words_lc.iter().position(|&w| ENTITY_VERBS.contains(&w)) {
-            (ClaimAgent::Entity, ClaimKind::Identity, pos)
-        } else {
-            return None;
-        }
-    };
-
-    // Prendi la prima parola-contenuto dopo il verbo come predicato
-    let predicate = words_lc.iter()
-        .skip(verb_pos + 1)
-        .find(|&&w| {
-            // Salta articoli e parole funzionali brevi
-            !matches!(w, "un" | "una" | "uno" | "il" | "la" | "lo" | "i" | "gli" | "le"
-                         | "del" | "della" | "di" | "a" | "da" | "in" | "per" | "e")
-        })
-        .map(|&w| w.to_string());
-
-    let predicate = predicate?;
-
-    // ── Validazione KG-aware del predicato ─────────────────────────────────
-    // Phase 73 (Francesco 2026-04-26): "il SpeakerClaim parser scambia verbi
-    // per emozioni" — chiamo, cercando registrati come Feeling. Verifichiamo
-    // strutturalmente prima di confermare il claim.
-    //
-    // Regole:
-    //   - Identity:  upgrade a Feeling se predicato è emozionale (logica esistente).
-    //                Altrimenti accettato — può essere un nome o aggettivo identità.
-    //   - Feeling:   il predicato DEVE essere emozionale (KG IsA emozione/...).
-    //                Altrimenti il claim è scartato — niente falsi positivi.
-    //   - Action:    il predicato DEVE essere un verbo (POS=Verb nel lessico) o
-    //                avere lemma diverso da sé (forma flessa di verbo).
-    //                Altrimenti il claim è scartato.
-    let final_kind = match kind {
-        ClaimKind::Identity => {
-            if is_emotional_word(&predicate, lexicon, kg) {
+        "cognitivo" | "comunicativo" | "azione" => ClaimKind::Action,
+        "copula"       => {
+            // "io sono triste" → Feeling; "io ho un cane" → Identity.
+            // Il predicato decide se il posizionamento è di stato interno.
+            if is_inner_state(&predicate, lexicon, kg) {
                 ClaimKind::Feeling
             } else {
                 ClaimKind::Identity
             }
         }
-        ClaimKind::Feeling => {
-            // Il predicato deve essere genuinamente emozionale.
-            // Se non lo è, il claim è un falso positivo — rifiuta.
-            if !is_emotional_word(&predicate, lexicon, kg) {
-                return None;
-            }
-            ClaimKind::Feeling
-        }
-        ClaimKind::Action => {
-            // Il predicato dovrebbe essere un verbo (forma flessa o infinito).
-            // Verifichiamo via lemmatize: se la lemmatizzazione produce un
-            // infinito diverso, è un verbo flesso. Oppure il lessico marca
-            // la parola come Verb.
-            let is_verb_form = crate::topology::grammar::lemmatize(&predicate).is_some()
-                || lexicon.get(&predicate)
-                    .and_then(|p| p.pos.as_ref())
-                    .map(|pos| matches!(pos, crate::topology::grammar::PartOfSpeech::Verb))
-                    .unwrap_or(false);
-            if !is_verb_form {
-                // Es. "io voglio pace" — "pace" non è verbo. Forse è
-                // un'identità o il predicato è il NOME di ciò che si vuole.
-                // Accettiamo come Action ma con il predicato così com'è —
-                // l'azione è "volere pace".
-                ClaimKind::Action
-            } else {
-                ClaimKind::Action
-            }
-        }
+        _ => return None, // categoria non riconosciuta
     };
 
-    Some(SpeakerClaim { agent, kind: final_kind, predicate })
+    Some(SpeakerClaim {
+        agent,
+        kind,
+        predicate,
+        verb_category: Some(category.to_string()),
+        complement: None,
+    })
+}
+
+/// Phase 83: costruisce un claim per un verbo a costruzione dativa.
+/// L'esperiente è il clitico (mi/ti/ci/vi → già in `explicit_agent`);
+/// l'emozione è lessicalizzata nel verbo (`Expresses` nel kg_proc); il tema è
+/// la prima parola-contenuto dopo il verbo (i determinanti si saltano).
+/// `None` se manca il clitico o l'emozione insegnata — niente fallback
+/// rumoroso. Nessuna logica verbo-specifica: tutto è dato del kg_proc.
+fn build_dative_claim(
+    raw_words: &[String],
+    verb_pos: usize,
+    infinitive: &str,
+    explicit_agent: Option<ClaimAgent>,
+    kg_proc: Option<&KnowledgeGraph>,
+) -> Option<SpeakerClaim> {
+    let agent = explicit_agent?;
+    let kp = kg_proc?;
+    let emotion = kp.query_objects(infinitive, RelationType::Expresses)
+        .into_iter().next()?.to_string();
+    let theme = raw_words.iter()
+        .skip(verb_pos + 1)
+        .find(|w| !is_kg_proc_function_word(w, kg_proc))
+        .cloned();
+    Some(SpeakerClaim {
+        agent,
+        kind: ClaimKind::Feeling,
+        predicate: emotion,
+        verb_category: Some("percettivo".to_string()),
+        complement: theme,
+    })
+}
+
+/// Phase 83: legge il frame di costruzione del verbo dal kg_proc (oggi solo
+/// `dativo`; l'assenza = frame nominativo di default). I frame sono una
+/// tabella finita — il minimo denominatore della struttura argomentale —
+/// mentre i verbi sono infiniti e quasi tutti a default.
+fn verb_frame(infinitive: &str, kg_proc: Option<&KnowledgeGraph>) -> Option<String> {
+    let kp = kg_proc?;
+    let parents = kp.query_objects(infinitive, RelationType::IsA);
+    const FRAMES: &[&str] = &["dativo"];
+    FRAMES.iter()
+        .find(|f| parents.iter().any(|p| p.eq_ignore_ascii_case(f)))
+        .map(|f| f.to_string())
+}
+
+/// Phase 80: lemmatizza una forma verbale italiana usando, in ordine:
+///   1. `grammar::lemmatize` (irregolari + suffissi noti)
+///   2. Match diretto del token come infinito nel kg_proc
+///   3. Fallback morfologico per il presente regolare (-are/-ere/-ire),
+///      validato sul kg_proc (il candidato deve essere `IsA verbo`).
+///
+/// Restituisce `(infinito, persona)` se il verbo è riconosciuto, `None`
+/// altrimenti. Il fallback è autocorrettivo: se il candidato infinitivo
+/// non è nel kg_proc, il match fallisce — niente falsi positivi su
+/// sostantivi che terminano in `-o`/`-i`.
+fn lemma_of_verb(
+    word: &str,
+    kg_proc: Option<&KnowledgeGraph>,
+) -> Option<(String, crate::topology::grammar::Person)> {
+    use crate::topology::grammar::{lemmatize, Person};
+
+    let w = word.to_lowercase();
+
+    // (1) Irregolari + suffissi noti — ma validati strutturalmente.
+    //     `grammar::lemmatize` ha falsi positivi su forme regolari: es.
+    //     "chiamo" (= chiamare 1sg) viene letto come `chare` 1pl perché
+    //     termina in "iamo". Quando il kg_proc è disponibile, validiamo
+    //     l'infinito proposto: se non è `IsA verbo`, scartiamo e proviamo
+    //     il fallback morfologico (che produrrà "chiamare", valido).
+    if let Some(r) = lemmatize(&w) {
+        match kg_proc {
+            None => return Some((r.infinitive, r.person)),
+            Some(kp) if is_kg_proc_isa(kp, &r.infinitive, "verbo") =>
+                return Some((r.infinitive, r.person)),
+            _ => { /* falso positivo: continua al fallback morfologico */ }
+        }
+    }
+
+    let kp = kg_proc?;
+
+    // (2) Il token stesso è già infinito? (es. "essere", "andare" in un'enumerazione)
+    if is_kg_proc_isa(kp, &w, "verbo") {
+        return Some((w.clone(), Person::Third)); // infinito non porta persona
+    }
+
+    // (3) Fallback morfologico: prova suffissi del presente regolare.
+    //     Lo stem deve avere lunghezza ≥3 per evitare match su monosillabi;
+    //     il candidato infinito deve essere validato come verbo nel kg_proc.
+    const PRESENT_SUFFIXES: &[(&str, Person)] = &[
+        ("iamo", Person::FirstPlural),
+        ("ate",  Person::SecondPlural),
+        ("ete",  Person::SecondPlural),
+        ("ite",  Person::SecondPlural),
+        ("ano",  Person::ThirdPlural),
+        ("ono",  Person::ThirdPlural),
+        ("o",    Person::First),
+        ("i",    Person::Second),
+        ("a",    Person::Third),
+        ("e",    Person::Third),
+    ];
+
+    for (suf, person) in PRESENT_SUFFIXES {
+        if let Some(stem) = w.strip_suffix(suf) {
+            if stem.len() < 3 { continue; }
+            for inf_suf in &["are", "ere", "ire"] {
+                let candidate = format!("{}{}", stem, inf_suf);
+                if is_kg_proc_isa(kp, &candidate, "verbo") {
+                    return Some((candidate, *person));
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Phase 80: legge la categoria del verbo (copula/percettivo/cognitivo/
+/// comunicativo/denominativo/azione) dal kg_proc tramite la sua IsA chain.
+///
+/// Quando un verbo è in più categorie (es. "sentire IsA azione + IsA
+/// percettivo"), prevale quella più specifica nel posizionamento:
+/// denominativo > percettivo > cognitivo > comunicativo > copula > azione.
+/// Questa priorità riflette la specificità semantica del verbo (non un
+/// dispatch arbitrario): "chiamare" come denominativo è informativo,
+/// "chiamare" come azione generica è una banalità.
+fn verb_category(
+    infinitive: &str,
+    kg_proc: Option<&KnowledgeGraph>,
+) -> Option<&'static str> {
+    let kp = kg_proc?;
+    let parents = kp.query_objects(infinitive, RelationType::IsA);
+    const PRIORITY: &[&str] = &[
+        "denominativo", "percettivo", "cognitivo",
+        "comunicativo", "copula", "azione",
+    ];
+    PRIORITY.iter().find(|cat| parents.contains(cat)).copied()
+}
+
+/// Phase 80: una parola è "funzione" se il kg_proc la classifica come
+/// pronome, articolo, preposizione, marcatore, congiunzione, oppure
+/// `IsA copula`. La distinzione vive nei dati: aggiungere/togliere
+/// parole-funzione è curation.
+fn is_kg_proc_function_word(word: &str, kg_proc: Option<&KnowledgeGraph>) -> bool {
+    let Some(kp) = kg_proc else { return false; };
+    let w = word.to_lowercase();
+    let parents = kp.query_objects(&w, RelationType::IsA);
+    for p in &parents {
+        let p_lc = p.to_lowercase();
+        if matches!(p_lc.as_str(),
+            "pronome" | "articolo" | "preposizione" |
+            "marcatore" | "congiunzione" | "copula" |
+            "determinante") {
+            return true;
+        }
+    }
+    false
+}
+
+/// Helper: verifica `subject IsA target` 1-hop nel kg_proc.
+fn is_kg_proc_isa(kg_proc: &KnowledgeGraph, subject: &str, target: &str) -> bool {
+    kg_proc.query_objects(subject, RelationType::IsA)
+        .iter().any(|p| p.to_lowercase() == target.to_lowercase())
 }
 
 /// Phase 73: rileva una presentazione di nome del parlante.
@@ -413,46 +573,68 @@ fn is_likely_proper_name(
     true
 }
 
-/// Verifica se una parola è nel dominio emozionale.
-/// Usa KG (IS_A "emozione") se disponibile, poi lista diretta come fallback.
-fn is_emotional_word(word: &str, lexicon: &Lexicon, kg: Option<&KnowledgeGraph>) -> bool {
-    // Lista diretta di parole emozionali comuni — bootstrap per parole non ancora nel KG
-    const EMOTIONAL_WORDS: &[&str] = &[
-        "triste", "tristezza", "felice", "felicità", "arrabbiato", "arrabbiata",
-        "paura", "spaventato", "spaventata", "ansioso", "ansiosa", "ansia",
-        "gioioso", "gioiosa", "contento", "contenta", "depresso", "depressa",
-        "solo", "sola", "solitudine", "amato", "amata", "odiato", "odiata",
-        "stanco", "stanca", "stanchezza", "eccitato", "eccitata", "nervoso", "nervosa",
-        "calmo", "calma", "sereno", "serena", "preoccupato", "preoccupata",
-        "deluso", "delusa", "sorpreso", "sorpresa", "confuso", "confusa",
-        "bene", "male", "meglio", "peggio", "vuoto", "pieno", "perso", "persa",
+/// Phase 80: verifica se una parola denota uno stato interno del soggetto
+/// (emozione, sentimento, sensazione, bisogno) leggendo strutturalmente la
+/// rete di relazioni IsA / Has nel KG semantico.
+///
+/// Una parola è "stato interno" se:
+///   (a) la sua catena IsA (1-2 hop) raggiunge uno dei super-tipi semantici
+///       {emozione, sentimento, stato_d_animo, sensazione, affetto, umore,
+///        bisogno, dolore, sofferenza}, oppure
+///   (b) ha una relazione `Has bisogno` / `Has sofferenza` / `Has mancanza`
+///       — segnale strutturale che il significante porta un bisogno (es. il
+///       KG codifica "fame Has bisogno" anziché "fame IsA bisogno": gli
+///       stati corporei *hanno* bisogni, non li *sono*).
+///
+/// I super-tipi sono concetti (non parole italiane) — l'insieme è piccolo
+/// e stabile, non cresce con il vocabolario. Qualunque significante che
+/// risale a uno di essi (es. "fame" → "bisogno", "buio" → niente di emotivo)
+/// emerge come stato interno o no.
+fn is_inner_state(word: &str, lexicon: &Lexicon, kg: Option<&KnowledgeGraph>) -> bool {
+    const INNER_STATE_ROOTS: &[&str] = &[
+        "emozione", "sentimento", "stato_d_animo", "sensazione",
+        "affetto", "umore", "bisogno", "dolore", "sofferenza",
+    ];
+    const HAS_SIGNALS: &[&str] = &[
+        "bisogno", "sofferenza", "mancanza", "dolore",
     ];
 
-    if EMOTIONAL_WORDS.contains(&word) { return true; }
+    let Some(kg) = kg else {
+        // Senza KG: fallback al lessico — POS=Adjective con alta Valenza è
+        // segnale debole di parola valutativa (es. "triste" senza KG).
+        // Usato solo dai test che girano senza KG.
+        if let Some(pat) = lexicon.get(word) {
+            if matches!(pat.pos, Some(crate::topology::grammar::PartOfSpeech::Adjective))
+                && pat.stability > 0.3
+                && pat.signature.get(crate::topology::primitive::Dim::Valenza) > 0.6
+            {
+                return true;
+            }
+        }
+        return false;
+    };
 
-    // Check KG: word IS_A emozione/sentimento?
-    if let Some(kg) = kg {
-        let parents = kg.query_objects(word, RelationType::IsA);
-        for p in parents {
-            let p_lc = p.to_lowercase();
-            if p_lc == "emozione" || p_lc == "sentimento" || p_lc == "stato_d_animo"
-                || p_lc == "sensazione" || p_lc == "affetto" || p_lc == "umore" {
+    let w = word.to_lowercase();
+
+    // (a) IsA chain 1-2 hop verso i super-tipi.
+    let direct_parents: Vec<&str> = kg.query_objects(&w, RelationType::IsA);
+    for p in &direct_parents {
+        if INNER_STATE_ROOTS.contains(&p.to_lowercase().as_str()) {
+            return true;
+        }
+        // 2-hop: il genitore IsA un super-tipo? (es. fame → bisogno-fisiologico → bisogno)
+        for gp in kg.query_objects(p, RelationType::IsA) {
+            if INNER_STATE_ROOTS.contains(&gp.to_lowercase().as_str()) {
                 return true;
             }
         }
     }
 
-    // Ultima risorsa: il lessico sa che è un aggettivo (emozioni sono spesso aggettivi)?
-    // Solo se ha POS = Adjective E fa parte del lessico con stabilità > 0
-    if let Some(pat) = lexicon.get(word) {
-        if matches!(pat.pos, Some(crate::topology::grammar::PartOfSpeech::Adjective))
-            && pat.stability > 0.3 {
-            // Gli aggettivi stabili nel lessico che hanno POS Adjective probabilmente
-            // descrivono stati — ma è un'euristica debole, non usarla come unico segnale
-            // Controllo dimensionale: alta Valenza (dim 7) = parola valutativa
-            if pat.signature.get(crate::topology::primitive::Dim::Valenza) > 0.6 {
-                return true;
-            }
+    // (b) Has signals: parola che porta un bisogno/sofferenza è stato interno.
+    let has_targets: Vec<&str> = kg.query_objects(&w, RelationType::Has);
+    for t in &has_targets {
+        if HAS_SIGNALS.contains(&t.to_lowercase().as_str()) {
+            return true;
         }
     }
 
@@ -502,6 +684,7 @@ mod tests {
             &kb,
             &lex,
             None,
+            None,
         );
         assert_eq!(r.act, InputAct::Greeting);
     }
@@ -518,6 +701,7 @@ mod tests {
             &delta,
             &kb,
             &lex,
+            None,
             None,
         );
         assert_eq!(r.act, InputAct::Greeting,
@@ -536,6 +720,7 @@ mod tests {
             &kb,
             &lex,
             None,
+            None,
         );
         assert_eq!(r.act, InputAct::SelfQuery);
     }
@@ -552,6 +737,7 @@ mod tests {
             &delta,
             &kb,
             &lex,
+            None,
             None,
         );
         assert_eq!(r.act, InputAct::SelfQuery,
@@ -570,6 +756,7 @@ mod tests {
             &kb,
             &lex,
             None,
+            None,
         );
         assert_eq!(r.act, InputAct::Question);
     }
@@ -585,6 +772,7 @@ mod tests {
             &empty_delta(),
             &kb,
             &lex,
+            None,
             None,
         );
         assert_eq!(r.act, InputAct::EmotionalExpr);
@@ -603,6 +791,7 @@ mod tests {
             &kb,
             &lex,
             None,
+            None,
         );
         assert_eq!(r.act, InputAct::EmotionalExpr,
             "qualunque parola che attiva EMOZIONE → EmotionalExpr");
@@ -619,6 +808,7 @@ mod tests {
             &kb,
             &lex,
             None,
+            None,
         );
         assert_eq!(r.act, InputAct::Declaration);
     }
@@ -628,7 +818,7 @@ mod tests {
         let lex = lex();
         let kb = kb_with_anchors();
         let delta = vec![(58u32, 0.6f64), (32u32, 0.4f64), (33u32, 0.2f64)];
-        let r = read_input(&[], "", &delta, &kb, &lex, None);
+        let r = read_input(&[], "", &delta, &kb, &lex, None, None);
         // avg top-3 assoluti = (0.6 + 0.4 + 0.2) / 3 ≈ 0.4
         assert!((r.intensity - 0.4).abs() < 0.01,
             "intensity attesa ~0.4, ottenuta {}", r.intensity);
@@ -639,11 +829,11 @@ mod tests {
         // Senza ancore concettuali, solo `?` e Declaration funzionano
         let lex = lex();
         let kb = KnowledgeBase::new(); // vuota
-        let r = read_input(&["ciao".to_string()], "ciao", &empty_delta(), &kb, &lex, None);
+        let r = read_input(&["ciao".to_string()], "ciao", &empty_delta(), &kb, &lex, None, None);
         // Senza ancora Social, "ciao" → Declaration (non riconosciuto)
         assert_eq!(r.act, InputAct::Declaration,
             "senza KnowledgeBase, ciao non è riconoscibile come saluto");
-        let r2 = read_input(&["cosa".to_string()], "cosa succede?", &empty_delta(), &kb, &lex, None);
+        let r2 = read_input(&["cosa".to_string()], "cosa succede?", &empty_delta(), &kb, &lex, None, None);
         assert_eq!(r2.act, InputAct::Question,
             "senza KB, `?` mantiene Question come fallback sintattico");
     }

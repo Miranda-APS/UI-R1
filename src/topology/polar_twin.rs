@@ -37,6 +37,9 @@ pub fn create_polar_twin(source: &PrometeoTopologyEngine) -> PrometeoTopologyEng
             simplex.plasticity,
             simplex.activation_count,
             simplex.source_words.clone(),
+            simplex.category.clone(),
+            simplex.ordered,
+            simplex.function_fractal,
         );
     }
 

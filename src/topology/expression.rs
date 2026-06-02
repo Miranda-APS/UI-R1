@@ -290,7 +290,7 @@ pub fn compose(
         (action_decision, comprehension_report, kg_proc)
     {
         if let Some(emergent) = crate::topology::pattern_matcher::compose_from_pattern(
-            decision, report, proc_kg, word_topology, lexicon,
+            decision, report, proc_kg, word_topology, lexicon, Some(valence_drives),
         ) {
             let should_expand = decision.kind == crate::topology::action_reasoning::ActionKind::RecognizeClaim;
 

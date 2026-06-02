@@ -81,6 +81,27 @@ pub struct Simplex {
     /// Phase 52: parole sorgente che hanno generato questo simplesso (proposizioni inscritte).
     /// Usato dalla risonanza per riattivare parole dal passato nella generazione.
     pub source_words: Option<Vec<String>>,
+    /// Phase 83 — categoria del simplesso. `None` = simplesso semantico
+    /// (default, Phase 49-52, proposizioni estratte dal KG).
+    /// `Some(s)` = simplesso grammaticale tipizzato (es. "preposizione_composta",
+    /// "locuzione_fatica", "costrutto_modale", "tempo_composto"). La categoria
+    /// non è un dispatch — è etichetta informativa per ispezione/curation.
+    pub category: Option<String>,
+    /// Phase 83 — se `true`, le `source_words` del simplesso devono attivarsi
+    /// nell'**ordine** specificato (e in adiacenza, vedi `engine.receive`)
+    /// affinché il simplesso emerga. Default `false` (semantico — qualsiasi
+    /// co-attivazione vale). I simplessi grammaticali usano `true`: "rispetto a"
+    /// ≠ "a rispetto".
+    pub ordered: bool,
+    /// Phase 83 — frattale-funzione che il simplesso ATTIVA quando emerge.
+    /// È il meccanismo di "significato senza etichetta": un simplesso
+    /// grammaticale non ha una regola semantica scritta — porta un
+    /// orientamento del campo verso un attrattore specifico
+    /// (es. RELAZIONE per `[rispetto, a]`, SALUTO per `[come, stai]`,
+    /// POSSIBILITA per `[bisogna, che]`). Il parser di Phase 81 legge
+    /// quali frattali sono attivi durante il parsing e decide ruoli
+    /// dalla geometria del campo, non da lookup.
+    pub function_fractal: Option<FractalId>,
 }
 
 impl Simplex {
@@ -96,7 +117,46 @@ impl Simplex {
             activation_count: 0,
             current_activation: 0.0,
             source_words: None,
+            category: None,
+            ordered: false,
+            function_fractal: None,
         }
+    }
+
+    /// Phase 83 — costruisce un simplesso grammaticale già configurato.
+    /// I `vertices` sono i frattali su cui poggia (tipicamente derivati
+    /// dalle firme delle source_words); `function_fractal` è il frattale
+    /// che il simplesso attiva quando emerge. `persistence` parte alta
+    /// (0.7) perché un simplesso grammaticale è insegnamento curato, non
+    /// emergenza da co-occorrenza ripetuta — è cristallizzato d'origine.
+    pub fn new_grammatical(
+        id: SimplexId,
+        vertices: Vec<FractalId>,
+        shared_faces: Vec<SharedFace>,
+        source_words: Vec<String>,
+        category: String,
+        function_fractal: FractalId,
+    ) -> Self {
+        let dimension = if vertices.is_empty() { 0 } else { vertices.len() - 1 };
+        Self {
+            id,
+            vertices,
+            shared_faces,
+            dimension,
+            persistence: 0.7,
+            plasticity: 0.3,
+            activation_count: 0,
+            current_activation: 0.0,
+            source_words: Some(source_words),
+            category: Some(category),
+            ordered: true,
+            function_fractal: Some(function_fractal),
+        }
+    }
+
+    /// Phase 83 — è un simplesso grammaticale?
+    pub fn is_grammatical(&self) -> bool {
+        self.category.is_some() && self.function_fractal.is_some()
     }
 
     /// Questo simplesso contiene un dato frattale?
@@ -196,10 +256,16 @@ impl SimplicialComplex {
 
     /// Ripristina un simplesso con ID, persistenza, plasticità e activation_count specifici.
     /// Usato dalla persistenza per ricostruire il complesso esatto salvato.
+    /// Phase 83: ultimi 3 parametri (category, ordered, function_fractal)
+    /// sono `Option<...>`/`bool` per backward compat con snapshot pre-P83.
+    #[allow(clippy::too_many_arguments)]
     pub fn restore_simplex(&mut self, id: SimplexId, vertices: Vec<FractalId>,
                            shared_faces: Vec<SharedFace>,
                            persistence: f64, plasticity: f64, activation_count: u64,
-                           source_words: Option<Vec<String>>) {
+                           source_words: Option<Vec<String>>,
+                           category: Option<String>,
+                           ordered: bool,
+                           function_fractal: Option<FractalId>) {
         // Aggiorna indice
         for &v in &vertices {
             self.fractal_index.entry(v).or_default().push(id);
@@ -210,6 +276,9 @@ impl SimplicialComplex {
         simplex.plasticity = plasticity;
         simplex.activation_count = activation_count;
         simplex.source_words = source_words;
+        simplex.category = category;
+        simplex.ordered = ordered;
+        simplex.function_fractal = function_fractal;
         self.simplices.insert(id, simplex);
 
         // Assicura che next_id sia sempre oltre l'id più alto

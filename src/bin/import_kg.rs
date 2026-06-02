@@ -75,6 +75,16 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn find_project_root() -> PathBuf {
+    // Override esplicito via env var. Usata da progetti wrapper (es. IAm-a-gotchi)
+    // che vivono fuori dal repo e vogliono leggere data/kg/ + scrivere
+    // prometeo_kg.json dentro la loro cartella, senza che il fallback per
+    // current_exe() li trascini dentro prometeo_standalone/.
+    if let Ok(p) = std::env::var("PROMETEO_PROJECT_ROOT") {
+        let path = PathBuf::from(p);
+        if path.exists() {
+            return path;
+        }
+    }
     // Cerca il Cargo.toml risalendo dalla directory corrente
     let mut dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     for _ in 0..5 {

@@ -214,6 +214,36 @@ for art in ["un", "uno", "una"]:
     add(art, "IsA", "indeterminativo")
 
 # ══════════════════════════════════════════════════════════════════════════
+# § D.bis — DETERMINANTI (possessivi, dimostrativi, quantificatori indefiniti)
+# ══════════════════════════════════════════════════════════════════════════
+# Determinano un nome senza esserne il contenuto → function-word nella scelta
+# del predicato. "mi manca mia madre": "mia" si salta, "madre" è il tema.
+# `determinante` è la super-classe-funzione che l'estrattore riconosce.
+add("determinante", "IsA", "categoria")
+for det, sub in [
+    ("mio", "possessivo"), ("mia", "possessivo"), ("miei", "possessivo"), ("mie", "possessivo"),
+    ("tuo", "possessivo"), ("tua", "possessivo"), ("tuoi", "possessivo"), ("tue", "possessivo"),
+    ("suo", "possessivo"), ("sua", "possessivo"), ("suoi", "possessivo"), ("sue", "possessivo"),
+    ("nostro", "possessivo"), ("nostra", "possessivo"), ("nostri", "possessivo"), ("nostre", "possessivo"),
+    ("vostro", "possessivo"), ("vostra", "possessivo"), ("vostri", "possessivo"), ("vostre", "possessivo"),
+    ("questo", "dimostrativo"), ("questa", "dimostrativo"), ("questi", "dimostrativo"), ("queste", "dimostrativo"),
+    ("quel", "dimostrativo"), ("quello", "dimostrativo"), ("quella", "dimostrativo"),
+    ("quei", "dimostrativo"), ("quelle", "dimostrativo"), ("quegli", "dimostrativo"),
+    ("alcun", "quantificatore"), ("alcuna", "quantificatore"), ("alcuno", "quantificatore"),
+    ("alcuni", "quantificatore"), ("alcune", "quantificatore"),
+    ("nessun", "quantificatore"), ("nessuna", "quantificatore"), ("nessuno", "quantificatore"),
+    ("ogni", "quantificatore"), ("qualche", "quantificatore"),
+    ("qualunque", "quantificatore"), ("qualsiasi", "quantificatore"),
+    ("tutto", "quantificatore"), ("tutta", "quantificatore"), ("tutti", "quantificatore"), ("tutte", "quantificatore"),
+    ("molto", "quantificatore"), ("molta", "quantificatore"), ("molti", "quantificatore"), ("molte", "quantificatore"),
+    ("poco", "quantificatore"), ("poca", "quantificatore"), ("pochi", "quantificatore"), ("poche", "quantificatore"),
+    ("tanto", "quantificatore"), ("tanta", "quantificatore"), ("tanti", "quantificatore"), ("tante", "quantificatore"),
+    ("troppo", "quantificatore"), ("troppa", "quantificatore"), ("troppi", "quantificatore"), ("troppe", "quantificatore"),
+]:
+    add(det, "IsA", "determinante")
+    add(det, "IsA", sub)
+
+# ══════════════════════════════════════════════════════════════════════════
 # § E — PREPOSIZIONI
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -352,6 +382,63 @@ add("ascoltare", "UsedFor", "ricevere", via="parola")
 add("intendere", "IsA", "verbo")
 add("intendere", "IsA", "cognitivo")
 add("intendere", "UsedFor", "verificare", via="comprensione")
+
+# Verbi percettivi addizionali (per "provo X")
+add("provare", "IsA", "verbo")
+add("provare", "IsA", "percettivo")
+add("provare", "UsedFor", "percepire", via="esperienza")
+
+# Verbi cognitivi addizionali (capire/comprendere)
+add("capire", "IsA", "verbo")
+add("capire", "IsA", "cognitivo")
+add("capire", "UsedFor", "esprimere", via="comprensione")
+
+add("comprendere", "IsA", "verbo")
+add("comprendere", "IsA", "cognitivo")
+add("comprendere", "UsedFor", "esprimere", via="comprensione")
+
+# Verbi modali (volere/dovere/potere/preferire) — esprimono intenzione/obbligo/capacità.
+# `IsA cognitivo` perché il loro contenuto è una posizione del soggetto;
+# `IsA modale` perché modulano un altro verbo (struttura modale + infinito).
+for modale_v in ["volere", "dovere", "potere", "preferire"]:
+    add(modale_v, "IsA", "verbo")
+    add(modale_v, "IsA", "cognitivo")
+    add(modale_v, "IsA", "modale")
+    add(modale_v, "UsedFor", "esprimere", via="intenzione")
+
+# Verbi di movimento (per dichiarazione-di-azione: "vado al mare")
+for mov_v in ["andare", "venire", "tornare", "uscire", "entrare", "partire", "arrivare"]:
+    add(mov_v, "IsA", "verbo")
+    add(mov_v, "IsA", "azione")
+    add(mov_v, "IsA", "movimento")
+    add(mov_v, "UsedFor", "spostare", via="luogo")
+
+# Verbi di azione generica (cercare/trovare/usare/fare-cose)
+for az_v in ["cercare", "trovare", "usare", "lavorare", "giocare", "leggere", "scrivere"]:
+    add(az_v, "IsA", "verbo")
+    add(az_v, "IsA", "azione")
+    add(az_v, "UsedFor", "compiere", via="atto")
+
+# ── Verbi a costruzione DATIVA (frame `dativo`) ─────────────────────────────
+# "mi manca X" / "mi piace X": l'esperiente è il clitico (mi/ti/...), il tema è
+# il nome dopo il verbo, e l'EMOZIONE è lessicalizzata NEL verbo (Expresses) —
+# non nel tema. Il frame `dativo` dice all'estrattore di rimappare i ruoli:
+#   mi manca mia madre  →  Speaker FeelsAs mancanza via=madre
+# Sono gli "irregolari della costruzione": i verbi a default nominativo non
+# hanno bisogno di alcun frame. `IsA percettivo` dà la relazione (FeelsAs);
+# `IsA dativo` dà il frame; `Expresses <emozione>` dà l'oggetto-emozione.
+add("dativo", "IsA", "qualificatore")
+for dat_v, emozione in [
+    ("mancare",     "mancanza"),
+    ("piacere",     "gradimento"),
+    ("servire",     "bisogno"),
+    ("bastare",     "sufficienza"),
+    ("interessare", "interesse"),
+]:
+    add(dat_v, "IsA", "verbo")
+    add(dat_v, "IsA", "percettivo")
+    add(dat_v, "IsA", "dativo")
+    add(dat_v, "Expresses", emozione)
 
 # ══════════════════════════════════════════════════════════════════════════
 # § H — AVVERBI MODALI (per esitazione)
@@ -540,6 +627,17 @@ add("incertezza", "Causes", "incertezza", strength=0.6)
 add("curiosità", "IsA", "percetto")
 add("curiosità", "Causes", "domandare",  strength=0.7)
 add("curiosità", "Causes", "curiosità",  strength=0.6)
+
+# ── vicinanza (Phase 83, freccia b): l'entità è relazionalmente MOSSA ──
+# Seminato da `seed_from_position` con intensità = |CD5| (orientamento
+# relazionale verso l'Altro, sofferenza o gioia comprese). Causa i target
+# dell'esplorazione (domandare/curiosità): quando l'entità è fortemente mossa,
+# si VOLGE verso l'Altro con una domanda invece di restituire neutro. NON è il
+# percetto a decidere — è la risonanza: a carica forte `esplorazione` supera
+# `riconoscimento`/`posizione`; a carica debole no. Crossover emergente.
+add("vicinanza", "IsA", "percetto")
+add("vicinanza", "Causes", "domandare",  strength=0.85)
+add("vicinanza", "Causes", "curiosità",  strength=0.7)
 
 # ══════════════════════════════════════════════════════════════════════════
 # § K — META: ancore concettuali

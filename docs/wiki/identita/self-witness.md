@@ -77,4 +77,5 @@ Quando UI-R1 dice "Essere." dopo aver autoosservato "mai", "qui", "fuori", "sape
 - [Narrative self](narrative-self.md) — l'organo decisionale che contiene SelfWitness
 - [Self profile e closure perception](../comprensione/self-profile-closure-perception.md) — il sé della sessione corrente
 - [PF1](../topologia/pf1.md) — il campo da cui SelfWitness pesca
+- [Memoria-sfera di haiku](../interfacce/memoria-haiku.md) — l'altro organo di memoria persistente (Phase 82)
 - [Capire prima, generare dopo](../principi/capire-prima-generare-dopo.md)

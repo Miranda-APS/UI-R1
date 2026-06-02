@@ -61,12 +61,29 @@ pub async fn run(port: u16) {
     let (cmd_tx, cmd_rx) = mpsc::channel::<EngineCommand>(64);
     let (broadcast_tx, _) = broadcast::channel::<String>(128);
 
+    // Phase 82 — carica la memoria-sfera di haiku da file. Se il file non
+    // esiste è il primo avvio, parte vuota.
+    let haiku_path = std::path::PathBuf::from("haiku_memory.json");
+    let haiku_memory = match crate::topology::haiku_memory::HaikuMemory::load_from_file(&haiku_path) {
+        Ok(m) => {
+            if !m.is_empty() {
+                eprintln!("[haiku-memory] caricati {} cristalli da {}", m.len(), haiku_path.display());
+            }
+            m
+        }
+        Err(e) => {
+            eprintln!("[haiku-memory] errore caricamento ({}): parto vuoto", e);
+            crate::topology::haiku_memory::HaikuMemory::new()
+        }
+    };
+
     let state = AppState {
         cmd_tx: cmd_tx.clone(),
         broadcast_tx: broadcast_tx.clone(),
         conv_store: std::sync::Arc::new(std::sync::Mutex::new(
             super::conversations::ConversationStore::load_or_new()
         )),
+        haiku_memory: std::sync::Arc::new(std::sync::Mutex::new(haiku_memory)),
     };
 
     // Thread OS dedicato per l'engine (non e Send)
@@ -135,6 +152,13 @@ pub async fn run(port: u16) {
         .route("/api/self", get(api::get_self))
         .route("/api/episodes", get(api::get_episodes))
         .route("/api/episodes/recall", get(api::recall_episodes))
+        // Phase 82 — Memoria-sfera di haiku
+        .route("/api/haiku/deposit", post(api::post_haiku_deposit))
+        .route("/api/haiku/recall", post(api::post_haiku_recall))
+        .route("/api/haiku/stats", get(api::get_haiku_stats))
+        .route("/api/haiku/all", get(api::get_haiku_all))
+        // Phase 83 — Educazione grammaticale live (simplessi tipizzati)
+        .route("/api/grammar_simplex", post(api::post_grammar_simplex))
         // Community session
         .route("/universo", get(api::universo_index))
         .route("/community", get(api::community_index))
@@ -471,7 +495,7 @@ fn engine_loop(
         "prometeo_topology_state.json",
         "prometeo_state.json",
     ];
-    let mut engine = {
+    let (mut engine, fresh_bootstrap) = {
         let mut loaded = None;
         // Prova prima il formato binario SimplDB
         for path_str in &binary_paths {
@@ -512,10 +536,13 @@ fn engine_loop(
                 }
             }
         }
-        loaded.unwrap_or_else(|| {
-            println!("[engine] Nessuno stato trovato — bootstrap seed ({} parole cardinali)", 36);
-            PrometeoTopologyEngine::new()
-        })
+        match loaded {
+            Some(eng) => (eng, false),
+            None => {
+                println!("[engine] Nessuno stato trovato — bootstrap seed ({} parole cardinali)", 36);
+                (PrometeoTopologyEngine::new(), true)
+            }
+        }
     };
 
     // Carica il Knowledge Graph (se disponibile)
@@ -527,6 +554,15 @@ fn engine_loop(
     if !engine.narrative_self.is_born {
         engine.initialize_founding_narrative();
         println!("[engine] Narrativa fondativa cristallizzata — Prometeo nasce");
+    }
+
+    // Se siamo nati fresh (nessun .bin esistente), congela subito lo stato
+    // iniziale su disco. Cosi' il sistema sopravvive a un restart anche prima
+    // della prima interazione utente. Beneficia in particolare i wrapper
+    // (es. IAm-a-gotchi) che vogliono distribuire un newborn riproducibile.
+    if fresh_bootstrap {
+        cura_save(&engine);
+        println!("[engine] Stato iniziale congelato in prometeo_topology_state.bin");
     }
 
     // Cache biennale: calcolata una volta all'avvio, invalidata solo su richiesta esplicita
@@ -555,6 +591,13 @@ fn engine_loop(
                     .map(|r| comprehension_report_to_dto(r));
                 let action_decision = engine.last_action_decision.as_ref()
                     .map(|d| action_decision_to_dto(d));
+                // Phase 81 → DTO web. last_sentence_proposition è popolata da
+                // engine.receive() solo se l'utterance ha portato a una PROP
+                // estraibile (claim rilevato OR pronome interrogativo).
+                let sentence_proposition = engine.last_sentence_proposition.as_ref()
+                    .map(|p| crate::web::state::sentence_proposition_to_dto(p));
+                let kg_confrontation = engine.last_kg_confrontation.as_ref()
+                    .map(|c| crate::web::state::kg_confrontation_to_dto(c));
                 let _ = reply.send(InputResponse {
                     generated_text: generated.text,
                     keywords: response.keywords,
@@ -568,6 +611,8 @@ fn engine_loop(
                     speaker_profile,
                     comprehension_report,
                     action_decision,
+                    sentence_proposition,
+                    kg_confrontation,
                 });
             }
             EngineCommand::GetState { reply } => {
@@ -1636,6 +1681,34 @@ fn engine_loop(
             EngineCommand::GetRecentEpisodes { limit, reply } => {
                 let dto = build_recent_episodes(&engine, limit);
                 let _ = reply.send(dto);
+            }
+            EngineCommand::AddGrammarSimplex { words, category, function_fractal_name, reply } => {
+                let result = match engine.add_grammar_simplex(words.clone(), category.clone(), &function_fractal_name) {
+                    Ok((simplex_id, function_fractal_id)) => {
+                        let resolved_name = engine.registry
+                            .iter()
+                            .find(|(id, _)| **id == function_fractal_id)
+                            .map(|(_, f)| f.name.clone())
+                            .unwrap_or_else(|| function_fractal_name.clone());
+                        let total = engine.count_grammar_simplices();
+                        // Phase 83 — auto-save persistente. L'insegnamento
+                        // è un atto pedagogico, NON deve sparire al prossimo
+                        // restart. Salviamo subito il .bin (e KG curato).
+                        // cura_save logga errori internamente; ignoriamo il
+                        // risultato per non fallire la response al client.
+                        cura_save(&engine);
+                        Ok(crate::web::state::AddGrammarSimplexResponse {
+                            simplex_id: simplex_id as u64,
+                            function_fractal_id,
+                            function_fractal_name: resolved_name,
+                            category,
+                            words,
+                            total_grammar_simplices: total,
+                        })
+                    }
+                    Err(e) => Err(e),
+                };
+                let _ = reply.send(result);
             }
         }
     }

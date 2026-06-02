@@ -72,3 +72,4 @@ Phase 63 ha rimosso la perturbazione hash UTF-8 dalle nuove parole (`new_from_co
 - [Lexicon](lexicon.md) — dove vivono le firme
 - [Knowledge graph semantico](knowledge-graph-semantico.md) — la fonte delle dimensioni (Phase 63)
 - [Valenza Octalysis](../identita/valenza-octalysis.md) — i drive emergono dalle 8D
+- [Memoria-sfera di haiku](../interfacce/memoria-haiku.md) — la sfera dei 64 attrattori usata come memoria (Phase 82)
