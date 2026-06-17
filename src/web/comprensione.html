@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI-r1 · Gate di Comprensione</title>
+<style>
+/* ── Tema ISOLATO (replica i token di campovasto, nessuna dipendenza) ──────
+   Una sola fonte di verità per i colori, qui in :root. Vedi
+   docs/raw/architettura/gate_di_comprensione.md */
+:root{
+  --bg:#0f0f1a; --surface:#1a1a2e; --surface2:#16162a; --border:#2a2a4e;
+  --border-hi:#5a5a8e; --text:#e0e0e0; --text-bright:#fff; --text-dim:#888;
+  --text-muted:#aaa;
+  --ok:#4AC880;        /* compreso  (intreccio) */
+  --part:#E8D040;      /* parziale  (verità)    */
+  --unk:#E04848;       /* ignoto    (ardore)    */
+  --accent:#5AAFE8;    /* potere */
+  --via:#A86EDB;       /* divenire */
+  --radius:10px;
+  --mono:'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);
+  font-size:15px;line-height:1.5;padding:0 0 80px}
+a{color:var(--accent)}
+.wrap{max-width:920px;margin:0 auto;padding:24px 20px}
+header h1{font-size:18px;font-weight:700;color:var(--text-bright);margin:0 0 4px;
+  letter-spacing:.5px}
+header .sub{color:var(--text-dim);font-size:13px;margin:0 0 20px}
+/* input */
+.inrow{display:flex;gap:10px;margin-bottom:22px}
+.inrow input{flex:1;background:var(--surface);border:1px solid var(--border);
+  color:var(--text);font-family:var(--mono);font-size:15px;padding:11px 14px;
+  border-radius:var(--radius);outline:none}
+.inrow input:focus{border-color:var(--border-hi)}
+.inrow button{background:var(--accent);color:#04121f;border:0;font-weight:700;
+  font-family:var(--mono);padding:0 20px;border-radius:var(--radius);cursor:pointer;
+  font-size:14px}
+.inrow button:hover{filter:brightness(1.1)}
+.hint{color:var(--text-dim);font-size:12px;margin:-14px 0 22px}
+/* verdetto */
+.verdict{display:flex;align-items:center;gap:14px;padding:16px 18px;
+  border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);
+  margin-bottom:18px}
+.verdict .dot{width:14px;height:14px;border-radius:50%;flex:0 0 auto}
+.verdict .v-label{font-size:17px;font-weight:700;text-transform:capitalize}
+.verdict .v-counts{margin-left:auto;font-size:13px;color:var(--text-muted)}
+.verdict .v-slots{font-size:13px;color:var(--part)}
+.badge{display:inline-block;padding:1px 7px;border-radius:6px;font-size:12px;
+  font-weight:700}
+/* striscia copertura */
+.section-t{font-size:12px;text-transform:uppercase;letter-spacing:1px;
+  color:var(--text-dim);margin:22px 0 10px}
+.cov{display:flex;flex-wrap:wrap;gap:8px}
+.tok{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;
+  padding:7px 11px;border-radius:8px;border:1px solid transparent;background:var(--surface);
+  transition:border-color .12s}
+.tok:hover{border-color:var(--border-hi)}
+.tok.sel{border-color:var(--text-bright)}
+.tok .w{font-size:15px;font-weight:600}
+.tok .r{font-size:10.5px;color:var(--text-dim)}
+.tok.compreso{border-left:3px solid var(--ok)}
+.tok.compreso .w{color:var(--ok)}
+.tok.parziale{border-left:3px solid var(--part)}
+.tok.parziale .w{color:var(--part)}
+.tok.ignoto{border-left:3px solid var(--unk)}
+.tok.ignoto .w{color:var(--unk)}
+/* dettaglio token (due assi) */
+.detail{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface2);padding:0;overflow:hidden;display:none}
+.detail.show{display:block}
+.detail .dhead{padding:12px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:baseline;gap:10px}
+.detail .dhead .dw{font-size:18px;font-weight:700;color:var(--text-bright)}
+.detail .dhead .dl{color:var(--text-dim);font-size:13px}
+.detail .dhead .dr{margin-left:auto;font-size:12px;color:var(--text-muted)}
+.axes{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.axis{padding:14px 16px}
+.axis:first-child{border-right:1px solid var(--border)}
+.axis h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.axis.know h4{color:var(--accent)} .axis.comp h4{color:var(--ok)}
+.axis .kv{font-size:13px;color:var(--text-muted);margin:3px 0}
+.axis .kv b{color:var(--text)}
+.reason{padding:0 16px 14px;font-size:13px;color:var(--text-muted);font-style:italic}
+/* proposizione (SVG) */
+.prop-box{border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);padding:8px;min-height:60px;display:flex;
+  align-items:center;justify-content:center}
+.prop-empty{color:var(--text-dim);font-size:13px;font-style:italic;padding:18px}
+/* narrazione */
+.narr{border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);padding:16px 18px;font-size:14.5px;line-height:1.7}
+.narr .lead{color:var(--text-bright)}
+.narr .miss{color:var(--part)}
+.narr .none{color:var(--unk)}
+.narr .partial{color:var(--text-muted)}
+.narr .ground{color:var(--text);margin-top:8px;padding-left:12px;border-left:2px solid var(--via)}
+.narr .ground b{color:var(--via);font-weight:600}
+.narr .incong{color:var(--unk);margin-top:8px;font-weight:600}
+.narr .circ{color:var(--accent);margin-top:6px;font-size:13.5px}
+.narr .subj-hint{color:var(--text-muted);font-size:12.5px;font-style:italic}
+.narr .circ{color:var(--accent);margin-top:6px;font-size:13.5px}
+.pos{border:1px solid var(--via);border-radius:var(--radius);background:var(--surface);
+  padding:16px 18px;font-size:14.5px;line-height:1.7}
+.pos > div{margin-top:6px}
+.pos > div:first-child{margin-top:0}
+.pos b{color:var(--via)}
+.pos .pos-op{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);
+  color:var(--text-muted);font-size:13px;font-style:italic}
+/* confronto col mondo */
+.world{margin-top:8px;padding:9px 14px;border-radius:8px;font-size:13px;
+  border:1px solid var(--border)}
+.world.w-ok{color:var(--ok);border-color:var(--ok)}
+.world.w-bad{color:var(--unk);border-color:var(--unk)}
+.world.w-new{color:var(--accent);border-color:var(--accent)}
+.world.w-none{color:var(--part);border-color:var(--part)}
+.empty-state{color:var(--text-dim);text-align:center;padding:40px 0;font-style:italic}
+.err{color:var(--unk);padding:14px}
+</style>
+</head>
+<body>
+<style>.back-admin{position:fixed;top:12px;left:12px;z-index:99999;font:600 12px/1 var(--mono,'JetBrains Mono',monospace);text-decoration:none;padding:6px 11px;border-radius:6px;background:var(--surface);color:var(--text-dim);border:1px solid var(--border);transition:.2s;}.back-admin:hover{color:var(--text);border-color:var(--border-hi);}</style>
+<a class="back-admin" href="/admin">← admin</a>
+<div class="wrap">
+  <header>
+    <h1>Gate di Comprensione</h1>
+    <p class="sub">Cosa UI-r1 comprende di un input — slot per slot, senza punti ciechi.</p>
+  </header>
+
+  <div class="inrow">
+    <input id="in" placeholder="scrivi una frase…" autocomplete="off" autofocus>
+    <button id="go">Analizza</button>
+  </div>
+  <p class="hint">Stateless: l'analisi non muove lo stato di UI-r1. ✅ compreso · 🟡 parziale · 🔴 non riconosciuto.</p>
+
+  <div id="out">
+    <div class="empty-state">Scrivi una frase e premi Analizza.</div>
+  </div>
+</div>
+
+<script>
+const RELVERB = {
+  IsA:"è", Has:"ha", Does:"compie", PartOf:"è parte di", Causes:"causa",
+  Requires:"richiede", Enables:"abilita", FeelsAs:"prova", Expresses:"esprime",
+  SimilarTo:"è simile a", OppositeOf:"è l'opposto di", UsedFor:"serve a",
+  TransformsInto:"diventa", DerivesFrom:"deriva da"
+};
+const SUBJ = { Speaker:"chi parla", Entity:"UI-r1", World:null, Variable:"(?)" };
+const DOTCOL = { piena:"var(--ok)", parziale:"var(--part)", "non-comprensibile":"var(--unk)" };
+
+// ── Etichette USER-FACING dei ruoli ──
+// Il modello interno usa il vocabolario dell'analisi logica (copula, predicato,
+// specificazione…); l'utente vede parole piane e corrette. PRIMARY_REL serve a
+// rendere lo slot-oggetto "predicato" con l'etichetta giusta per la relazione.
+let PRIMARY_REL = null;
+const ROLE_LABEL = {
+  soggetto:"soggetto", verbo:"verbo", copula:"verbo", ausiliare:"verbo (ausiliare)",
+  specificazione:"complemento", avverbio:"avverbio", preposizione:"preposizione",
+  articolo:"articolo", congiunzione:"congiunzione", pronome:"pronome",
+  interiezione:"esclamazione", funzionale:"parola funzione",
+};
+// Lo slot "oggetto" della proposizione, nominato secondo cosa lo lega:
+// "ho paura"→stato, "la paura è emozione"→categoria, "mangio una mela"→oggetto.
+function objLabel(rel){
+  return {IsA:"categoria", FeelsAs:"stato", Expresses:"contenuto",
+          Does:"oggetto", Has:"oggetto"}[rel] || "oggetto";
+}
+function detLabel(tok){
+  const t=(tok||"").toLowerCase();
+  if(/^(mio|mia|miei|mie|tuo|tua|tuoi|tue|suo|sua|suoi|sue|nostro|nostra|nostri|nostre|vostro|vostra|vostri|vostre|loro)$/.test(t)) return "possessivo";
+  if(/^(questo|questa|questi|queste|quello|quella|quelli|quelle|codesto)$/.test(t)) return "dimostrativo";
+  return "quantità"; // molto/poco/tutto/numerali/nessun…
+}
+function friendlyRole(role, tok){
+  if(role==="predicato") return objLabel(PRIMARY_REL);
+  if(role==="marcatore") return (tok||"").toLowerCase()==="non" ? "negazione" : "segnale";
+  if(role==="determinante") return detLabel(tok);
+  return ROLE_LABEL[role] || role;
+}
+// Spiegazione in parole piane (niente gergo nel testo del backend).
+const FUNCTIONAL_ROLES = ["copula","ausiliare","articolo","preposizione","congiunzione","pronome","marcatore","determinante","avverbio","interiezione","funzionale"];
+function friendlyReason(c){
+  if(c.status==="compreso" && FUNCTIONAL_ROLES.includes(c.role))
+    return "parola che serve a costruire la frase ("+friendlyRole(c.role,c.token)+") — struttura, non contenuto.";
+  if(c.status==="compreso")
+    return "legata alla frase come "+friendlyRole(c.role,c.token)+", e ancorata a ciò che so.";
+  if(c.status==="parziale" && c.bound)
+    return "ha un ruolo nella frase ("+friendlyRole(c.role,c.token)+") ma non la trovo nel mio grafo.";
+  if(c.status==="parziale")
+    return "la conosco, ma in questa frase non c'è nulla a cui legarla.";
+  return "non la riconosco: nessun aggancio né ruolo.";
+}
+
+const $ = s => document.querySelector(s);
+const el = (t,c,txt)=>{const e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e;};
+
+// Grounding per-parola dall'ultima analisi (asse Conoscenza del dettaglio-token).
+let UNDERSTANDING = [];
+function groundingFor(lemma, token){
+  const w = (lemma||"").toLowerCase(), t = (token||"").toLowerCase();
+  return (UNDERSTANDING||[]).find(u => {
+    const uw = (u.word||"").toLowerCase();
+    return uw===w || uw===t;
+  });
+}
+
+async function analyze(text){
+  const out = $("#out");
+  out.innerHTML = '<div class="empty-state">…</div>';
+  let r;
+  try{
+    const resp = await fetch("/api/comprehend",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});
+    r = await resp.json();
+  }catch(e){ out.innerHTML = ''; out.appendChild(el("div","err","Errore: "+e)); return; }
+  render(r);
+}
+
+function render(r){
+  const out = $("#out"); out.innerHTML = "";
+  const s = r.saturation || {};
+  const cov = r.coverage || [];
+  UNDERSTANDING = (r.understanding && r.understanding.words) || [];
+  PRIMARY_REL = (r.primary && r.primary.relation) || null;
+
+  // ── Verdetto ──
+  const v = el("div","verdict");
+  const dot = el("span","dot"); dot.style.background = DOTCOL[s.verdict]||"var(--text-dim)";
+  v.appendChild(dot);
+  v.appendChild(el("span","v-label", s.verdict||"—"));
+  const counts = el("span","v-counts",
+    `✅ ${s.compreso||0}  🟡 ${s.parziale||0}  🔴 ${s.ignoto||0}  / ${s.total||0}`);
+  v.appendChild(counts);
+  if(s.open_slots && s.open_slots.length){
+    v.appendChild(el("span","v-slots","manca: "+s.open_slots.join(", ")));
+  }
+  out.appendChild(v);
+
+  // ── Striscia copertura ──
+  out.appendChild(el("div","section-t","Copertura — ogni parola, il suo stato"));
+  const strip = el("div","cov");
+  const detail = el("div","detail"); detail.id="detail";
+  cov.forEach((c,i)=>{
+    const t = el("div","tok "+c.status);
+    t.appendChild(el("span","w",c.token));
+    t.appendChild(el("span","r",friendlyRole(c.role, c.token)));
+    t.onclick=()=>{
+      document.querySelectorAll(".tok.sel").forEach(x=>x.classList.remove("sel"));
+      t.classList.add("sel"); showDetail(c, detail);
+    };
+    strip.appendChild(t);
+  });
+  out.appendChild(strip);
+  out.appendChild(detail);
+
+  // ── Proposizione + confronto col mondo ──
+  out.appendChild(el("div","section-t","Proposizione — la frase legata al mondo"));
+  out.appendChild(propBox(r.primary));
+  out.appendChild(worldConfront(r.primary, r.kg_confrontation));
+
+  // ── Narrazione ──
+  out.appendChild(el("div","section-t","In parole"));
+  out.appendChild(narration(r, cov, s));
+
+  // ── L'intento di UI-r1 (lo step prima della risposta) — varia col bisogno ──
+  const pos = positionBox(r, cov);
+  if(pos){
+    const need = (r.need && r.need.dominant) || "";
+    const titles = {posizionarsi:"L'intento di UI-r1 — posizionarsi", capire:"L'intento di UI-r1 — capire",
+      riconoscere:"L'intento di UI-r1 — riconoscere", strutturare:"L'intento di UI-r1 — mettere in ordine"};
+    out.appendChild(el("div","section-t", titles[need] || "L'intento di UI-r1"));
+    out.appendChild(pos);
+  }
+}
+
+function showDetail(c, box){
+  box.innerHTML="";
+  const h = el("div","dhead");
+  h.appendChild(el("span","dw",c.token));
+  if(c.lemma && c.lemma.toLowerCase()!==c.token.toLowerCase())
+    h.appendChild(el("span","dl","→ "+c.lemma));
+  h.appendChild(el("span","dr", ({compreso:"✅ compreso",parziale:"🟡 parziale",ignoto:"🔴 non riconosciuto"})[c.status]||""));
+  box.appendChild(h);
+  const axes = el("div","axes");
+  // asse conoscenza — cosa la parola È e FA (grounding dal KG)
+  const k = el("div","axis know"); k.appendChild(el("h4","Conoscenza — cosa ne sa"));
+  k.appendChild(kv("nel grafo", c.known ? "sì" : "no"));
+  k.appendChild(kv("relazioni note", String(c.arc_count)));
+  const g = groundingFor(c.lemma, c.token);
+  if(g && g.outgoing && g.outgoing.length){
+    // Le relazioni-chiave: cosa È (è/è parte di) e cosa FA (causa/richiede/…).
+    g.outgoing.slice(0,4).forEach(grp=>{
+      const tgts = (grp.targets||[]).slice(0,4).map(t=>t.word).join(" · ");
+      if(tgts) k.appendChild(kv(grp.label||grp.relation, tgts));
+    });
+  } else if(c.known){
+    k.appendChild(el("div","kv","(nessuna relazione diretta letta)"));
+  }
+  axes.appendChild(k);
+  // asse comprensione
+  const cp = el("div","axis comp"); cp.appendChild(el("h4","Comprensione — qui"));
+  cp.appendChild(kv("ruolo", friendlyRole(c.role, c.token)));
+  cp.appendChild(kv("legato alla frase", c.bound ? "sì" : "no"));
+  axes.appendChild(cp);
+  box.appendChild(axes);
+  box.appendChild(el("div","reason", friendlyReason(c)));
+  box.classList.add("show");
+}
+function kv(k,val){const d=el("div","kv");d.innerHTML=k+": <b>"+val+"</b>";return d;}
+
+function propBox(p){
+  const box = el("div","prop-box");
+  if(!p || !p.relation){ box.appendChild(el("div","prop-empty","Nessuna proposizione estratta (input non proposizionale).")); return box; }
+  const subj = p.subject_surface || (p.subject_kind==="World" ? p.subject_name : (SUBJ[p.subject_kind]||p.subject_name||"?"));
+  const hasObj = !!(p.object_name && p.object_name.length) || p.object_kind==="Variable";
+  const obj = (p.object_kind==="Variable" ? "?"+(p.object_name||"") : p.object_name);
+  const verb = (RELVERB[p.relation]||p.relation) + (p.polarity===false ? " (non)" : "");
+  // Con oggetto diretto: [subj]→[obj], il via è un ramo-complemento. Senza
+  // oggetto (intransitivo): il via È l'endpoint (complemento di luogo/origine).
+  if(hasObj) box.appendChild(propSvg(subj, verb, obj, p.via, null));
+  else if(p.via) box.appendChild(propSvg(subj, verb, p.via, null, "complemento"));
+  else box.appendChild(propSvg(subj, verb, "·", null, null));
+  return box;
+}
+function propSvg(subj, verb, obj, via, endpointTag){
+  const NS="http://www.w3.org/2000/svg";
+  const W=860, H = via?150:90;
+  const svg=document.createElementNS(NS,"svg"); svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  svg.setAttribute("width","100%"); svg.style.maxHeight=(H+10)+"px";
+  const node=(x,y,txt,col)=>{
+    const g=document.createElementNS(NS,"g");
+    const tw=Math.max(70, txt.length*10+24);
+    const rect=document.createElementNS(NS,"rect");
+    rect.setAttribute("x",x-tw/2);rect.setAttribute("y",y-17);rect.setAttribute("width",tw);
+    rect.setAttribute("height",34);rect.setAttribute("rx",8);
+    rect.setAttribute("fill","var(--surface2)");rect.setAttribute("stroke",col);rect.setAttribute("stroke-width","1.5");
+    const t=document.createElementNS(NS,"text");
+    t.setAttribute("x",x);t.setAttribute("y",y+5);t.setAttribute("text-anchor","middle");
+    t.setAttribute("fill","var(--text-bright)");t.setAttribute("font-size","15");
+    t.setAttribute("font-family","var(--mono)");t.textContent=txt;
+    g.appendChild(rect);g.appendChild(t);return [g,tw];
+  };
+  const arrow=(x1,y1,x2,y2,label,col)=>{
+    const g=document.createElementNS(NS,"g");
+    const line=document.createElementNS(NS,"line");
+    line.setAttribute("x1",x1);line.setAttribute("y1",y1);line.setAttribute("x2",x2);line.setAttribute("y2",y2);
+    line.setAttribute("stroke",col);line.setAttribute("stroke-width","1.5");
+    const t=document.createElementNS(NS,"text");
+    t.setAttribute("x",(x1+x2)/2);t.setAttribute("y",(y1+y2)/2-7);t.setAttribute("text-anchor","middle");
+    t.setAttribute("fill",col);t.setAttribute("font-size","12");t.setAttribute("font-family","var(--mono)");
+    t.textContent=label;
+    g.appendChild(line);g.appendChild(t);return g;
+  };
+  const y=40;
+  const endCol = endpointTag ? "var(--via)" : "var(--ok)";
+  const [sg,sw]=node(120,y,subj,"var(--accent)");
+  const [og,ow]=node(W-160,y,obj,endCol);
+  svg.appendChild(arrow(120+sw/2, y, W-160-ow/2, y, verb, "var(--text-muted)"));
+  svg.appendChild(sg); svg.appendChild(og);
+  if(endpointTag){ // etichetta sopra l'endpoint quando è un complemento
+    const t=document.createElementNS(NS,"text");
+    t.setAttribute("x",W-160);t.setAttribute("y",y-24);t.setAttribute("text-anchor","middle");
+    t.setAttribute("fill","var(--via)");t.setAttribute("font-size","11");
+    t.setAttribute("font-family","var(--mono)");t.textContent="("+endpointTag+")";
+    svg.appendChild(t);
+  }
+  if(via){
+    const [vg]=node(W-160, y+70, via, "var(--via)");
+    svg.appendChild(arrow(W-160, y+17, W-160, y+53, "via", "var(--via)"));
+    svg.appendChild(vg);
+  }
+  return svg;
+}
+
+function worldConfront(p, kc){
+  const box = el("div","world");
+  if(!p || !p.relation || !kc){ box.style.display="none"; return box; }
+  let cls, txt;
+  if(kc.contradictions && kc.contradictions.length){
+    cls="w-bad"; txt="✗ contraddetta dal mondo — il grafo tiene l'opposto.";
+  } else if(kc.matches){
+    cls="w-ok"; txt="✓ confermata dal mondo — questa relazione esiste già nel grafo.";
+  } else if(kc.object_in_kg){
+    cls="w-new"; txt = kc.via_in_kg
+      ? "○ nuova ma ancorata — i concetti esistono nel mondo, la relazione è nuova."
+      : "○ nuova — l'oggetto è noto al mondo, la relazione è nuova.";
+  } else {
+    cls="w-none"; txt="○ non ancorata — questa relazione non la trovo nel mondo.";
+  }
+  box.classList.add(cls);
+  box.appendChild(el("span","w-txt",txt));
+  return box;
+}
+
+// Verbi-relazione ACCORDATI col soggetto recuperato (pro-drop): la desinenza
+// segue chi parla. Tabella finita (relazione × persona) — è "educare il frame",
+// non un trucco. `_` = 3ª persona (soggetto del mondo).
+const RELVERB_AGREED = {
+  IsA:      {io:"sono", noi:"siamo", tu:"sei", voi:"siete", _:"è"},
+  Has:      {io:"ho", noi:"abbiamo", tu:"hai", voi:"avete", _:"ha"},
+  FeelsAs:  {io:"provo", noi:"proviamo", tu:"provi", voi:"provate", _:"prova"},
+  Expresses:{io:"esprimo", noi:"esprimiamo", tu:"esprimi", voi:"esprimete", _:"esprime"},
+  Does:     {io:"compio", noi:"compiamo", tu:"compi", voi:"compite", _:"compie"},
+};
+function agreedVerb(rel, surf){
+  const m = RELVERB_AGREED[rel];
+  if(m) return m[surf] || m._;
+  return RELVERB[rel] || rel;
+}
+// Coniugazione del VERBO DI SUPERFICIE realmente usato (più fedele del verbo-
+// relazione generico): "ho paura"→hai (non "provi"), "sono triste"→sei,
+// "vogliamo"→volete. Tabella finita dei verbi-supporto/modali frequenti.
+const VERB_SURF_AGREED = {
+  essere:{io:"sono",noi:"siamo",tu:"sei",voi:"siete",_:"è"},
+  avere: {io:"ho",noi:"abbiamo",tu:"hai",voi:"avete",_:"ha"},
+  stare: {io:"sto",noi:"stiamo",tu:"stai",voi:"state",_:"sta"},
+  sentire:{io:"sento",noi:"sentiamo",tu:"senti",voi:"sentite",_:"sente"},
+  provare:{io:"provo",noi:"proviamo",tu:"provi",voi:"provate",_:"prova"},
+  volere:{io:"voglio",noi:"vogliamo",tu:"vuoi",voi:"volete",_:"vuole"},
+  dovere:{io:"devo",noi:"dobbiamo",tu:"devi",voi:"dovete",_:"deve"},
+  potere:{io:"posso",noi:"possiamo",tu:"puoi",voi:"potete",_:"può"},
+};
+function verbFor(p, surf){
+  const vl = p.verb_lemma;
+  if(vl && VERB_SURF_AGREED[vl]) return VERB_SURF_AGREED[vl][surf] || VERB_SURF_AGREED[vl]._;
+  return agreedVerb(p.relation, surf);
+}
+// Congiunzione italiana di una lista: "a, b e c".
+function joinIt(a){ a=a.filter(Boolean); if(a.length<=1) return a.join("");
+  return a.slice(0,-1).join(", ")+" e "+a[a.length-1]; }
+// Clausola ANCORATA: cosa il grafo sa del nodo GIÀ COMPRESO (legato). Solo
+// relazioni tipate del nodo — niente attivazioni libere (anti-nuclei).
+function groundedClause(lemma){
+  const g = groundingFor(lemma, lemma);
+  if(!g || !g.outgoing) return null;
+  const pick = (rel, n) => { const grp=g.outgoing.find(o=>o.relation===rel);
+    return grp ? (grp.targets||[]).slice(0,n).map(t=>t.word) : []; };
+  const frags=[];
+  const isa=pick("IS_A",3);          if(isa.length)   frags.push("è "+joinIt(isa));
+  const causes=pick("CAUSES",3);     if(causes.length)frags.push("produce "+joinIt(causes));
+  const feels=pick("FEELS_AS",2);    if(feels.length) frags.push("si avverte come "+joinIt(feels));
+  if(frags.length<3){ const has=pick("HAS",2); if(has.length) frags.push("porta con sé "+joinIt(has)); }
+  if(frags.length<3){ const opp=pick("OPPOSITE_OF",2); if(opp.length) frags.push("si oppone a "+joinIt(opp)); }
+  return frags.length ? frags.slice(0,3).join("; ") : null;
+}
+
+function narration(r, cov, s){
+  const box=el("div","narr");
+  const p=r.primary;
+  if(p && p.relation){
+    const surf = p.subject_surface || null;
+    // DEISSI: nella comprensione di UI-r1 il punto di vista si ribalta —
+    // l'«io» dell'utente diventa «tu». Il verbo si accorda al pronome SHIFTATO.
+    const dsurf = surf ? deictic(surf) : null;
+    const subj = dsurf || (p.subject_kind==="World" ? p.subject_name : (SUBJ[p.subject_kind]||"?"));
+    const neg = p.polarity===false ? "non " : "";
+    const hasObj = !!(p.object_name && p.object_name.length);
+    const isQuestion = p.object_kind==="Variable";
+    // Avverbi di frequenza/tempo che MODIFICANO il senso: vanno nel lead, non
+    // relegati a footnote ("hai SEMPRE sonno", non "hai sonno" + nota).
+    const propW = new Set([p.subject_name,p.object_name,p.via,p.verb_lemma].filter(Boolean).map(w=>w.toLowerCase()));
+    const freqAdv = cov.find(c=>c.role==="avverbio" && !propW.has((c.lemma||c.token).toLowerCase())
+                          && adverbInfo(c.token).cat==="frequenza");
+    const advWord = freqAdv ? freqAdv.token.toLowerCase() : "";
+    let txt;
+    if(isQuestion){
+      txt = `${cap(subj)} mi pone una domanda (${p.object_name||"?"}).`;
+    } else if(p.relation==="Does" && p.verb_lemma && (!hasObj || p.object_name===p.verb_lemma)){
+      txt = `Ho capito che ${subj} ${neg}${advWord?advWord+" ":""}${agreedVerb("Does", dsurf)} l'azione di ${p.verb_lemma}.`;
+    } else {
+      txt = `Ho capito che ${subj} ${neg}${verbFor(p, dsurf)}`;
+      if(advWord) txt += ` ${advWord}`;
+      if(hasObj) txt += ` ${p.object_name}`;
+      if(p.via) txt += ` — riguardo a ${p.via}`;
+      txt += ".";
+    }
+    const l=el("div","lead"); l.textContent=txt; box.appendChild(l);
+    const dn = surf ? deixisNote(surf) : null;
+    if(dn) box.appendChild(el("div","subj-hint", dn));
+
+    // ── La CARNE: cosa so dei nodi che ho legato (oltre la ripetizione) ──
+    // Per i claim sul mondo grondo il SOGGETTO (il tema); per i claim di chi
+    // parla, l'OGGETTO (il contenuto) ed eventualmente il complemento via.
+    const seen = new Set();
+    const groundNodes = [];
+    if(p.subject_kind==="World" && p.subject_name) groundNodes.push(p.subject_name);
+    if(hasObj && !isQuestion) groundNodes.push(p.object_name);
+    if(p.via) groundNodes.push(p.via);
+    groundNodes.forEach(node=>{
+      const key=(node||"").toLowerCase(); if(!node||seen.has(key)) return; seen.add(key);
+      const clause = groundedClause(node);
+      if(clause){ const g=el("div","ground"); g.innerHTML="Nel mio grafo, <b>"+node+"</b> "+clause+"."; box.appendChild(g); }
+    });
+  } else {
+    box.appendChild(el("div","partial","Nessuna proposizione: l'input non porta un'affermazione che io possa legare al mondo."));
+  }
+
+  // ── Incongruenza grafo↔input ──
+  const kc = r.kg_confrontation;
+  if(kc && kc.contradictions && kc.contradictions.length){
+    kc.contradictions.forEach(pair=>{
+      box.appendChild(el("div","incong","⚠ Per me «"+pair[0]+"» e «"+pair[1]+"» sono opposti, non la stessa cosa: lo registro come una tensione, non lo do per vero."));
+    });
+  }
+
+  // ── Circostanze: avverbi INTERPRETATI (non solo "c'è un avverbio") ──
+  const propWords = new Set();
+  if(p){ [p.subject_name,p.object_name,p.via,p.verb_lemma].forEach(w=>{ if(w) propWords.add(w.toLowerCase()); }); }
+  cov.filter(c=>c.role==="avverbio" && !propWords.has((c.lemma||c.token).toLowerCase()))
+     .forEach(c=>{
+       const ai = adverbInfo(c.token);
+       let t = "Circostanza «"+c.token+"» ("+ai.cat+")";
+       if(ai.eff) t += ": "+ai.eff;
+       // l'avverbio di frequenza cambia il senso del nodo che modifica.
+       if(ai.cat==="frequenza" && p){
+         const node = p.via || p.object_name;
+         if(node) t += ` → «${node}» non è occasionale ma costante`;
+       }
+       box.appendChild(el("div","circ", t+"."));
+     });
+
+  // ── Limiti onesti (compatti) ──
+  if(s.open_slots && s.open_slots.length)
+    box.appendChild(el("div","miss","Mi manca: "+s.open_slots.join(", ")+" — l'informazione è incompleta."));
+  const red = cov.filter(c=>c.status==="ignoto").map(c=>c.token);
+  if(red.length) box.appendChild(el("div","none","Non riconosco: "+red.join(", ")+"."));
+  const yellow = cov.filter(c=>c.status==="parziale").map(c=>c.token);
+  if(yellow.length) box.appendChild(el("div","partial","Conosco ma non ho legato a questa frase: "+yellow.join(", ")+"."));
+  return box;
+}
+function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+
+// ── Deissi (shifter lacaniano): nella COMPRENSIONE di UI-r1 il punto di vista
+// si ribalta. L'utente che dice «io» è «tu» per UI-r1; «tu» (rivolto a UI-r1) è
+// «io». «noi» può includere o no UI-r1; «voi»/«loro» hanno un referente da
+// chiarire — rilevante nel dialogo multi-turno.
+const DEIXIS = { io:"tu", tu:"io", noi:"voi", voi:"voi", loro:"loro", lui:"lui", lei:"lei", egli:"lui", ella:"lei" };
+function deictic(surf){ return surf ? (DEIXIS[surf.toLowerCase()]||surf) : surf; }
+function deixisNote(surf){
+  const s=(surf||"").toLowerCase();
+  if(s==="io")  return "(parli di te: nella mia comprensione «io» diventa «tu»)";
+  if(s==="tu")  return "(ti rivolgi a me: «tu» qui sono io, UI-r1)";
+  if(s==="noi") return "(«noi»: non so se mi includi o no — da chiarire)";
+  if(s==="voi"||s==="loro") return "(«"+s+"»: a chi ti riferisci esattamente? da chiarire)";
+  return null;
+}
+// Effetto dell'avverbio sul senso (non solo «c'è un avverbio»).
+function adverbInfo(tok){
+  const t=(tok||"").toLowerCase();
+  if(/^(sempre|mai|spesso|raramente|talvolta|talora|sovente|continuamente|costantemente|ogni)$/.test(t))
+    return {cat:"frequenza", eff:"rende lo stato costante/abituale, non occasionale"};
+  if(/^(molto|poco|tanto|troppo|parecchio|assai|abbastanza|piuttosto)$/.test(t))
+    return {cat:"intensità", eff:"modula quanto"};
+  if(/^(oggi|domani|ieri|ora|adesso|presto|tardi|stamattina|stasera|subito|poi)$/.test(t))
+    return {cat:"tempo", eff:"colloca nel tempo"};
+  if(t.endsWith("mente")) return {cat:"modo", eff:"dice come"};
+  return {cat:"avverbio", eff:null};
+}
+
+// ── La POSIZIONE di UI-r1: lo step fra comprensione e risposta. ONESTA —
+// lettura della tensione + cosa è in gioco nel grafo + cosa la muove (need).
+// NON prescrive comportamenti né fabbrica opinioni (Principio 3): con 0 opinioni
+// cristallizzate, lo dice. La posizione è dove la porta il SUO grafo.
+const NEED_LABEL = {
+  posizionarsi:"prendere posizione su questo", strutturare:"mettere ordine nel groviglio",
+  riconoscere:"riconoscere ciò che già so", esplorare:"esplorare ciò che non ho ancora capito",
+  "co-regolare":"accompagnare il tuo stato", interiorizzare:"farne esperienza", restituire:"risponderti",
+};
+function tensionReading(p){
+  const obj=p.object_name, via=p.via, rel=p.relation, neg=p.polarity===false;
+  if(neg && rel==="FeelsAs")  return via ? `una riluttanza — manca lo slancio verso «${via}».` : `un non-provare «${obj}».`;
+  if(neg && rel==="Does")     return `un rifiuto o una rinuncia verso «${obj}».`;
+  if(neg && rel==="Has")      return `un'assenza dichiarata di «${obj}».`;
+  if(neg && rel==="IsA")      return `una negazione d'identità: non «${obj}».`;
+  if(!neg && rel==="FeelsAs") return via ? `uno stato vissuto («${obj}») rivolto a «${via}».` : `uno stato vissuto: «${obj}».`;
+  if(!neg && rel==="Does")    return `un'azione o un'intenzione: «${via||obj}».`;
+  if(!neg && rel==="IsA")     return `un'identificazione con «${obj}».`;
+  if(!neg && rel==="Has")     return `il possesso/la presenza di «${obj}».`;
+  return null;
+}
+function stakeOf(p){
+  const node = p.via || p.object_name; if(!node) return null;
+  const g=groundingFor(node,node); if(!g||!g.outgoing) return null;
+  const pick=(rel,n)=>{const grp=g.outgoing.find(o=>o.relation===rel);return grp?(grp.targets||[]).slice(0,n).map(t=>t.word):[];};
+  const ca=pick("CAUSES",2), isa=pick("IS_A",2), opp=pick("OPPOSITE_OF",1);
+  const frags=[];
+  if(ca.length)  frags.push(`«${node}» produce ${joinIt(ca)}`);
+  else if(isa.length) frags.push(`«${node}» è ${joinIt(isa)}`);
+  if(opp.length) frags.push(`il suo opposto è «${opp[0]}»`);
+  return frags.length ? frags.join("; ")+"." : null;
+}
+// Di COSA UI-r1 si posiziona — concreto, dal nodo/tensione dell'input (non
+// "posizionarsi" e basta).
+function positionTopic(p, freq){
+  const obj=p.object_name, via=p.via, rel=p.relation, neg=p.polarity===false;
+  if(neg && rel==="FeelsAs") return `la tua riluttanza verso «${via||obj}»`;
+  if(neg && rel==="Does")    return `il tuo non voler «${via||obj}»`;
+  if(freq && (rel==="FeelsAs"||rel==="Has")) return `«${obj}» che ti accompagna (${freq})`;
+  if(rel==="Has")  return `«${obj}» che hai`;
+  if(rel==="Does") return `«${via||obj}» che fai`;
+  if(rel==="FeelsAs") return via ? `«${obj}» rivolto a «${via}»` : `«${obj}» che senti`;
+  return `«${obj||via}»`;
+}
+// COME intende posizionarsi: la domanda GENUINA che emerge dai vuoti della
+// comprensione (slot mancante, negazione, frequenza, entità introdotta). Non è
+// un consiglio né un template fisso: è la curiosità strutturale verso ciò che
+// NON ha ancora legato. È anche il gancio per il dialogo (Tsunami).
+function wouldAsk(p, openSlots, freq){
+  const obj=p.object_name, via=p.via, rel=p.relation, neg=p.polarity===false;
+  if(openSlots && openSlots.length){
+    const slot=openSlots[0];
+    return slot==="oggetto" ? "di cosa, di preciso?" : `mi manca «${slot}»: me lo dici?`;
+  }
+  if(neg && (rel==="FeelsAs"||rel==="Does"))
+    return `«${via||obj}» è qualcosa che devi per forza, o puoi farne a meno? e sai dirmi come mai?`;
+  if(freq && (rel==="FeelsAs"||rel==="Has"))
+    return `come mai ${freq} «${obj}»? c'è qualcosa dietro?`;
+  if(!neg && (rel==="Has"||rel==="Does") && obj)
+    return `vuoi raccontarmi di più su «${via||obj}»?`;
+  return "ti va di raccontarmi di più?";
+}
+// Etichetta breve di un locus (per "strutturare").
+function lociLabel(p){ return p.via || p.object_name || p.verb_lemma || "?"; }
+// L'intento di UI-r1 dipende dal BISOGNO dominante (capire/riconoscere/
+// strutturare/posizionarsi), NON è sempre "posizionarsi". Il pannello si adatta.
+function positionBox(r, cov){
+  const p=r.primary;
+  const need = r.need && r.need.dominant;
+  const box=el("div","pos");
+  const propW=new Set([p&&p.subject_name,p&&p.object_name,p&&p.via,p&&p.verb_lemma].filter(Boolean).map(w=>w.toLowerCase()));
+  const fa=(cov||[]).find(c=>c.role==="avverbio" && !propW.has((c.lemma||c.token).toLowerCase()) && adverbInfo(c.token).cat==="frequenza");
+  const freq = fa ? fa.token.toLowerCase() : "";
+  const openSlots = (r.saturation && r.saturation.open_slots) || [];
+
+  // ── STRUTTURARE: il dump → ordine (il superpotere ADHD) ──
+  if(need==="strutturare"){
+    const loci=(r.propositions||[]).filter(x=>x.proposition).map(x=>lociLabel(x.proposition));
+    box.appendChild(rowEl("pos-topic","Sento più cose insieme", loci.length+" cose"));
+    box.appendChild(el("div","pos-read","Il mio impulso è metterle in fila: "+loci.join(" · ")+"."));
+    box.appendChild(rowEl("pos-ask","Ti direi","«vedo "+loci.length+" cose — "+loci.join(", ")+" — da quale partiamo?»"));
+    return box;
+  }
+  // ── RICONOSCERE: il mondo conferma — niente domanda, una conferma ──
+  if(need==="riconoscere" && p){
+    box.appendChild(rowEl("pos-topic","Riconosco", positionTopic(p, freq)));
+    box.appendChild(el("div","pos-read","Questa relazione è già nel mio mondo: la confermo."));
+    const st=stakeOf(p); if(st) box.appendChild(rowEl("pos-stake","Nel mio grafo", st));
+    return box;
+  }
+  // ── CAPIRE: c'è un vuoto — il moto è chiarirlo ──
+  if(need==="capire" && p){
+    box.appendChild(rowEl("pos-topic","Mi manca un pezzo", openSlots[0]||"un elemento"));
+    const reading=tensionReading(p); if(reading) box.appendChild(rowEl("pos-read","Leggo", reading));
+    box.appendChild(rowEl("pos-ask","Per capire ti chiederei","«"+wouldAsk(p, openSlots, freq)+"»"));
+    return box;
+  }
+  // ── domanda dell'utente (nessun bisogno, oggetto-variabile) ──
+  if(p && p.object_kind==="Variable"){
+    box.appendChild(rowEl("pos-topic","Mi stai interrogando", "vuoi sapere "+(p.object_name||"qualcosa")));
+    box.appendChild(rowEl("pos-ask","Ti risponderei","«da ciò che il mio grafo tiene su di me»"));
+    return box;
+  }
+  // ── POSIZIONARSI (default per claim nuovo): tensione + cosa è in gioco + domanda ──
+  if(need==="posizionarsi" && p){
+    box.appendChild(rowEl("pos-topic","Mi posiziono riguardo a", positionTopic(p, freq)));
+    const reading=tensionReading(p); if(reading) box.appendChild(rowEl("pos-read","Leggo", reading));
+    const stake=stakeOf(p); if(stake) box.appendChild(rowEl("pos-stake","In gioco, dal mio grafo", stake));
+    box.appendChild(rowEl("pos-ask","Per posizionarmi ti chiederei","«"+wouldAsk(p, openSlots, freq)+"»"));
+    box.appendChild(el("div","pos-op","Non ho ancora un'opinione cristallizzata: mi oriento dalla tensione e da ciò che il mio grafo lega — e ti chiedo, non ti dico cosa fare."));
+    return box;
+  }
+  return null; // fatico (ciao) o nessun appiglio → nessun pannello
+}
+function rowEl(cls,label,txt){ const d=el("div",cls); d.innerHTML="<b>"+label+":</b> "+txt; return d; }
+
+$("#go").onclick=()=>{ const t=$("#in").value.trim(); if(t) analyze(t); };
+$("#in").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const t=e.target.value.trim(); if(t) analyze(t);} });
+</script>
+</body>
+</html>

@@ -269,24 +269,40 @@ fn conjugate_regular(inf: &str, person: Person, tense: Tense) -> String {
 
     if inf.ends_with("are") {
         let stem = &inf[..inf.len() - 3];
+        // Ortografia -care/-gare: il suono duro si conserva → "h" davanti a
+        // i/e ("mancare"→manchi/manchiamo/mancherò, "pagare"→paghi/pagherai).
+        // Regola grafica deterministica, vale SOLO per la 1ª coniugazione.
+        let hard_cg = stem.ends_with('c') || stem.ends_with('g');
+        let join = |suf: &str| -> String {
+            // Ortografia -iare: la `i` atona del tema si FONDE con la desinenza
+            // che inizia per i ("studiare"→studi/studiamo, "cambiare"→cambi,
+            // "mangiare"→mangi/mangiamo), non si raddoppia (mai "studii").
+            if stem.ends_with('i') && suf.starts_with('i') {
+                format!("{}{}", stem, &suf[1..])
+            } else if hard_cg && (suf.starts_with('i') || suf.starts_with('e')) {
+                format!("{}h{}", stem, suf)
+            } else {
+                format!("{}{}", stem, suf)
+            }
+        };
         match tense {
             Present => {
                 let suf = match person {
                     First => "o", Second => "i", Third => "a",
                     FirstPlural => "iamo", SecondPlural => "ate", ThirdPlural => "ano",
                 };
-                format!("{}{}", stem, suf)
+                join(suf)
             }
             Imperfect => {
                 let suf = match person {
                     First => "avo", Second => "avi", Third => "ava",
                     FirstPlural => "avamo", SecondPlural => "avate", ThirdPlural => "avano",
                 };
-                format!("{}{}", stem, suf)
+                join(suf)
             }
             Future => {
-                // "amare" → stem "am" → futuro stem "amer"
-                let fstem = format!("{}er", stem);
+                // "amare" → stem "am" → futuro stem "amer" ("mancare" → "mancher")
+                let fstem = join("er");
                 let suf = match person {
                     First => "ò", Second => "ai", Third => "à",
                     FirstPlural => "emo", SecondPlural => "ete", ThirdPlural => "anno",
@@ -294,7 +310,7 @@ fn conjugate_regular(inf: &str, person: Person, tense: Tense) -> String {
                 format!("{}{}", fstem, suf)
             }
             Conditional => {
-                let cstem = format!("{}er", stem);
+                let cstem = join("er");
                 let suf = match person {
                     First => "ei", Second => "esti", Third => "ebbe",
                     FirstPlural => "emmo", SecondPlural => "este", ThirdPlural => "ebbero",
@@ -414,6 +430,38 @@ fn is_finire_type(inf: &str) -> bool {
 ///   3. Presente finire-type (-isco/-isci/-isce/-iscono)
 ///   4. Condizionale -ire (-irei/-iresti/-irebbe/-iremmo/-ireste/-irebbero)
 ///   5. Futuro -ire (-iro/-irai/-ira/-iremo/-irete/-iranno)
+/// Phase 86 (#3): infinito di un PARTICIPIO PASSATO IRREGOLARE, o `None`.
+/// Tabella-dato (come i verbi irregolari): la forma NON si ricostruisce per
+/// stripping (-ato/-uto/-ito). Match per *stem* = participio senza la vocale di
+/// concordanza (o/a/i/e), così "preso/presa/presi/prese" → "prendere". Stem ≥4
+/// per ridurre l'ambiguità coi nomi (il seeding è additivo, quindi tollera
+/// qualche falso positivo raro).
+pub fn irregular_participle(word: &str) -> Option<String> {
+    let w = word.to_lowercase();
+    const IRREG: &[(&str, &str)] = &[
+        ("pres", "prendere"), ("mess", "mettere"), ("scritt", "scrivere"),
+        ("vist", "vedere"), ("apert", "aprire"), ("chius", "chiudere"),
+        ("accolt", "accogliere"), ("scelt", "scegliere"), ("tolt", "togliere"),
+        ("rispost", "rispondere"), ("chiest", "chiedere"), ("decis", "decidere"),
+        ("spint", "spingere"), ("dipint", "dipingere"), ("strett", "stringere"),
+        ("vint", "vincere"), ("giunt", "giungere"), ("offert", "offrire"),
+        ("soffert", "soffrire"), ("copert", "coprire"), ("rott", "rompere"),
+        ("cott", "cuocere"), ("fritt", "friggere"), ("vissut", "vivere"),
+        ("conclus", "concludere"), ("divis", "dividere"), ("espress", "esprimere"),
+        ("discuss", "discutere"), ("pers", "perdere"), ("cors", "correre"),
+        ("mort", "morire"), ("nascost", "nascondere"), ("rimast", "rimanere"),
+        ("vissut", "vivere"), ("prodott", "produrre"), ("condott", "condurre"),
+        ("ridott", "ridurre"), ("tradott", "tradurre"), ("distrutt", "distruggere"),
+    ];
+    let stem = if w.ends_with(|c| matches!(c, 'o' | 'a' | 'i' | 'e')) {
+        &w[..w.len() - 1]
+    } else {
+        &w[..]
+    };
+    if stem.len() < 4 { return None; }
+    IRREG.iter().find(|(s, _)| *s == stem).map(|(_, inf)| inf.to_string())
+}
+
 pub fn lemmatize(word: &str) -> Option<LemmaResult> {
     use Person::*;
     use Tense::*;
@@ -421,9 +469,40 @@ pub fn lemmatize(word: &str) -> Option<LemmaResult> {
     let w = word.to_lowercase();
     let w = w.as_str();
 
+    // 0. Enclitico pronominale/riflessivo su INFINITO (Phase 86 §2-bis):
+    //    "abbandonarsi"→"abbandonare", "andarci"→"andare", "darsene"→"dare".
+    //    L'infinito perde la "e" finale e si attacca il clitico; lo ricostruiamo.
+    //    Guard anti-falso-positivo: dopo lo strip il residuo deve finire in "r" e
+    //    il candidato (+"e") deve essere un infinito valido (-are/-ere/-ire) —
+    //    così "corsi"→"cor"→"core"(ore) è RIFIUTATO, "abbandonar"→"abbandonare" no.
+    //    Cliti più lunghi prima (sene/glielo… prima di si/ne/lo).
+    const ENCLITICS: &[&str] = &[
+        "glielo", "gliela", "glieli", "gliele", "gliene",
+        "sene", "cene", "tene", "mene", "vene",
+        "cela", "cele", "celo", "celi",
+        "mela", "mele", "melo", "meli", "tela", "tele", "telo", "teli",
+        "si", "ci", "mi", "ti", "vi", "ne", "lo", "la", "li", "le", "gli",
+    ];
+    for cl in ENCLITICS {
+        if let Some(stem) = w.strip_suffix(cl) {
+            if stem.ends_with('r') && stem.len() >= 3 {
+                let inf = format!("{stem}e");
+                if inf.ends_with("are") || inf.ends_with("ere") || inf.ends_with("ire") {
+                    return Some(LemmaResult { infinitive: inf, person: Third, tense: Present });
+                }
+            }
+        }
+    }
+
     // 1. Irregolari
     if let Some(r) = lemmatize_irregular(w) {
         return Some(r);
+    }
+
+    // 1b. Participio passato IRREGOLARE (Phase 86 #3): "preso"→"prendere",
+    //     "accolto"→"accogliere". Non ricostruibile per stripping → tabella-dato.
+    if let Some(inf) = irregular_participle(w) {
+        return Some(LemmaResult { infinitive: inf, person: Third, tense: Present });
     }
 
     // 2. Imperfetto -are (avano/avate/avamo/ava/avi/avo)
@@ -574,6 +653,270 @@ pub fn lemmatize(word: &str) -> Option<LemmaResult> {
     None
 }
 
+/// Collasso morfologico GENERICO verso il/i lemma-candidati (Phase 86 §11).
+///
+/// A differenza di `lemmatize` (verbo-only, consumato dalla comprensione:
+/// `pattern_matcher`, `action_reasoning`, `input_reading`, `sentence_proposition`),
+/// questa funzione copre anche NOMI (plurale→singolare) e AGGETTIVI
+/// (genere/numero/grado→base) — è il collasso usato al *seeding* del campo
+/// (`engine::receive`) e dal *gate di cura* (`bin/check_lemma`).
+///
+/// L'italiano è ambiguo (plurale `-i` → `-o` *o* `-e`; `-e` → `-a`): per questo
+/// **sovra-genera** un insieme di candidati invece di sceglierne uno solo. Chi
+/// chiama disambigua: il seeding tiene il primo candidato che esiste nel lessico
+/// (il lessico è il ponte, §11.2); il gate verifica se il lemma-bersaglio `into`
+/// è fra i candidati. Funzione PURA: nessun accesso a lessico/KG.
+///
+/// I candidati verbali (via `lemmatize` + gerundio + 1ª sing.) vengono prima,
+/// poi le riduzioni nominali/aggettivali. L'ordine conta solo come tie-break:
+/// il filtro lessicale del chiamante è il vero disambiguatore.
+pub fn lemma_candidates(word: &str) -> Vec<String> {
+    let w = word.to_lowercase();
+    let mut out: Vec<String> = Vec::new();
+    let mut add = |c: String, out: &mut Vec<String>| {
+        if c != w && c.chars().count() >= 2 && !out.contains(&c) {
+            out.push(c);
+        }
+    };
+
+    // ── 1. VERBO ───────────────────────────────────────────────────────────
+    // 1a. Tutte le forme già coperte da lemmatize (irregolari, imperfetto,
+    //     presente plurale, finire-type, condizionale, futuro, enclitici).
+    if let Some(r) = lemmatize(&w) {
+        add(r.infinitive, &mut out);
+    }
+    // 1b. Participio passato irregolare (idempotente con lemmatize).
+    if let Some(inf) = irregular_participle(&w) {
+        add(inf, &mut out);
+    }
+    // 1c. Gerundio: -ando → -are ; -endo → -ere | -ire (amando→amare, agendo→agire).
+    if let Some(stem) = w.strip_suffix("ando") {
+        if stem.chars().count() >= 2 { add(format!("{stem}are"), &mut out); }
+    }
+    if let Some(stem) = w.strip_suffix("endo") {
+        if stem.chars().count() >= 2 {
+            add(format!("{stem}ere"), &mut out);
+            add(format!("{stem}ire"), &mut out);
+        }
+    }
+    // 1d. 1ª singolare presente -o (abbacchio→abbacchiare): coniugazione ignota
+    //     → candidati per tutte e tre. Stem ≥3 per ridurre il rumore sui nomi.
+    if let Some(stem) = w.strip_suffix('o') {
+        if stem.chars().count() >= 3 {
+            add(format!("{stem}are"), &mut out);
+            add(format!("{stem}ere"), &mut out);
+            add(format!("{stem}ire"), &mut out);
+        }
+    }
+
+    // ── 2. NOME / AGGETTIVO ──────────────────────────────────────────────────
+    // Mutazione velare ortografica: uno stem in "ch"/"gh" davanti a -i/-e maschera
+    // una base in "c"/"g" (antico→antichi, cronaca→cronache, amico→amici). Per ogni
+    // stem proviamo anche la variante "ammorbidita".
+    let soften = |stem: &str| -> Option<String> {
+        if let Some(s) = stem.strip_suffix("ch") { return Some(format!("{s}c")); }
+        if let Some(s) = stem.strip_suffix("gh") { return Some(format!("{s}g")); }
+        None
+    };
+    // 2a. Superlativo assoluto -issimo/a/i/e → base (-o e -e): altissimo→alto,
+    //     grandissimo→grande, agitatissimo→agitato, antichissimo→antico (velare).
+    for suf in &["issimo", "issima", "issimi", "issime"] {
+        if let Some(stem) = w.strip_suffix(suf) {
+            if stem.chars().count() >= 2 {
+                for base in std::iter::once(stem.to_string()).chain(soften(stem)) {
+                    add(format!("{base}o"), &mut out);
+                    add(format!("{base}e"), &mut out);
+                }
+            }
+        }
+    }
+    // 2b. Flessione genere/numero verso il lemma base.
+    //   plurale -i → -o (libri→libro) | -e (api→ape, accidenti→accidente) |
+    //               -a (poeti→poeta) | -io (binari→binario, edifici→edificio) | velare
+    if let Some(stem) = w.strip_suffix('i') {
+        if stem.chars().count() >= 2 {
+            for base in std::iter::once(stem.to_string()).chain(soften(stem)) {
+                add(format!("{base}o"), &mut out);
+                add(format!("{base}e"), &mut out);
+                add(format!("{base}a"), &mut out);
+            }
+            add(format!("{stem}io"), &mut out); // nomi in -io: -io → -i
+        }
+    }
+    //   forma in -e → -a (femm. plur.: case→casa, aquile→aquila) |
+    //              -o (agg. femm. plur.: diverse→diverso, solide→solido) | velare ;
+    //              + 3ª sing. verbo -ere/-ire (affligge→affliggere, sente→sentire)
+    if let Some(stem) = w.strip_suffix('e') {
+        if stem.chars().count() >= 2 {
+            for base in std::iter::once(stem.to_string()).chain(soften(stem)) {
+                add(format!("{base}a"), &mut out);
+                add(format!("{base}o"), &mut out);
+            }
+            add(format!("{stem}ere"), &mut out);
+            add(format!("{stem}ire"), &mut out);
+        }
+    }
+    //   femminile -a → -o (aggettivo: ampia→ampio) ; + verbo -are/-ere/-ire
+    //              (3ª sing. e congiuntivo: ama→amare, discerna→discernere, risponda→rispondere)
+    if let Some(stem) = w.strip_suffix('a') {
+        if stem.chars().count() >= 2 {
+            add(format!("{stem}o"), &mut out);
+            add(format!("{stem}are"), &mut out);
+            add(format!("{stem}ere"), &mut out);
+            add(format!("{stem}ire"), &mut out);
+        }
+    }
+
+    out
+}
+
+/// Lemma VALIDATO contro un dizionario esterno (KG/lessico, via la closure
+/// `known`). Risolve il bug dell'"infinito inventato" (Tsunami, fase archetipo):
+/// `lemmatize` è solo-verbi → forzava nomi/aggettivi in infiniti inesistenti
+/// (`mondi→mondare`, `possibili→possibilare`), gonfiando `unknown_words`.
+///
+/// Qui: prova i candidati morfologici (verbo + nome/aggettivo, via
+/// `lemma_candidates`) confermati dal dizionario. Tre esiti, ONESTI:
+///   - la parola stessa è nota → è già lemma;
+///   - ESATTAMENTE UN candidato confermato → disambiguo, lo usa (cani→cane);
+///   - PIÙ candidati confermati (es. "mondi"→{mondo, mondare} — "mondare" È un
+///     verbo reale) → **NON indovina**: deferisce alla forma di superficie. La
+///     disambiguazione nome-vs-verbo è CONTESTUALE (il ruolo nella clausola,
+///     analisi logica), non un trucco morfologico cieco;
+///   - zero conferme → superficie.
+/// MAI un infinito speculativo (mondi↛mondare). `grammar` resta autonomo: il
+/// dizionario entra come closure. NB: interim — la versione piena lemmatizzerà
+/// per RUOLO (verbo→infinito, argomento→singolare) quando il chunker clausa-aware
+/// assegna i ruoli; questa funzione resterà la riduzione nominale validata.
+pub fn kg_validated_lemma(word: &str, known: impl Fn(&str) -> bool) -> String {
+    kg_validated_with(word, known, lemma_candidates)
+}
+
+/// Lemmatizzazione NOMINALE validata: come `kg_validated_lemma` ma genera **solo
+/// candidati nome/aggettivo** (`nominal_lemma_candidates`), mai infiniti verbali.
+/// È la lemmatizzazione PER RUOLO (Phase 86+): quando il chunker clausa-aware ha
+/// marcato un token come argomento/attributo sappiamo che è un nome → "mondi"→
+/// "mondo" anche se "mondare" esiste nel KG (la disambiguazione nome-vs-verbo
+/// l'ha fatta il RUOLO, non un trucco morfologico — [[feedback-no-tricks…]]).
+pub fn kg_validated_nominal(word: &str, known: impl Fn(&str) -> bool) -> String {
+    kg_validated_with(word, known, nominal_lemma_candidates)
+}
+
+/// Come `kg_validated_nominal` ma con il GENERE noto dall'articolo (accordo
+/// grammaticale): scioglie la falsa-ambiguità dei plurali `-i` ("i gatti"→"gatto"
+/// invece di deferire perché anche "gatta" è nel KG). `masc=None` → identico a
+/// `kg_validated_nominal`. È disambiguazione contestuale, non un trucco
+/// morfologico ([[feedback-no-tricks-toward-reality]]).
+pub fn kg_validated_nominal_gendered(
+    word: &str,
+    masc: Option<bool>,
+    known: impl Fn(&str) -> bool,
+) -> String {
+    kg_validated_with(word, known, |w| nominal_lemma_candidates_gendered(w, masc))
+}
+
+/// Cuore comune: prova i candidati prodotti da `candidates`, ritorna l'unico
+/// confermato dal dizionario; deferisce alla superficie se ambiguo o assente.
+fn kg_validated_with(
+    word: &str,
+    known: impl Fn(&str) -> bool,
+    candidates: impl Fn(&str) -> Vec<String>,
+) -> String {
+    let w = word.to_lowercase();
+    if w.chars().count() < 2 {
+        return w;
+    }
+    if known(&w) {
+        return w; // la forma stessa è nel dizionario → è già lemma
+    }
+    let mut found: Option<String> = None;
+    for c in candidates(&w) {
+        if !known(&c) {
+            continue;
+        }
+        match &found {
+            None => found = Some(c),
+            Some(prev) if *prev != c => return w, // ambiguo → deferisci al contesto
+            _ => {}
+        }
+    }
+    found.unwrap_or(w) // disambiguo → lemma; zero conferme → superficie
+}
+
+/// Candidati di lemma NOMINALE (nome/aggettivo): solo riduzioni di genere/numero
+/// (-issimo→base, plurale -i→-o/-e/-a/-io, -e→-a/-o, -a→-o, con mutazione velare
+/// ch/gh→c/g). MAI infiniti verbali — quello lo fa `lemma_candidates` quando la
+/// classe è ignota. Qui la classe (nome) è già nota dal ruolo.
+pub fn nominal_lemma_candidates(word: &str) -> Vec<String> {
+    nominal_lemma_candidates_gendered(word, None)
+}
+
+/// Come `nominal_lemma_candidates`, ma se il genere è NOTO (dall'articolo che
+/// precede il nome — accordo grammaticale, non un trucco morfologico) filtra i
+/// candidati del plurale `-i`: un maschile (`i/gli gatti`) non viene mai da `-a`
+/// (gatta→gatte, non gatti); un femminile (`le armi`) non viene mai da `-o`.
+/// Questo scioglie la falsa-ambiguità che faceva deferire "gatti" (→{gatto,gatta}
+/// entrambi nel KG). `masc = Some(true)` maschile, `Some(false)` femminile,
+/// `None` = genere ignoto → comportamento invariato (tutti i candidati).
+pub fn nominal_lemma_candidates_gendered(word: &str, masc: Option<bool>) -> Vec<String> {
+    let w = word.to_lowercase();
+    let mut out: Vec<String> = Vec::new();
+    let mut add = |c: String, out: &mut Vec<String>| {
+        if c != w && c.chars().count() >= 2 && !out.contains(&c) {
+            out.push(c);
+        }
+    };
+    let soften = |stem: &str| -> Option<String> {
+        if let Some(s) = stem.strip_suffix("ch") { return Some(format!("{s}c")); }
+        if let Some(s) = stem.strip_suffix("gh") { return Some(format!("{s}g")); }
+        None
+    };
+    // superlativo assoluto -issimo/a/i/e → base (-o/-e)
+    for suf in &["issimo", "issima", "issimi", "issime"] {
+        if let Some(stem) = w.strip_suffix(suf) {
+            if stem.chars().count() >= 2 {
+                for base in std::iter::once(stem.to_string()).chain(soften(stem)) {
+                    add(format!("{base}o"), &mut out);
+                    add(format!("{base}e"), &mut out);
+                }
+            }
+        }
+    }
+    // plurale -i → -o | -e | -a | -io (+velare).
+    // Filtro di genere (se noto): maschile mai -a, femminile mai -o/-io.
+    if let Some(stem) = w.strip_suffix('i') {
+        if stem.chars().count() >= 2 {
+            let allow_o = masc != Some(false); // -o è maschile
+            let allow_a = masc != Some(true);  // -a è femminile
+            for base in std::iter::once(stem.to_string()).chain(soften(stem)) {
+                if allow_o { add(format!("{base}o"), &mut out); }
+                add(format!("{base}e"), &mut out); // -e: entrambi i generi
+                if allow_a { add(format!("{base}a"), &mut out); }
+            }
+            if allow_o { add(format!("{stem}io"), &mut out); }
+        }
+    }
+    // plurale -e → -a | -o (+velare). "le piante"→pianta (femminile -a);
+    // il filtro di genere evita la falsa-ambiguità con "pianto" (-o maschile).
+    if let Some(stem) = w.strip_suffix('e') {
+        if stem.chars().count() >= 2 {
+            let allow_o = masc != Some(false);
+            let allow_a = masc != Some(true);
+            for base in std::iter::once(stem.to_string()).chain(soften(stem)) {
+                if allow_a { add(format!("{base}a"), &mut out); }
+                if allow_o { add(format!("{base}o"), &mut out); }
+            }
+        }
+    }
+    // femminile -a → -o (aggettivo: ampia→ampio)
+    if let Some(stem) = w.strip_suffix('a') {
+        if stem.chars().count() >= 2 {
+            add(format!("{stem}o"), &mut out);
+        }
+    }
+    out
+}
+
 /// Reverse lookup per verbi irregolari.
 fn lemmatize_irregular(w: &str) -> Option<LemmaResult> {
     use Person::*;
@@ -675,6 +1018,38 @@ fn lemmatize_irregular(w: &str) -> Option<LemmaResult> {
         "andremmo" => ("andare", FirstPlural,  Conditional),
         "andreste" => ("andare", SecondPlural, Conditional),
         "andrebbero"=> ("andare", ThirdPlural, Conditional),
+        // ── riuscire (presente irregolare: riesc-) ───────────────────────────
+        "riesco"    => ("riuscire", First,        Present),
+        "riesci"    => ("riuscire", Second,       Present),
+        "riesce"    => ("riuscire", Third,        Present),
+        "riusciamo" => ("riuscire", FirstPlural,  Present),
+        "riuscite"  => ("riuscire", SecondPlural, Present),
+        "riescono"  => ("riuscire", ThirdPlural,  Present),
+        // ── dovere ──────────────────────────────────────────────────────────
+        "devo"     => ("dovere", First,        Present),
+        "devi"     => ("dovere", Second,       Present),
+        "deve"     => ("dovere", Third,        Present),
+        "dobbiamo" => ("dovere", FirstPlural,  Present),
+        "dovete"   => ("dovere", SecondPlural, Present),
+        "devono"   => ("dovere", ThirdPlural,  Present),
+        "dovevo"   => ("dovere", First,        Imperfect),
+        "dovevi"   => ("dovere", Second,       Imperfect),
+        "doveva"   => ("dovere", Third,        Imperfect),
+        "dovevamo" => ("dovere", FirstPlural,  Imperfect),
+        "dovevate" => ("dovere", SecondPlural, Imperfect),
+        "dovevano" => ("dovere", ThirdPlural,  Imperfect),
+        "dovrò"    => ("dovere", First,        Future),
+        "dovrai"   => ("dovere", Second,       Future),
+        "dovrà"    => ("dovere", Third,        Future),
+        "dovremo"  => ("dovere", FirstPlural,  Future),
+        "dovrete"  => ("dovere", SecondPlural, Future),
+        "dovranno" => ("dovere", ThirdPlural,  Future),
+        "dovrei"   => ("dovere", First,        Conditional),
+        "dovresti" => ("dovere", Second,       Conditional),
+        "dovrebbe" => ("dovere", Third,        Conditional),
+        "dovremmo" => ("dovere", FirstPlural,  Conditional),
+        "dovreste" => ("dovere", SecondPlural, Conditional),
+        "dovrebbero"=> ("dovere", ThirdPlural, Conditional),
         // ── volere ──────────────────────────────────────────────────────────
         "voglio"   => ("volere", First,        Present),
         "vuoi"     => ("volere", Second,       Present),
@@ -1116,7 +1491,9 @@ pub fn detect_gender_number(word: &str) -> (Gender, Number) {
     if len >= 5 && (word.ends_with("ione") || word.ends_with("zione") || word.ends_with("sione")) {
         return (Gender::Femminile, Number::Singolare);
     }
-    if word.ends_with("tà") || word.ends_with("tà") {
+    // Nomi astratti in -tà / -tù accentata sono femminili (libertà, virtù,
+    // gioventù, schiavitù). Regola morfologica, non lista.
+    if word.ends_with("tà") || word.ends_with("tù") {
         return (Gender::Femminile, Number::Singolare);
     }
     if len >= 5 && word.ends_with("ezza") {
@@ -1206,6 +1583,28 @@ pub fn definite_article(word: &str) -> &'static str {
     italian_definite_article(word, gender, number)
 }
 
+/// Preposizione `di` contratta con l'articolo determinativo della parola:
+/// del / dello / della / dell' / dei / degli / delle. Restituisce la forma
+/// completa "preposizione + parola" (con elisione per dell'). Phase 84 (2b):
+/// risolve "di buio" → "del buio", "di futuro" → "del futuro".
+pub fn di_articulated(word: &str) -> String {
+    let prep = match definite_article(word) {
+        "il" => "del",
+        "lo" => "dello",
+        "la" => "della",
+        "l'" => "dell'",
+        "i" => "dei",
+        "gli" => "degli",
+        "le" => "delle",
+        _ => "di",
+    };
+    if prep == "dell'" {
+        format!("{}{}", prep, word)
+    } else {
+        format!("{} {}", prep, word)
+    }
+}
+
 fn italian_definite_article(word: &str, gender: Gender, number: Number) -> &'static str {
     let starts_vowel = word.chars().next()
         .map(|c| "aeiouàèéìòóùAEIOU".contains(c))
@@ -1282,7 +1681,9 @@ fn italian_indefinite_article(word: &str, gender: Gender, number: Number) -> &'s
 
     match (gender, number) {
         (Gender::Maschile, Number::Singolare) => {
-            if starts_vowel || needs_uno { "un" } else { "un" }
+            // "uno" davanti a s+consonante / z / gn / ps / pn / x / y;
+            // "un" altrimenti (incluso davanti a vocale: "un amico").
+            if needs_uno && !starts_vowel { "uno" } else { "un" }
         }
         (Gender::Maschile, Number::Plurale) => "dei",
         (Gender::Femminile, Number::Singolare) => {
@@ -1479,6 +1880,109 @@ mod tests {
     }
 
     #[test]
+    fn test_lemma_candidates_nome_plurale() {
+        // -i → -e / -o / -a : il candidato giusto è fra quelli generati (gate §11)
+        assert!(lemma_candidates("accidenti").contains(&"accidente".to_string()));
+        assert!(lemma_candidates("api").contains(&"ape".to_string()));
+        assert!(lemma_candidates("libri").contains(&"libro".to_string()));
+        // -e → -a (femminile plurale)
+        assert!(lemma_candidates("aquile").contains(&"aquila".to_string()));
+        assert!(lemma_candidates("case").contains(&"casa".to_string()));
+    }
+
+    #[test]
+    fn test_kg_validated_lemma_onesto_no_trucchi() {
+        // DISAMBIGUO: un solo candidato nel dizionario → lemmatizza.
+        let solo_nomi = |w: &str| ["cane", "idea", "opera", "amare"].contains(&w);
+        assert_eq!(kg_validated_lemma("cani", solo_nomi), "cane");
+        assert_eq!(kg_validated_lemma("idee", solo_nomi), "idea");
+        assert_eq!(kg_validated_lemma("opere", solo_nomi), "opera");
+        assert_eq!(kg_validated_lemma("amano", solo_nomi), "amare"); // verbo confermato
+
+        // AMBIGUO: "mondare"/"possibilare" SONO nel dizionario (verbi reali) →
+        // NON si indovina (niente trucco di distanza): si DEFERISCE alla
+        // superficie, deciderà il contesto (analisi logica clausa-aware).
+        let con_verbi = |w: &str| {
+            ["mondo", "mondare", "possibile", "possibilare"].contains(&w)
+        };
+        assert_eq!(kg_validated_lemma("mondi", con_verbi), "mondi");
+        assert_eq!(kg_validated_lemma("possibili", con_verbi), "possibili");
+
+        // Già lemma → invariata. Zero conferme → superficie, MAI infinito.
+        assert_eq!(kg_validated_lemma("mondo", con_verbi), "mondo");
+        assert_eq!(kg_validated_lemma("mondi", |_| false), "mondi");
+    }
+
+    #[test]
+    fn test_kg_validated_nominal_disambigua_per_ruolo() {
+        // Stesso dizionario del test sopra: "mondo" E "mondare" entrambi noti.
+        // Ma SAPENDO che il token è un argomento (ruolo nominale), si generano
+        // SOLO candidati nome → "mondare" non è nemmeno considerato → "mondi"
+        // si riduce a "mondo" senza ambiguità. È la disambiguazione PER RUOLO,
+        // non un trucco morfologico: il chunker ha già detto "questo è un nome".
+        let con_verbi = |w: &str| {
+            ["mondo", "mondare", "possibile", "possibilare"].contains(&w)
+        };
+        assert_eq!(kg_validated_nominal("mondi", con_verbi), "mondo");
+        assert_eq!(kg_validated_nominal("possibili", con_verbi), "possibile");
+        // niente candidati verbali: nominal_lemma_candidates non produce infiniti
+        assert!(!nominal_lemma_candidates("mondi").iter().any(|c| c.ends_with("are")));
+        // zero conferme → superficie (mai infinito inventato)
+        assert_eq!(kg_validated_nominal("mondi", |_| false), "mondi");
+    }
+
+    #[test]
+    fn test_kg_validated_nominal_gendered_articolo() {
+        // "gatto" E "gatta" entrambi nel KG → senza genere, "gatti" è ambiguo
+        // (gatto vs gatta) → deferisce. Col genere dall'articolo si scioglie.
+        let dict = |w: &str| ["gatto", "gatta", "arma", "armo"].contains(&w);
+        // senza genere: ambiguo → superficie
+        assert_eq!(kg_validated_nominal("gatti", dict), "gatti");
+        // "i/gli gatti" → maschile → mai -a → solo "gatto" confermato → riduce
+        assert_eq!(kg_validated_nominal_gendered("gatti", Some(true), dict), "gatto");
+        // "le armi" → femminile → mai -o → solo "arma" confermato → riduce
+        assert_eq!(kg_validated_nominal_gendered("armi", Some(false), dict), "arma");
+        // plurale -e: "le piante" → femminile → "pianta" (non l'ambiguo "pianto")
+        let dict2 = |w: &str| ["pianta", "pianto"].contains(&w);
+        assert_eq!(kg_validated_nominal("piante", dict2), "piante"); // ambiguo senza genere
+        assert_eq!(kg_validated_nominal_gendered("piante", Some(false), dict2), "pianta");
+        // genere ignoto (None) = comportamento invariato (deferisce)
+        assert_eq!(kg_validated_nominal_gendered("gatti", None, dict), "gatti");
+        // mai infiniti inventati e mai conferme dal nulla
+        assert_eq!(kg_validated_nominal_gendered("gatti", Some(true), |_| false), "gatti");
+    }
+
+    #[test]
+    fn test_lemma_candidates_aggettivo() {
+        // superlativo assoluto → base
+        assert!(lemma_candidates("altissimo").contains(&"alto".to_string()));
+        assert!(lemma_candidates("agitatissimo").contains(&"agitato".to_string()));
+        assert!(lemma_candidates("grandissimo").contains(&"grande".to_string()));
+        // femminile → maschile (base)
+        assert!(lemma_candidates("ampia").contains(&"ampio".to_string()));
+    }
+
+    #[test]
+    fn test_lemma_candidates_verbo_finito() {
+        // 1ª singolare presente -o
+        assert!(lemma_candidates("abbacchio").contains(&"abbacchiare".to_string()));
+        // gerundio
+        assert!(lemma_candidates("amando").contains(&"amare".to_string()));
+        assert!(lemma_candidates("agendo").contains(&"agire".to_string()));
+        // 3ª singolare presente -ere
+        assert!(lemma_candidates("affligge").contains(&"affliggere".to_string()));
+        // participio irregolare (coerente con lemmatize)
+        assert!(lemma_candidates("accolta").contains(&"accogliere".to_string()));
+    }
+
+    #[test]
+    fn test_lemma_candidates_non_riduce_se_stesso() {
+        // la forma non deve mai comparire fra i propri candidati
+        assert!(!lemma_candidates("casa").contains(&"casa".to_string()));
+        assert!(!lemma_candidates("amare").contains(&"amare".to_string()));
+    }
+
+    #[test]
     fn test_lemmatize_imperfect() {
         let r = lemmatize("sentivo").unwrap();
         assert_eq!(r.infinitive, "sentire");
@@ -1530,6 +2034,26 @@ mod tests {
         assert!(lemmatize("casa").is_none());
         assert!(lemmatize("felice").is_none());
         assert!(lemmatize("io").is_none());
+    }
+
+    #[test]
+    fn test_lemmatize_participio_irregolare() {
+        // Phase 86 #3
+        assert_eq!(lemmatize("preso").unwrap().infinitive, "prendere");
+        assert_eq!(lemmatize("presa").unwrap().infinitive, "prendere");
+        assert_eq!(lemmatize("scritto").unwrap().infinitive, "scrivere");
+        assert_eq!(lemmatize("accolto").unwrap().infinitive, "accogliere");
+        assert_eq!(lemmatize("aperto").unwrap().infinitive, "aprire");
+    }
+
+    #[test]
+    fn test_lemmatize_enclitico_riflessivo() {
+        // Phase 86 §2-bis
+        assert_eq!(lemmatize("abbandonarsi").unwrap().infinitive, "abbandonare");
+        assert_eq!(lemmatize("andarci").unwrap().infinitive, "andare");
+        assert_eq!(lemmatize("abbellirsi").unwrap().infinitive, "abbellire");
+        // guard anti-falso-positivo: "corsi"→"cor"→"core"(ore) NON è infinito → rifiutato dall'enclitico
+        assert_ne!(lemmatize("corsi").map(|r| r.infinitive), Some("core".to_string()));
     }
 
     #[test]

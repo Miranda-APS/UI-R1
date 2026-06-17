@@ -102,6 +102,12 @@ pub enum EngineCommand {
         illumination: String,
         reply: oneshot::Sender<bool>,
     },
+    /// Phase 86 — UI-r1 prova a collocare una parola DA SOLA: cammino multi-hop
+    /// tipato verso un'ancora fondata (vista Stato interno, auto-chiarimento).
+    ExploreWord {
+        word: String,
+        reply: oneshot::Sender<ExploreDto>,
+    },
     /// Recupera le incertezze aperte dell'entità (per la UI)
     GetOpenQuestions {
         reply: oneshot::Sender<Vec<UncertaintyDto>>,
@@ -161,6 +167,16 @@ pub enum EngineCommand {
         via: Option<String>,
         confidence: Option<f32>,
         reply: oneshot::Sender<bool>,
+    },
+    /// Phase 84: l'utente comunica come avrebbe voluto sentire la risposta.
+    /// Il sistema estrae parole-contenuto, applica triple specializzate o
+    /// modula confidence, registra il fatto nello SpeakerProfile.
+    Correct {
+        input: String,
+        given: String,
+        wanted: String,
+        context: Option<String>,
+        reply: oneshot::Sender<CorrectDto>,
     },
     /// Rimuove una relazione specifica (soggetto, tipo, oggetto)
     DeleteWordRelation {
@@ -226,9 +242,33 @@ pub enum EngineCommand {
         word: String,
         reply: oneshot::Sender<ConceptDto>,
     },
+    /// P1 (Tsunami): comprensione STATELESS di un testo isolato. Non muta
+    /// l'engine (no tick, no NarrativeSelf, no SpeakerProfile, no PF1): è una
+    /// lettura pura del KG. Per analizzare titoli-task isolati o ogni analisi
+    /// puntuale senza contaminazione fra chiamate (al contrario di /api/input,
+    /// che accumula SpeakerProfile/closure fra i turni).
+    Comprehend {
+        text: String,
+        reply: oneshot::Sender<ComprehendDto>,
+    },
     /// Stato completo del SelfModel (credenze, valori, incertezze)
     GetSelf {
         reply: oneshot::Sender<SelfDto>,
+    },
+    /// P2 (Tsunami): il ritratto-utente cumulativo (SpeakerProfile) — read-only.
+    /// La memoria del parlante persistita cross-sessione: chi è, cosa ha detto,
+    /// cosa resta aperto, dove ha corretto. Esposizione ricca per il companion.
+    GetSpeakerProfile {
+        reply: oneshot::Sender<SpeakerProfileDto>,
+    },
+    /// P2 (Tsunami): forza la persistenza dello stato vissuto nel `.bin`
+    /// (formato che il loader RILEGGE al boot — `/api/save` scrive solo il JSON
+    /// legacy, ignorato in presenza del .bin). Include SpeakerProfile, narrativa,
+    /// identità, simplessi, lessico. L'app lo chiama sui lifecycle event
+    /// (onPause/onStop), NON per turno: il .bin è grosso (decine di MB).
+    /// NON riscrive il KG (immutato fuori dalla curation).
+    Persist {
+        reply: oneshot::Sender<bool>,
     },
     /// Episodi semantici recenti
     GetEpisodes {
@@ -406,6 +446,17 @@ pub enum EngineCommand {
         function_fractal_name: String,
         reply: oneshot::Sender<Result<AddGrammarSimplexResponse, String>>,
     },
+
+    // === IAm-gotchi (glass-box) — Step 5: correzione del modello-dell'Altro ===
+    /// L'utente corregge l'intento attribuito all'Altro (+ valenza opzionale).
+    /// Nudgia gli EMA dell'interlocutor nel quadrante target di attribute_intent,
+    /// poi persiste via cura_save. Vedi InterlocutorModel::apply_intent_correction.
+    CorrectInterlocutor {
+        intent: String,
+        emotional_valence: Option<f64>,
+        reply: oneshot::Sender<bool>,
+    },
+    // === fine IAm-gotchi ===
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -467,7 +518,7 @@ pub struct RelationTargetDto {
     pub confidence: f32,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, Default)]
 pub struct SceneUnderstandingDto {
     /// Ruolo sintattico: "Statement" | "Question" | "Exclamation"
     pub syntactic_role: String,
@@ -737,6 +788,181 @@ pub struct InputResponse {
     /// (object_in_kg / via_in_kg), e quali contraddizioni `OppositeOf`
     /// emergono. È l'ancoraggio strutturale della frase al mondo.
     pub kg_confrontation: Option<KgConfrontationDto>,
+    /// Phase 86+: il BISOGNO che l'input ha aperto nel campo — il segnale
+    /// PRINCIPALE per Tsunami. L'app lo mappa su una feature/azione (NON su una
+    /// chat): `strutturare`→ordina il dump, `capire`→la domanda che sblocca,
+    /// `co-regolare`→calma la UI, `esternalizzare-memoria`→riemergi un fatto, ecc.
+    pub need: Option<NeedDto>,
+    /// Phase 86+ (multi-locus): TUTTE le proposizioni dell'enunciato, una per
+    /// clausola. Per i dump ("devo X e comprare Y e non ho finito Z") l'app le
+    /// mostra come item separati. La primaria è marcata `is_primary`.
+    pub propositions: Vec<ClausePropositionDto>,
+}
+
+/// Il bisogno dominante + la classifica (per ispezione/diagnostica).
+#[derive(Serialize, Clone, Debug)]
+pub struct NeedDto {
+    pub dominant: String,
+    pub intensity: f64,
+    pub ranked: Vec<NeedRankDto>,
+    /// Il *perché*: i segnali di campo che hanno prodotto questo bisogno. Rende
+    /// il bisogno esplorabile invece che un'etichetta opaca.
+    pub signals: NeedSignalsDto,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct NeedRankDto {
+    pub need: String,
+    pub intensity: f64,
+}
+
+/// I segnali grezzi che alimentano la lettura del bisogno (need.rs::NeedSignals).
+/// Ogni campo è una quantità di campo, non una soglia: il bisogno dominante è
+/// `argmax` delle intensità che questi segnali generano.
+#[derive(Serialize, Clone, Debug)]
+pub struct NeedSignalsDto {
+    /// Nodi-contenuto che non raggiungono ancora un'ancora.
+    pub ungrounded_count: usize,
+    /// Totale nodi-contenuto (per normalizzare l'ungrounded).
+    pub content_count: usize,
+    /// Esiste un vuoto dialogico PROP-driven (slot non saturo)?
+    pub has_dialogic_gap: bool,
+    /// Un gap aperto in un turno precedente si è chiuso ORA?
+    pub closes_prior_gap: bool,
+    /// Confronto col mondo: 0=conferma/n.a., ~0.6=novità, 1.0=contraddizione.
+    pub world_confront: f64,
+    /// Il mondo CONFERMA il claim (la triple esiste già nel kg_sem).
+    pub world_confirm: f64,
+    /// Salienza della grana del sé toccata dalla frase.
+    pub self_salience: f64,
+    /// Sovraccarico (tipicamente 1 - coherence_integrity).
+    pub overload: f64,
+    /// Rilevanza di un fatto del parlante che riaffiora.
+    pub memory_resurfaced: f64,
+    /// Assenza percepita al ritorno.
+    pub absence: f64,
+    /// Numero di loci/componenti sconnesse (1 = monolocus).
+    pub locus_count: usize,
+}
+
+/// Una proposizione ancorata alla sua clausola (multi-locus).
+#[derive(Serialize, Clone, Debug)]
+pub struct ClausePropositionDto {
+    pub proposition: Option<SentencePropositionDto>,
+    pub subordinate: bool,
+    pub is_primary: bool,
+}
+
+pub fn need_to_dto(n: &crate::topology::need::NeedReading) -> NeedDto {
+    let s = &n.signals;
+    NeedDto {
+        dominant: n.dominant.as_str().to_string(),
+        intensity: n.intensity,
+        ranked: n.ranked.iter()
+            .filter(|(_, i)| *i > 0.0)
+            .map(|(nd, i)| NeedRankDto { need: nd.as_str().to_string(), intensity: *i })
+            .collect(),
+        signals: NeedSignalsDto {
+            ungrounded_count: s.ungrounded_count,
+            content_count: s.content_count,
+            has_dialogic_gap: s.has_dialogic_gap,
+            closes_prior_gap: s.closes_prior_gap,
+            world_confront: s.world_confront,
+            world_confirm: s.world_confirm,
+            self_salience: s.self_salience,
+            overload: s.overload,
+            memory_resurfaced: s.memory_resurfaced,
+            absence: s.absence,
+            locus_count: s.locus_count,
+        },
+    }
+}
+
+pub fn clause_props_to_dto(
+    props: &[crate::topology::sentence_proposition::ClauseProposition],
+) -> Vec<ClausePropositionDto> {
+    let primary = crate::topology::sentence_proposition::primary_index(props);
+    props.iter().enumerate().map(|(i, c)| ClausePropositionDto {
+        proposition: c.prop.as_ref().map(sentence_proposition_to_dto),
+        subordinate: c.subordinate,
+        is_primary: Some(i) == primary,
+    }).collect()
+}
+
+// NB: `coverage` + `saturation` (Gate di Comprensione) sono esposti da
+// `/api/comprehend`. Doc: docs/raw/architettura/gate_di_comprensione.md.
+//
+/// P1 (Tsunami): risultato della comprensione STATELESS di un testo isolato.
+/// Stessi DTO della comprensione di `/api/input`, ma ottenuti SENZA mutare lo
+/// stato dell'engine. L'app lo usa per il task_type del Mental Inbox e per ogni
+/// analisi puntuale; i campi turn-relazionali (closure di un turno precedente)
+/// sono per costruzione assenti (un testo isolato non ha un "prima").
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct ComprehendDto {
+    /// Il testo analizzato (eco, per correlazione lato app).
+    pub text: String,
+    /// Lemmi/forme-base normalizzate via KG (mai infiniti inventati).
+    pub lemmas: Vec<String>,
+    /// TUTTE le proposizioni dell'enunciato, una per clausola (multi-locus).
+    /// La primaria è marcata `is_primary`.
+    pub propositions: Vec<ClausePropositionDto>,
+    /// La proposizione PRIMARIA, isolata (comodità: evita di cercare il flag).
+    pub primary: Option<SentencePropositionDto>,
+    /// Ancoraggio della primaria al kg_sem (object/via nel KG, contraddizioni).
+    pub kg_confrontation: Option<KgConfrontationDto>,
+    /// Il bisogno che l'enunciato apre, calcolato dai soli segnali derivabili
+    /// staticamente (grounding, confronto col mondo, salienza del sé, gap
+    /// dialogico, multi-locus). I segnali multi-turno (closure, memoria,
+    /// assenza, sovraccarico) sono 0 per definizione in modalità stateless.
+    pub need: Option<NeedDto>,
+    /// Comprensione per-parola dal KG (IS_A, relazioni, catene inferenziali):
+    /// la materia per arricchire il task_type.
+    pub understanding: SceneUnderstandingDto,
+    /// COPERTURA per-token (Gate di Comprensione, 2026-06-15): ogni parola
+    /// dell'input ha uno stato (C1 — nessun punto cieco). Vedi
+    /// `docs/raw/architettura/gate_di_comprensione.md`.
+    pub coverage: Vec<TokenCoverageDto>,
+    /// VERDETTO di saturazione (C1–C4): quanto la comprensione è "satura".
+    pub saturation: SaturationDto,
+}
+
+/// Copertura di un singolo token: lo stato di comprensione di OGNI parola
+/// dell'input (C1, nessun punto cieco). I DUE ASSI: `known` (conoscenza
+/// generale, "sa") vs `bound` (comprensione in QUESTA frase, "ha compreso qui").
+#[derive(Serialize, Clone, Debug)]
+pub struct TokenCoverageDto {
+    /// Forma di superficie (così come scritta).
+    pub token: String,
+    /// Forma-base normalizzata via KG.
+    pub lemma: String,
+    /// "compreso" (✅) | "parziale" (🟡) | "ignoto" (🔴).
+    pub status: String,
+    /// Ruolo strutturale nella frase (soggetto/verbo/oggetto/specificazione/
+    /// la classe grammaticale per le parole funzionali, o "—").
+    pub role: String,
+    /// Perché questo stato (per giallo/rosso: cosa manca).
+    pub reason: String,
+    /// Asse CONOSCENZA: la parola è nel grafo / lessico stabile.
+    pub known: bool,
+    /// Profondità della conoscenza generale (numero di archi KG).
+    pub arc_count: usize,
+    /// Asse COMPRENSIONE: il token è legato alla proposizione di QUESTA frase
+    /// (ruolo determinato), non solo conosciuto in astratto.
+    pub bound: bool,
+}
+
+/// Verdetto di saturazione (C1–C4): rapporto di copertura, MAI una soglia
+/// inventata. "piena" = tutto legato e nessuno slot aperto; "parziale" = legato
+/// ma con gap/ignoti; "non-comprensibile" = nessun ancoraggio strutturale.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct SaturationDto {
+    pub verdict: String,
+    pub total: usize,
+    pub compreso: usize,
+    pub parziale: usize,
+    pub ignoto: usize,
+    /// Slot della proposizione non saturi (i gap dichiarati — C2/C4).
+    pub open_slots: Vec<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -799,7 +1025,7 @@ pub struct InferenceDto {
     pub strength: f32,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, Default)]
 pub struct SpeakerProfileDto {
     pub turn_count: usize,
     /// Phase 73: nome del parlante se si è presentato.
@@ -807,12 +1033,26 @@ pub struct SpeakerProfileDto {
     pub self_facts: Vec<SpokenFactDto>,
     pub entity_facts: Vec<SpokenFactDto>,
     pub open_questions: Vec<OpenQuestionDto>,
-    /// Top-10 concetti menzionati ordinati per conteggio.
+    /// Concetti menzionati ordinati per conteggio (fino a 30).
     pub top_mentioned: Vec<(String, u32)>,
     /// Gap di conoscenza ancora aperti.
     pub open_gaps: Vec<KnowledgeGapDto>,
     /// Gap che sono stati chiusi (per visualizzare la narrativa che si compone).
     pub closed_gaps: Vec<KnowledgeGapDto>,
+    /// P2 (Tsunami): correzioni ricevute dal parlante — traccia narrativa di
+    /// "qui mi hai corretto" (materia per il rilevatore-pattern-utente lato app).
+    pub corrections: Vec<CorrectionFactDto>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct CorrectionFactDto {
+    pub turn: usize,
+    pub input: String,
+    pub given: String,
+    pub wanted: String,
+    pub via_context: Option<String>,
+    pub positive_words: Vec<String>,
+    pub negative_words: Vec<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -838,6 +1078,10 @@ pub struct KnowledgeGapDto {
     pub trigger: String,
     pub gap_kind: String,
     pub turn: usize,
+    /// La parola che ha colmato il vuoto, se chiuso (es. "buio" per una paura).
+    pub closed_by: Option<String>,
+    /// Turno in cui il vuoto è stato colmato.
+    pub closed_at_turn: Option<usize>,
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -871,7 +1115,15 @@ pub struct SentencePropositionDto {
     pub object_kind: String,
     pub object_name: String,
     pub via: Option<String>,
+    /// Lemma del verbo di superficie (es. "uccidere") quando la relazione è
+    /// realizzata da un verbo lessicale; `None` per le copule. La `relation`
+    /// resta il tipo, questo è il verbo concreto compreso.
+    pub verb_lemma: Option<String>,
     pub polarity: bool,
+    /// Soggetto di superficie recuperato dal pro-drop ("vogliamo"→"noi",
+    /// "devo"→"io"): il soggetto celato reso esplicito. `None` per i soggetti
+    /// del mondo (in `subject_name`) o le domande.
+    pub subject_surface: Option<String>,
 }
 
 /// Confronto fra la PROP e il kg_sem. Vedi
@@ -912,7 +1164,9 @@ pub fn sentence_proposition_to_dto(
         object_kind,
         object_name,
         via: prop.via.clone(),
+        verb_lemma: prop.verb_lemma.clone(),
         polarity: prop.polarity,
+        subject_surface: prop.subject_surface.clone(),
     }
 }
 
@@ -1048,6 +1302,8 @@ pub struct ReportDto {
     pub total_perturbations: u64,
     pub vocabulary_size: usize,
     pub emergent_dimensions: usize,
+    /// Archi del KG semantico — per le stat dinamiche della home (Tier 1.5).
+    pub kg_edge_count: usize,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -1320,6 +1576,28 @@ pub struct WordNeighborsDto {
     pub neighbors: Vec<WordNeighborDto>,
 }
 
+/// Phase 86 — il cammino multi-hop con cui UI-r1 prova a collocare una parola
+/// (auto-chiarimento, vista Stato interno). `ground` = come si è fondata
+/// ("attrattore"/"sé"/"non raggiunta"); `reached` = ha trovato un'ancora.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct ExploreDto {
+    pub from: String,
+    pub ground: String,
+    pub reached: bool,
+    pub steps: Vec<ExploreStepDto>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct ExploreStepDto {
+    /// Relazione tipata (forma Debug: "IsA", "Causes", …).
+    pub relation: String,
+    /// true = arco percorso in avanti (from→to); false = a ritroso (to←from).
+    pub forward: bool,
+    pub via: Option<String>,
+    pub to: String,
+    pub confidence: f32,
+}
+
 #[derive(Serialize, Clone, Debug)]
 pub struct WordNeighborDto {
     pub word: String,
@@ -1425,6 +1703,16 @@ pub struct WordConnectBody {
     pub via: Option<String>,
     pub confidence: Option<f32>,
 }
+
+// === IAm-gotchi (glass-box) — Step 5 ===
+#[derive(Deserialize)]
+pub struct CorrectInterlocutorBody {
+    /// Intento corretto: "Seeking" | "Teaching" | "Challenging" | "Connecting".
+    pub intent: String,
+    /// Valenza emotiva dell'Altro [-1, +1], opzionale.
+    pub emotional_valence: Option<f64>,
+}
+// === fine IAm-gotchi ===
 
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct WordListDto {
@@ -2068,4 +2356,43 @@ pub struct RecentEpisodeDto {
 pub struct RecentEpisodesDto {
     pub episodes: Vec<RecentEpisodeDto>,
     pub total_count: usize,
+}
+
+// ─── Phase 84: Correzione ────────────────────────────────────────────────────
+
+/// Body di `POST /api/correct`.
+#[derive(Deserialize)]
+pub struct CorrectBody {
+    /// L'input dell'utente che aveva provocato la risposta.
+    pub input: String,
+    /// La risposta che UI-r1 ha dato e che l'utente vuole correggere.
+    pub given: String,
+    /// La risposta che l'utente avrebbe voluto sentire.
+    pub wanted: String,
+    /// Contesto opzionale (una parola o breve frase) che spiega il "perche'".
+    /// Se presente, viene usato come `via` delle triple specializzate.
+    pub context: Option<String>,
+}
+
+/// Risposta di `POST /api/correct`. Descrive cosa e' cambiato in modo che il
+/// frontend possa raccontarlo all'utente (e aprire il modal di educazione
+/// se sono state create parole nuove).
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct CorrectDto {
+    pub accepted: bool,
+    /// Parole preferite (estratte da `wanted`, assenti in `given`).
+    pub positive_words: Vec<String>,
+    /// Parole evitate (in `given`, assenti in `wanted`).
+    pub negative_words: Vec<String>,
+    /// Categorie semantiche toccate (IS_A target).
+    pub categories_affected: Vec<String>,
+    /// Parole appena create nel KG (la via era sconosciuta, ad esempio).
+    /// Il frontend usa questo per aprire la scheda "spiegami X".
+    pub new_words_created: Vec<String>,
+    /// Triple aggiunte (human-readable).
+    pub triples_added: Vec<String>,
+    /// Confidence modificate (human-readable).
+    pub confidences_changed: Vec<String>,
+    /// Messaggio sintetico per l'utente.
+    pub message: String,
 }

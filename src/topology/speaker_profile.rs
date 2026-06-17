@@ -126,6 +126,34 @@ pub struct SpeakerProfile {
     pub gaps: Vec<KnowledgeGap>,
     /// Numero di turni del parlante osservati.
     pub turn_count: usize,
+    /// Phase 84: correzioni ricevute dal parlante.
+    /// Ogni correzione è un fatto strutturale: l'utente ha indicato come
+    /// avrebbe voluto sentire una risposta. Le triple sono già state
+    /// applicate al KG; qui resta la traccia narrativa di "qui ho sbagliato".
+    #[serde(default)]
+    pub corrections: Vec<CorrectionFact>,
+}
+
+/// Phase 84: una correzione ricevuta. Tracciata per memoria narrativa, NON
+/// per dispatch comportamentale. Le modifiche reali al sistema sono nel KG.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorrectionFact {
+    /// Turno in cui la correzione è arrivata.
+    pub turn: usize,
+    /// Input dell'utente che ha provocato la risposta sbagliata.
+    pub input: String,
+    /// Risposta che UI-r1 aveva dato.
+    pub given: String,
+    /// Risposta che l'utente avrebbe voluto.
+    pub wanted: String,
+    /// Eventuale contesto-via fornito dall'utente per specializzare la
+    /// correzione (es. "amico" per insegnare che "ciao" è un saluto via amico).
+    /// `None` = correzione senza via, modifica via confidence.
+    pub via_context: Option<String>,
+    /// Parole-contenuto preferite (estratte da `wanted`, non in `given`).
+    pub positive_words: Vec<String>,
+    /// Parole-contenuto evitate (in `given`, non in `wanted`).
+    pub negative_words: Vec<String>,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -141,6 +169,17 @@ impl SpeakerProfile {
         if self.name.is_none() {
             self.name = Some(name.to_string());
         }
+    }
+
+    /// Phase 84: registra una correzione ricevuta come fatto narrativo.
+    /// Le modifiche reali al KG sono già state applicate dal caller — qui
+    /// salviamo solo la traccia "in questo turno l'utente mi ha corretto".
+    pub fn register_correction(&mut self, fact: CorrectionFact) {
+        // Cap a 64 correzioni (più recenti) per non gonfiare il .bin.
+        if self.corrections.len() >= 64 {
+            self.corrections.remove(0);
+        }
+        self.corrections.push(fact);
     }
 
     /// Osserva un nuovo turno e aggiorna il profilo.
@@ -160,13 +199,22 @@ impl SpeakerProfile {
         self.turn_count += 1;
         let turn = self.turn_count;
 
-        // ── 1. Mentioned — incrementa per ogni radice non-funzionale ──────
+        // ── 1. Mentioned — incrementa per ogni radice ────────────────────────
+        //    (Il filtro anti-spazzatura vive a monte, dove i root sono costruiti:
+        //    qui i root arrivano già puliti.)
         for r in &kg_facts.roots {
             *self.mentioned.entry(r.clone()).or_insert(0) += 1;
         }
 
         // ── 2. SpokenFact — dal SpeakerClaim se presente ──────────────────
         if let Some(sc) = speaker_claim {
+            // Auto-presentazione ("mi chiamo X"): il verbo è denominativo →
+            // registra il NOME del parlante (prima presentazione vince).
+            if matches!(sc.agent, ClaimAgent::Speaker)
+                && sc.verb_category.as_deref() == Some("denominativo")
+            {
+                self.set_name_if_unset(&sc.predicate);
+            }
             let kind = match sc.kind {
                 ClaimKind::Identity => FactKind::Identity,
                 ClaimKind::Feeling  => FactKind::Feeling,
@@ -377,6 +425,8 @@ mod tests {
             predicate: "paura".to_string(),
             verb_category: Some("copula".to_string()),
             complement: None,
+            verb_lemma: None,
+            subject_surface: None,
         };
         p.observe_turn("ho paura", &f, Some(&sc), &kg);
         assert_eq!(p.self_facts.len(), 1);
@@ -395,6 +445,8 @@ mod tests {
             predicate: "bello".to_string(),
             verb_category: Some("copula".to_string()),
             complement: None,
+            verb_lemma: None,
+            subject_surface: None,
         };
         p.observe_turn("tu sei bello", &f, Some(&sc), &kg);
         assert_eq!(p.entity_facts.len(), 1);
@@ -424,6 +476,8 @@ mod tests {
             predicate: "paura".to_string(),
             verb_category: Some("copula".to_string()),
             complement: None,
+            verb_lemma: None,
+            subject_surface: None,
         };
         p.observe_turn("ho paura", &f, Some(&sc), &kg);
         assert!(p.open_gaps().any(|g| g.trigger == "paura" && g.gap_kind == "emotion_object"),
@@ -443,6 +497,8 @@ mod tests {
             predicate: "paura".to_string(),
             verb_category: Some("copula".to_string()),
             complement: None,
+            verb_lemma: None,
+            subject_surface: None,
         };
         p.observe_turn("ho paura", &f1, Some(&sc), &kg);
         // Turn 2: "del buio" — gap dovrebbe chiudersi (l'oggetto della paura è specificato)

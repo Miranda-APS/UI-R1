@@ -507,6 +507,12 @@ pub struct PrometeoTopologyEngine {
     /// Parole contenuto dell'ultimo input ricevuto.
     /// Usate per il recall contestuale del knowledge_base (boost leggero nel campo).
     pub last_input_words: Vec<String>,
+    /// Phase 86+: flusso di token COMPLETO dell'ultimo input (incluse le parole
+    /// di un carattere: "e", "o", "a", "è"), che `last_input_words` scarta. Serve
+    /// all'analisi logica clausa-aware: le congiunzioni e le preposizioni brevi
+    /// sono grammaticalmente essenziali (la coordinazione di un dump "X e Y e Z"
+    /// va sulle "e"). Non serializzato.
+    pub last_input_tokens_full: Vec<String>,
     /// Parole usate nell'ultimo output generato.
     /// Aggiunte a echo_exclude nel turno successivo: Prometeo non ripete
     /// meccanicamente ciò che ha appena detto (né ciò che l'utente ha detto).
@@ -578,10 +584,39 @@ pub struct PrometeoTopologyEngine {
     /// possono operare invece di ri-parsare token. Non serializzata.
     pub last_sentence_proposition: Option<crate::topology::sentence_proposition::SentenceProposition>,
 
+    /// Phase 86+ (multi-locus): TUTTE le proposizioni dell'enunciato, una per
+    /// clausola (chunker clausa-aware). `last_sentence_proposition` è la PRIMARIA
+    /// (prima clausola indipendente). Il numero di loci indipendenti con
+    /// proposizione alimenta il bisogno `Strutturare` (i dump). Non serializzata.
+    pub last_sentence_propositions: Vec<crate::topology::sentence_proposition::ClauseProposition>,
+
     /// Phase 81: confronto della proposizione col kg_sem (matches, object/via
     /// ancorati, contraddizioni leggere via OppositeOf). Calcolato a valle di
     /// `last_sentence_proposition`. Non serializzato.
     pub last_kg_confrontation: Option<crate::topology::sentence_proposition::KgConfrontation>,
+
+    /// Phase 85: confronto della proposizione col grafo del SÉ (kg_self) —
+    /// conflitti/risonanze con le convinzioni profonde. L'OPINIONE come secondo
+    /// legame. Calcolato a valle di `last_sentence_proposition`. Non serializzato.
+    pub last_self_confrontation: Option<crate::topology::sentence_proposition::SelfConfrontation>,
+
+    /// Phase 85 (Stage 3): i concetti del SÉ toccati negli ultimi turni
+    /// (window). Ogni set = i nodi di `kg_self` che la proposizione di quel
+    /// turno ha sfiorato. Session-scoped, NON serializzato — è memoria di
+    /// lavoro del dialogo, non stato persistente.
+    pub recent_self_themes: std::collections::VecDeque<std::collections::HashSet<String>>,
+
+    /// Phase 85 (Stage 3): continuità tematica del dialogo, da overlap dei
+    /// concetti-del-sé tra il turno corrente e il precedente (Jaccard). NON è
+    /// overlap di parole né di frattali — è "stiamo parlando ancora di qualcosa
+    /// che alla lente importa?". [0,1]. Non serializzato.
+    pub self_continuity: f64,
+
+    /// Phase 86+: il BISOGNO che l'ultimo input ha aperto nel campo (lettura di
+    /// stati esistenti — `comprensione_bisogno_atto.md`). Calcolato a valle di
+    /// comprehension_graph/confront/report/coerenza. OSSERVABILE per ora: non
+    /// ancora consumato dall'atto. Non serializzato.
+    pub last_need: Option<crate::topology::need::NeedReading>,
 
     /// Phase 83 — segnali grammaticali rilevati dal match dei simplessi
     /// grammaticali sul turno corrente. Coppie `(category, function_fractal_id)`
@@ -744,6 +779,111 @@ pub struct PrometeoTopologyEngine {
     /// le relazioni hanno funzione diversa. Insegnabile per triple,
     /// senza modifiche a Rust.
     pub kg_procedural: crate::topology::knowledge_graph::KnowledgeGraph,
+
+    /// Phase 85 — il grafo del SÉ: le convinzioni profonde come LENTE che
+    /// rifrange ogni comprensione. Caricato da `prometeo_kg_self.json` (file
+    /// gemello del kg_proc). Non serializzato nel `.bin` — vive nel suo JSON,
+    /// scritto SOLO per cristallizzazione validata (`crystallize_opinion`).
+    pub kg_self: crate::topology::kg_self::KgSelf,
+    /// Percorso del file `prometeo_kg_self.json` (per persistere le opinioni
+    /// cristallizzate). `None` finché il kg_self non è stato caricato da file.
+    pub kg_self_path: Option<std::path::PathBuf>,
+}
+
+/// Realizzazione grammaticale di un locus per l'enumerazione di `structure_voice`.
+/// FeelsAs → predicato nudo ("sopraffatto"); infinito verbale (-are/-ere/-ire,
+/// stem ≥3 — "dormire" sì, "mare" no) → nudo; altrimenti articolo determinativo.
+/// `input_article` è l'articolo che il PARLANTE ha usato ("il latte", "alle
+/// mail" → "le mail"): genere e numero letti dalla sua grammatica, non
+/// indovinati dalla morfologia (principio no-trucchi — stesso metodo di
+/// `article_gender`/P3). Fallback morfologico solo senza articolo in input.
+fn realize_locus(
+    obj: &str,
+    relation: crate::topology::relation::RelationType,
+    input_article: Option<&str>,
+) -> String {
+    use crate::topology::relation::RelationType;
+    if relation == RelationType::FeelsAs {
+        return obj.to_string();
+    }
+    let is_infinitive = obj.len() >= 6
+        && (obj.ends_with("are") || obj.ends_with("ere") || obj.ends_with("ire"));
+    if is_infinitive {
+        return obj.to_string();
+    }
+    match input_article {
+        Some("l'") => format!("l'{obj}"),
+        Some(art) => format!("{art} {obj}"),
+        None => crate::topology::grammar::with_definite_article(obj),
+    }
+}
+
+/// L'articolo determinativo che il parlante ha usato davanti a `target`
+/// nell'input, riportato alla forma semplice (le preposizioni articolate
+/// portano lo stesso genere/numero: "alle mail" → "le"). `None` se il token
+/// precedente non è un articolo né un'articolata — si userà la morfologia.
+fn input_article_for(tokens: &[String], target: &str) -> Option<&'static str> {
+    let t = target.to_lowercase();
+    let idx = tokens
+        .iter()
+        .position(|w| w.to_lowercase().trim_matches(|c: char| !c.is_alphabetic()) == t)?;
+    if idx == 0 {
+        return None;
+    }
+    let prev = tokens[idx - 1].to_lowercase();
+    let prev = prev.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'');
+    match prev {
+        "il" | "un" | "al" | "dal" | "del" | "nel" | "sul" => Some("il"),
+        "lo" | "uno" | "allo" | "dallo" | "dello" | "nello" | "sullo" => Some("lo"),
+        "la" | "una" | "alla" | "dalla" | "della" | "nella" | "sulla" => Some("la"),
+        "le" | "alle" | "dalle" | "delle" | "nelle" | "sulle" => Some("le"),
+        "i" | "ai" | "dai" | "dei" | "nei" | "sui" => Some("i"),
+        "gli" | "agli" | "dagli" | "degli" | "negli" | "sugli" => Some("gli"),
+        p if p.ends_with('\'') => Some("l'"),
+        _ => None,
+    }
+}
+
+/// L'oggetto realizzato con l'articolo che l'utente ha usato in input, accordato
+/// al nome (ridotto al singolare): "un cane"→"un cane", "una mela"→"una mela",
+/// "la tesi"→"la tesi". `None` se l'utente NON ha messo articolo (stati astratti:
+/// "ho paura"→nessun articolo, corretto). Preserva la distinzione conteggio/
+/// astratto SENZA indovinarla — la grammatica dell'utente l'ha già data.
+fn object_with_input_article(tokens: &[String], obj: &str) -> Option<String> {
+    let t = obj.to_lowercase();
+    let idx = tokens
+        .iter()
+        .position(|w| w.to_lowercase().trim_matches(|c: char| !c.is_alphabetic()) == t)?;
+    if idx == 0 {
+        return None;
+    }
+    let prev = tokens[idx - 1].to_lowercase();
+    let prev = prev.trim_matches(|c: char| !c.is_alphanumeric() && c != '\'');
+    // Riusa l'articolo LETTERALE dell'utente (il genere/numero li ha già azzeccati
+    // lui), così evitiamo i bug di gender-detection di `with_*_article`. Articoli
+    // singolari → "un cane"/"la tesi"; elisi → "l'amore"/"un'idea" senza spazio.
+    // Articoli plurali (i/gli/le) li saltiamo: l'oggetto è ridotto al singolare.
+    match prev {
+        "un" | "uno" | "una" | "il" | "lo" | "la" => Some(format!("{prev} {obj}")),
+        "un'" | "l'" => Some(format!("{prev}{obj}")),
+        _ => None,
+    }
+}
+
+/// Numerale cardinale italiano (morfologia, come le realizzazioni di
+/// `path_collapse`): 2..=9 in lettere, oltre in cifre.
+fn numeral_it(n: usize) -> String {
+    match n {
+        2 => "due".to_string(),
+        3 => "tre".to_string(),
+        4 => "quattro".to_string(),
+        5 => "cinque".to_string(),
+        6 => "sei".to_string(),
+        7 => "sette".to_string(),
+        8 => "otto".to_string(),
+        9 => "nove".to_string(),
+        _ => n.to_string(),
+    }
 }
 
 impl PrometeoTopologyEngine {
@@ -799,6 +939,7 @@ impl PrometeoTopologyEngine {
             conversation_turn_count: 0,
             knowledge_base: KnowledgeBase::new(),
             last_input_words: Vec::new(),
+            last_input_tokens_full: Vec::new(),
             last_generated_words: Vec::new(),
             pf_field: PrometeoField::empty(),
             pf_activation: ActivationState::new(0),
@@ -813,7 +954,12 @@ impl PrometeoTopologyEngine {
             conversation_window: std::collections::VecDeque::new(),
             last_input_reading: None,
             last_sentence_proposition: None,
+            last_sentence_propositions: Vec::new(),
             last_kg_confrontation: None,
+            last_self_confrontation: None,
+            recent_self_themes: std::collections::VecDeque::new(),
+            self_continuity: 0.0,
+            last_need: None,
             last_grammar_signals: Vec::new(),
             narrative_self: crate::topology::narrative::NarrativeSelf::new(),
             kg: KnowledgeGraph::new(),
@@ -845,6 +991,8 @@ impl PrometeoTopologyEngine {
             last_action_decision: None,
             self_profile: crate::topology::self_profile::SelfProfile::new(),
             kg_procedural: crate::topology::knowledge_graph::KnowledgeGraph::new(),
+            kg_self: crate::topology::kg_self::KgSelf::default(),
+            kg_self_path: None,
             instance_born: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -914,6 +1062,7 @@ impl PrometeoTopologyEngine {
             conversation_turn_count: 0,
             knowledge_base: KnowledgeBase::new(),
             last_input_words: Vec::new(),
+            last_input_tokens_full: Vec::new(),
             last_generated_words: Vec::new(),
             pf_field: PrometeoField::empty(),
             pf_activation: ActivationState::new(0),
@@ -928,7 +1077,12 @@ impl PrometeoTopologyEngine {
             conversation_window: std::collections::VecDeque::new(),
             last_input_reading: None,
             last_sentence_proposition: None,
+            last_sentence_propositions: Vec::new(),
             last_kg_confrontation: None,
+            last_self_confrontation: None,
+            recent_self_themes: std::collections::VecDeque::new(),
+            self_continuity: 0.0,
+            last_need: None,
             last_grammar_signals: Vec::new(),
             narrative_self: crate::topology::narrative::NarrativeSelf::new(),
             kg: KnowledgeGraph::new(),
@@ -960,6 +1114,8 @@ impl PrometeoTopologyEngine {
             last_action_decision: None,
             self_profile: crate::topology::self_profile::SelfProfile::new(),
             kg_procedural: crate::topology::knowledge_graph::KnowledgeGraph::new(),
+            kg_self: crate::topology::kg_self::KgSelf::default(),
+            kg_self_path: None,
             instance_born: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -1003,6 +1159,280 @@ impl PrometeoTopologyEngine {
                 }
             }
         }
+
+        // Phase 85: carica il grafo del SÉ dal file gemello (tollerante: se
+        // assente, kg_self resta vuoto e l'entità semplicemente non rifrange).
+        let self_path = path.with_file_name("prometeo_kg_self.json");
+        self.kg_self_path = Some(self_path.clone());
+        match crate::topology::kg_self::KgSelf::load_from_file(&self_path) {
+            Ok(kg) => {
+                self.kg_self = kg;
+                eprintln!(
+                    "[KG-SELF] caricato: {} pendenze (grana), {} opinioni",
+                    self.kg_self.pendenze.len(),
+                    self.kg_self.len()
+                );
+            }
+            Err(e) => eprintln!("[KG-SELF] {}", e),
+        }
+    }
+
+    /// Deriva i candidati-opinione (`self_audit`): risonanze, tensioni, epifanie
+    /// candidate fra la grana del sé e la struttura del mondo. Read-only — è la
+    /// proposta che la validazione umana giudica prima di cristallizzare.
+    pub fn self_audit(&self) -> crate::topology::self_audit::SelfAuditReport {
+        crate::topology::self_audit::self_audit(&self.kg_self, &self.kg)
+    }
+
+    /// Phase 86 — tentativo di auto-collocazione di una parola (vista Stato
+    /// interno): il cammino multi-hop tipato verso un'ancora che l'entità già
+    /// conosce (attrattore / nodo del sé). Read-only — è ciò che UI-r1 prova a
+    /// inferire DA SOLA prima di chiedere conferma all'umano.
+    pub fn explore_word(&self, word: &str) -> crate::topology::comprehension_path::TypedPath {
+        crate::topology::comprehension_path::ground_word(word, &self.kg, &self.kg_self)
+    }
+
+    /// **Cristallizza** un'opinione validata (Nome-del-Padre): l'edge entra nel
+    /// `kg_self` vivo (così `confront_with_self` lo trova già dal turno dopo) E
+    /// viene persistito nel JSON. È l'unico modo in cui un'opinione nasce: gated
+    /// da validazione umana, mai per-turno, mai assorbita dall'Altro. Ritorna
+    /// `Ok(false)` se l'opinione esisteva già (dedup), `Err` se il salvataggio
+    /// fallisce. Senza un path noto (kg_self mai caricato da file) → `Err`.
+    pub fn crystallize_opinion(
+        &mut self,
+        edge: crate::topology::kg_self::SelfEdge,
+    ) -> Result<bool, String> {
+        let added = self.kg_self.add_opinion(edge);
+        if !added {
+            return Ok(false);
+        }
+        match &self.kg_self_path {
+            Some(p) => self.kg_self.save_to_file(p).map(|_| true),
+            None => Err("kg_self non caricato da file: niente percorso per persistere".to_string()),
+        }
+    }
+
+    /// Phase 86 — Stadio 1: il grafo di comprensione (pathfinding tipato) della
+    /// proposizione dell'ultimo turno. Read-only, ispezionabile (`:explore`).
+    /// Non tocca lo stato: misura ciò che `receive()` ha già strutturato.
+    pub fn comprehension_graph(
+        &self,
+    ) -> Option<crate::topology::comprehension_path::ComprehensionGraph> {
+        let prop = self.last_sentence_proposition.as_ref()?;
+        Some(crate::topology::comprehension_path::explore(prop, &self.kg, &self.kg_self))
+    }
+
+    /// Phase 86+ (Anello 2): la VOCE dell'atto quando il bisogno è "posizionarsi"
+    /// su un claim del Mondo — il collasso del cammino saliente, deformato dalla
+    /// grana (`salient_grounding` preferisce i nodi-pendenza; la grana ha già
+    /// pesato `self_salience` che ha fatto vincere il bisogno). Solo
+    /// soggetto-Mondo; Speaker/Entity → `None` (fallback alla pipeline).
+    ///
+    /// **Anti-eco (riconcezione 2026-06-10)** — la posizione INGAGGIA il
+    /// confronto col mondo, non ricalca l'Altro:
+    /// - `KgConfrontation.matches == true` → la triple del claim esiste nel
+    ///   grafo dell'entità: ricollassarla è RICONOSCIMENTO fondato (eco
+    ///   legittima — è anche conoscenza sua).
+    /// - `matches == false` → il claim è NUOVO: ripeterlo sarebbe assenso
+    ///   simulato (la regressione "L'incertezza è un fallimento." ridetto come
+    ///   parola propria). La voce è il cammino di grounding più saliente —
+    ///   ciò che il SUO grafo sostiene sul tema, deformato dalla grana — o il
+    ///   silenzio onesto (`None` → fallback).
+    /// Mai la recita di un edge del sé (le opinioni pesano l'atto, non il testo).
+    fn position_voice(&self) -> Option<crate::topology::expression::Expression> {
+        use crate::topology::need::Need;
+        let need = self.last_need.as_ref()?;
+        let wants_position = matches!(need.dominant, Need::Posizionarsi);
+        // Riconoscere da CONFERMA del mondo (`world_confirm`): l'Altro asserisce
+        // una triple che il grafo dell'entità già tiene → restituirla è
+        // riconoscimento fondato. (Riconoscere da CLOSURE ha root=None — claim
+        // dello Speaker — e cade al pattern `riconoscimento`: nessun conflitto.)
+        let wants_recognition = matches!(need.dominant, Need::Riconoscere);
+        if !wants_position && !wants_recognition {
+            return None;
+        }
+        let g = self.comprehension_graph()?;
+        g.root.as_ref()?; // solo claim del Mondo
+        let claim_known = self
+            .last_kg_confrontation
+            .as_ref()
+            .map(|c| c.matches)
+            .unwrap_or(false);
+        if wants_recognition && !claim_known {
+            return None; // riconoscere-da-closure: lascia il pattern path
+        }
+        let text = if claim_known {
+            crate::topology::path_collapse::collapse(&g)?
+        } else {
+            crate::topology::path_collapse::collapse_grounding(&g)?
+        };
+        let words_used: Vec<String> = [g.root.clone(), g.target.clone(), g.via.clone()]
+            .into_iter()
+            .flatten()
+            .collect();
+        Some(crate::topology::expression::Expression { text, words_used })
+    }
+
+    /// Phase 86+ (Anello 2, il superpotere dump→struttura): la VOCE dell'atto
+    /// quando il bisogno è "strutturare" — il dump multi-locus NON si risponde
+    /// col solo locus primario ("Vedi sopraffatto."), si RESTITUISCE LA
+    /// STRUTTURA: i loci indipendenti enumerati, dal contenuto (le PROP già
+    /// estratte), mai da un template di reazione. Forma indicata dal reframe
+    /// Tsunami: "Sento tre cose: X, Y, Z" — il frame è la realizzazione
+    /// grammaticale dell'atto-enumerazione (come le realizzazioni di
+    /// `path_collapse`), il contenuto è interamente delle PROP.
+    ///
+    /// Fire quando `Strutturare` è ALLA MASSIMA intensità (pareggi inclusi —
+    /// argmax con tolleranza di parità, nessuna soglia): a parità di tensione
+    /// (es. dump che apre anche `capire` 1.0) l'atto-struttura scioglie più
+    /// campo del generico capire, perché restituisce TUTTI i loci.
+    fn structure_voice(&self) -> Option<crate::topology::expression::Expression> {
+        use crate::topology::need::Need;
+        use crate::topology::sentence_proposition::ObjectRef;
+        let need = self.last_need.as_ref()?;
+        let top = need.ranked.first().map(|(_, i)| *i).unwrap_or(0.0);
+        let strutturare = need
+            .ranked
+            .iter()
+            .find(|(n, _)| matches!(n, Need::Strutturare))
+            .map(|(_, i)| *i)
+            .unwrap_or(0.0);
+        if strutturare <= 0.0 || strutturare < top {
+            return None;
+        }
+
+        // I loci indipendenti con proposizione e oggetto-Parola, deduplicati.
+        let mut seen = std::collections::HashSet::new();
+        let mut items: Vec<String> = Vec::new();
+        let mut words_used: Vec<String> = Vec::new();
+        for clause in self.last_sentence_propositions.iter().filter(|c| !c.subordinate) {
+            let Some(prop) = clause.prop.as_ref() else { continue };
+            let Some(ObjectRef::Word(obj)) = prop.object.as_ref() else { continue };
+            let key = obj.to_lowercase();
+            if !seen.insert(key.clone()) {
+                continue;
+            }
+            words_used.push(key.clone());
+            let art = input_article_for(&self.last_input_tokens_full, &key);
+            items.push(realize_locus(&key, prop.relation, art));
+        }
+        if items.len() < 2 {
+            return None; // monolocus: niente da strutturare (fallback)
+        }
+
+        let count = numeral_it(items.len());
+        let text = format!("Sento {} cose: {}.", count, items.join(", "));
+        Some(crate::topology::expression::Expression { text, words_used })
+    }
+
+    /// Phase 86+ (Anello 2): l'atto per un claim dello SPEAKER (l'utente parla di
+    /// sé) — il pezzo che mancava (prima cadeva a "Stato."). Gemello di
+    /// `position_voice` (solo Mondo) e `structure_voice` (i dump). Legge la
+    /// GRAMMATICA della trasformazione dal kg_proc (`bisogno UsedFor atto
+    /// via=locus`, `locus UsedFor chiedere via=interrogativo`) e chiama il
+    /// collasso strutturale. Nessun intento codificato in Rust: aggiungere un
+    /// atto = una riga nel kg_proc (vedi `docs/raw/architettura/kg_proc_legenda.md`).
+    fn speaker_voice(&self) -> Option<crate::topology::expression::Expression> {
+        use crate::topology::sentence_proposition::{ObjectRef, SubjectRef};
+        use crate::topology::relation::RelationType;
+        let need = self.last_need.as_ref()?;
+        let prop = self.last_sentence_proposition.as_ref()?;
+        // Solo il claim dello Speaker: il Mondo è di `position_voice`, l'Entity
+        // (claim sull'entità) resta al path esistente.
+        if !matches!(prop.subject, SubjectRef::Speaker) {
+            return None;
+        }
+        // bisogno → (atto, locus): la regola generale del kg_proc. Un bisogno può
+        // avere più `UsedFor` (es. "capire" è anche un verbo: `UsedFor esprimere
+        // via=comprensione`); scegliamo l'edge il cui oggetto `IsA atto` — la
+        // disambiguazione strutturale del riuso di parole.
+        let need_name = need.dominant.as_str();
+        let (act, _conf, locus) = self
+            .kg_procedural
+            .query_objects_with_via(need_name, RelationType::UsedFor)
+            .into_iter()
+            .find(|(o, _, _)| {
+                crate::topology::input_reading::is_kg_proc_isa(&self.kg_procedural, o, "atto")
+            })?;
+        let act = act.to_string();
+        // locus → interrogativo: `<locus> UsedFor chiedere via=<parola>`.
+        let interrog: Option<String> = locus.and_then(|loc| {
+            self.kg_procedural
+                .query_objects_with_via(loc, RelationType::UsedFor)
+                .into_iter()
+                .find(|(o, _, _)| *o == "chiedere")
+                .and_then(|(_, _, via)| via.map(|s| s.to_string()))
+        });
+        // L'oggetto realizzato con l'articolo che l'utente ha usato in input
+        // ("un cane"→"un cane", "la tesi"→"la tesi"); senza articolo (gli stati:
+        // "ho paura") resta nudo. Preserva la distinzione conteggio/astratto
+        // senza indovinarla: la grammatica dell'utente l'ha già data.
+        let obj_word = match &prop.object {
+            Some(ObjectRef::Word(w)) => Some(w.clone()),
+            _ => None,
+        };
+        let obj_display = obj_word.as_ref()
+            .and_then(|o| object_with_input_article(&self.last_input_tokens_full, o));
+        let text = crate::topology::path_collapse::collapse_speaker(
+            prop, &act, interrog.as_deref(), obj_display.as_deref(),
+        )?;
+        let words_used: Vec<String> = [obj_word, prop.via.clone()]
+            .into_iter()
+            .flatten()
+            .collect();
+        Some(crate::topology::expression::Expression { text, words_used })
+    }
+
+    /// Phase 86+ (Anello 2): la VOCE quando gli atti specifici (posizione/
+    /// struttura/speaker) NON scattano — invece della parola-viva-spazzatura,
+    /// VERBALIZZA la comprensione. Due livelli, dal più ricco:
+    ///   (1) c'è un claim del Mondo con proposizione → collassa il claim
+    ///       ("il mare è profondo" → "Il mare è profondo.").
+    ///   (2) nessuna proposizione, ma una parola-contenuto dell'input è nel KG →
+    ///       un fatto FONDATO su di essa ("il cane abbaia" → "Il cane è un
+    ///       animale."): on-topic, dal grafo, MAI una parola a caso del campo.
+    /// `None` solo se davvero nulla è riconosciuto → allora (e solo allora) il
+    /// fallback parola-viva. Niente nuclei liberi: tutto ancorato a nodi reali.
+    fn comprehension_voice(&self) -> Option<crate::topology::expression::Expression> {
+        use crate::topology::relation::RelationType;
+        use crate::topology::expression::Expression;
+        // (1) claim del Mondo con proposizione → collasso del claim.
+        if let Some(g) = self.comprehension_graph() {
+            if g.root.is_some() {
+                if let Some(text) = crate::topology::path_collapse::collapse(&g) {
+                    let words_used = [g.root.clone(), g.target.clone(), g.via.clone()]
+                        .into_iter().flatten().collect();
+                    return Some(Expression { text, words_used });
+                }
+            }
+        }
+        // (2) nessuna proposizione: fatto fondato sulla parola-contenuto saliente
+        //     dell'input (la sua categoria IsA più confidente nel KG). Il soggetto
+        //     usa l'articolo LETTERALE dell'utente ("il cane"→"Il cane", evita i
+        //     bug di genere di with_definite_article su -e); il predicato prende
+        //     l'indeterminativo ("un mammifero").
+        for w in &self.last_input_words {
+            let wl = w.to_lowercase();
+            let mut isa = self.kg.query_objects_weighted(&wl, RelationType::IsA);
+            if isa.is_empty() { continue; }
+            isa.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            let top = isa[0].0;
+            let subj = object_with_input_article(&self.last_input_tokens_full, &wl)
+                .unwrap_or_else(|| wl.clone());
+            let subj_cap = {
+                let mut ch = subj.chars();
+                match ch.next() {
+                    Some(f) => f.to_uppercase().collect::<String>() + ch.as_str(),
+                    None => subj.clone(),
+                }
+            };
+            let pred = crate::topology::grammar::with_indefinite_article(top);
+            return Some(Expression {
+                text: format!("{subj_cap} è {pred}."),
+                words_used: vec![wl],
+            });
+        }
+        None
     }
 
     /// Carica il Knowledge Graph da file JSON (generato da `import-kg`).
@@ -1017,9 +1447,22 @@ impl PrometeoTopologyEngine {
             Err(e) => eprintln!("[KG] errore lettura {}: {}", path.display(), e),
             Ok(json) => {
                 match serde_json::from_str::<crate::topology::knowledge_graph::KgSnapshot>(&json) {
-                    Err(e) => eprintln!("[KG] errore parsing JSON: {}", e),
+                    Err(e) => {
+                        // Il KG semantico È il substrato della comprensione. Se il
+                        // parsing fallisce, il sistema gira CIECO (is_inner_state,
+                        // confront_with_kg, nuclei, gap derivati: tutto a vuoto).
+                        // Non è un warning qualunque: è la perdita del pensiero.
+                        eprintln!("\n╔═══════════════════════════════════════════════════════════╗");
+                        eprintln!("║  [KG] ⚠  CRITICO: parsing del KG semantico FALLITO         ║");
+                        eprintln!("║  Il sistema gira SENZA substrato: la comprensione è cieca. ║");
+                        eprintln!("╚═══════════════════════════════════════════════════════════╝");
+                        eprintln!("[KG] errore parsing JSON: {}\n", e);
+                    }
                     Ok(snap) => {
                         self.kg = KnowledgeGraph::from_snapshot(snap);
+                        if self.kg.edge_count == 0 {
+                            eprintln!("[KG] ⚠  ATTENZIONE: caricato ma 0 archi — comprensione senza grounding.");
+                        }
                         eprintln!("[KG] caricato: {} archi, {} nodi",
                             self.kg.edge_count, self.kg.node_count);
                         // Costruisce archi semantici nel campo parole.
@@ -2313,6 +2756,9 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // lo attiva con la stessa forza della forma coniugata.
         // Permette al KG di ragionare su "stare" anche quando l'input contiene "stai".
         for act in phrase.word_activations.iter().filter(|a| !a.negated) {
+            // Blocco A — VERBO (invariato): il lemma verbale si attiva anche quando
+            // la forma flessa è essa stessa un nodo del campo ("sono"→"essere").
+            let mut seeded = false;
             if let Some(lemma) = crate::topology::grammar::lemmatize(&act.word) {
                 if lemma.infinitive != act.word
                     && self.pf_field.word_id(&lemma.infinitive).is_some()
@@ -2320,6 +2766,25 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 {
                     self.pf_activation.activate_by_name(&self.pf_field, &lemma.infinitive, act.strength as f32);
                     input_words_for_provenance.push(lemma.infinitive.clone());
+                    seeded = true;
+                }
+            }
+            // Blocco B — NOME/AGGETTIVO (Phase 86 §11.2): collassa la forma flessa
+            // sul nodo-lemma DOPO il merge di cura (es. "aquile"→"aquila"). Scatta
+            // SOLO se A non ha seminato (il fallback verbale grezzo produce infiniti
+            // spuri non in lessico) E se la forma NON è già un nodo-lemma del campo
+            // (così "casa" non viene mai ridotto al suo omografo "caso"). Il lessico
+            // è il ponte: si tiene il primo candidato che esiste come nodo.
+            if !seeded && self.pf_field.word_id(&act.word).is_none() {
+                for cand in crate::topology::grammar::lemma_candidates(&act.word) {
+                    if cand != act.word
+                        && self.pf_field.word_id(&cand).is_some()
+                        && !input_words_for_provenance.contains(&cand)
+                    {
+                        self.pf_activation.activate_by_name(&self.pf_field, &cand, act.strength as f32);
+                        input_words_for_provenance.push(cand);
+                        break;
+                    }
                 }
             }
         }
@@ -2403,32 +2868,16 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             // Include anche i lemmi delle parole input: "abbaia" → "abbaiare" nel KG.
             let mut causes_sources: Vec<String> = iw_refs.iter().map(|s| s.to_string()).collect();
             for iw in &iw_refs {
-                // Lemmi dal lemmatizer formale
-                if let Some(lemma) = crate::topology::grammar::lemmatize(iw) {
-                    if lemma.infinitive != *iw && !causes_sources.contains(&lemma.infinitive) {
-                        causes_sources.push(lemma.infinitive);
-                    }
-                }
-                // Phase 67: euristica per presente regolare -are (il lemmatizer
-                // non copre questo pattern per evitare falsi positivi nei test).
-                // "abbaia" → "abbaiare", "brucia" → "bruciare", "parla" → "parlare"
-                // Verifica che l'infinito candidato esista nel KG — niente falsi positivi.
-                if iw.len() >= 4 {
-                    let w = iw.to_lowercase();
-                    let candidates: Vec<String> = if w.ends_with('a') {
-                        vec![format!("{}re", w)]  // abbaia → abbiare  NO! abbaia → abbaiare
-                    } else if w.ends_with('o') {
-                        vec![format!("{}are", &w[..w.len()-1])]  // parlo → parlare
-                    } else if w.ends_with('i') {
-                        vec![format!("{}are", &w[..w.len()-1])]  // parli → parlare
-                    } else {
-                        vec![]
-                    };
-                    for candidate in candidates {
-                        if self.kg.contains(&candidate) && !causes_sources.contains(&candidate) {
-                            causes_sources.push(candidate);
-                        }
-                    }
+                // Normalizzazione VALIDATA contro il KG (verbo + nome/aggettivo via
+                // lemma_candidates): "abbaia"→"abbaiare", "mondi"→"mondo", "idee"→
+                // "idea" — e MAI un infinito inventato ("mondi"↛"mondare"), perché
+                // tiene solo i candidati che esistono nel KG. Sostituisce sia il
+                // lemmatize verbo-only sia l'euristica -are ad-hoc (Phase 67):
+                // entrambi ciechi ai nomi → "mondi"/"idee" finivano in unknown_words
+                // (segnalazione Tsunami fase archetipo).
+                let lemma = crate::topology::grammar::kg_validated_lemma(iw, |c| self.kg.contains(c));
+                if lemma != *iw && !causes_sources.contains(&lemma) {
+                    causes_sources.push(lemma);
                 }
             }
             let causes_refs: Vec<&str> = causes_sources.iter().map(|s| s.as_str()).collect();
@@ -2785,6 +3234,11 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             .filter_map(|w| crate::topology::lexicon::clean_token(w))
             .filter(|w| w.len() > 1)
             .collect();
+        // Phase 86+: flusso COMPLETO per l'analisi logica (tiene "e"/"o"/"a"/"è").
+        self.last_input_tokens_full = input.split_whitespace()
+            .filter_map(|w| crate::topology::lexicon::clean_token(w))
+            .filter(|w| !w.is_empty())
+            .collect();
 
         // 14c. Accumula nella finestra conversazionale (parole-contenuto ≥3 char).
         //      Previene l'eco cross-turno: "ciao" al turno N non compare al turno N+1.
@@ -2821,16 +3275,72 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // così ottenuta è confrontata col kg_sem per stabilire se object/via
         // sono ancorati al mondo che UI-r1 già conosce.
         {
-            let claim_opt = self.last_input_reading.as_ref()
-                .and_then(|r| r.speaker_claim.as_ref());
-            let proposition = crate::topology::sentence_proposition::extract_proposition(
-                &self.last_input_words,
-                claim_opt,
+            // Phase 86+ (multi-locus): una proposizione per CLAUSOLA (chunker
+            // clausa-aware). La PRIMARIA (prima clausola indipendente) alimenta i
+            // consumatori a voce singola; le subordinate non la scavalcano più
+            // ("mi sento solo da quando…" → primaria = "mi sento solo", non la
+            // subordinata). Il numero di loci indipendenti → bisogno `Strutturare`.
+            let clause_props = crate::topology::sentence_proposition::extract_propositions(
+                &self.last_input_tokens_full,
+                &self.lexicon,
                 Some(&self.kg_procedural),
+                Some(&self.kg),
             );
+            let proposition = crate::topology::sentence_proposition::primary_index(&clause_props)
+                .and_then(|i| clause_props[i].prop.clone());
+            self.last_sentence_propositions = clause_props;
             self.last_kg_confrontation = proposition.as_ref().map(|p| {
                 crate::topology::sentence_proposition::confront_with_kg(p, &self.kg)
             });
+            // Phase 85: confronto col SÉ — l'opinione come secondo legame.
+            self.last_self_confrontation = proposition.as_ref().map(|p| {
+                crate::topology::sentence_proposition::confront_with_self(p, &self.kg_self)
+            });
+
+            // Phase 85 (Stage 3): continuità tematica da overlap kg_self.
+            // I "temi del sé" del turno = i concetti della proposizione che
+            // esistono come nodi in kg_self (il sé ha una posta su di loro),
+            // più i nodi colpiti dal confronto. La continuità è l'overlap
+            // (Jaccard) con il turno precedente — quanto il dialogo resta su
+            // ciò che alla lente importa, NON overlap di parole.
+            {
+                use crate::topology::sentence_proposition::{SubjectRef, ObjectRef};
+                let self_nodes = self.kg_self.nodes();
+                let mut themes: std::collections::HashSet<String> = std::collections::HashSet::new();
+                if let Some(p) = proposition.as_ref() {
+                    if let SubjectRef::World(s) = &p.subject {
+                        let s = s.to_lowercase();
+                        if self_nodes.contains(&s) { themes.insert(s); }
+                    }
+                    if let Some(ObjectRef::Word(o)) = &p.object {
+                        let o = o.to_lowercase();
+                        if self_nodes.contains(&o) { themes.insert(o); }
+                    }
+                    if let Some(v) = &p.via {
+                        let v = v.to_lowercase();
+                        if self_nodes.contains(&v) { themes.insert(v); }
+                    }
+                }
+                if let Some(sc) = self.last_self_confrontation.as_ref() {
+                    for h in sc.conflitti.iter().chain(sc.risonanze.iter()) {
+                        themes.insert(h.subject.to_lowercase());
+                        themes.insert(h.object.to_lowercase());
+                    }
+                }
+                self.self_continuity = match self.recent_self_themes.back() {
+                    Some(prev) if !prev.is_empty() && !themes.is_empty() => {
+                        let inter = themes.intersection(prev).count() as f64;
+                        let union = themes.union(prev).count() as f64;
+                        if union > 0.0 { inter / union } else { 0.0 }
+                    }
+                    _ => 0.0,
+                };
+                self.recent_self_themes.push_back(themes);
+                while self.recent_self_themes.len() > 4 {
+                    self.recent_self_themes.pop_front();
+                }
+            }
+
             self.last_sentence_proposition = proposition;
         }
 
@@ -3612,6 +4122,78 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
             self.last_comprehension_report = Some(report);
         }
         tick!("comprehension_report");
+
+        // ─── Phase 86+: BISOGNO — cosa l'input ha aperto nel campo ───────────
+        // Lettura (non decisore) di stati GIÀ calcolati: forma del grafo di
+        // comprensione (ungrounded / Confront), vuoto dialogico e closure dal
+        // report, sovraccarico dalla coerenza. OSSERVABILE: non ancora consumato
+        // dall'atto (lo sarà quando la grana del sé pesa la salienza). Vedi
+        // docs/raw/architettura/comprensione_bisogno_atto.md.
+        {
+            use crate::topology::comprehension_path::Confront;
+            use crate::topology::need::{sense_need, NeedSignals};
+
+            let graph = self.comprehension_graph();
+            let (ungrounded_count, content_count, world_confront, world_confirm) = match &graph {
+                Some(g) => {
+                    let content = g.groundings.len() + g.ungrounded.len();
+                    let confront = match g.confront {
+                        Confront::Contradict => 1.0,
+                        Confront::Novelty => 0.6,
+                        Confront::Confirm | Confront::NotApplicable => 0.0,
+                    };
+                    // Conferma del mondo (la triple esiste già) → RICONOSCERE:
+                    // l'eco fondata, non una posizione né un vuoto.
+                    let confirm = if matches!(g.confront, Confront::Confirm) { 1.0 } else { 0.0 };
+                    (g.ungrounded.len(), content, confront, confirm)
+                }
+                None => (0, 0, 0.0, 0.0),
+            };
+            // Salienza del sé: quanto la comprensione tocca le pendenze del sé
+            // (grana dissolta, mai recitata). Fa aprire "posizionarsi" alle
+            // confidenze emotive/esistenziali (soggetto Speaker → confront col
+            // mondo NotApplicable, ma la frase tocca le poste del sé).
+            let self_salience = graph
+                .as_ref()
+                .map(|g| crate::topology::comprehension_path::self_salience(g, &self.kg_self))
+                .unwrap_or(0.0);
+            let (has_dialogic_gap, closes_prior_gap) = self
+                .last_comprehension_report
+                .as_ref()
+                .map(|r| (!r.gaps.is_empty(), r.closes_prior_gap.is_some()))
+                .unwrap_or((false, false));
+
+            let signals = NeedSignals {
+                ungrounded_count,
+                content_count,
+                has_dialogic_gap,
+                closes_prior_gap,
+                world_confront,
+                world_confirm,
+                // Phase 86+ (Anello 1): la grana del sé DISSOLTA pesa la salienza
+                // (mai recitata). Apre "posizionarsi" alle confidenze emotive che
+                // toccano le poste del sé. memory/absence/multi-locus: passi dopo.
+                self_salience,
+                // overload NON è `1 - coherence_integrity`: la coerenza ha un
+                // baseline (~0.8) → quello sarebbe un PAVIMENTO costante che fa
+                // vincere "co-regolare" per default (numero-magico mascherato,
+                // vigilanza §7). La co-regolazione è un fenomeno multi-turno/di
+                // rate (frammentazione = caduta di coerenza su finestra + ritmo
+                // di input), non leggibile da una singola frase. Cablato dopo;
+                // 0 finché non c'è il segnale vero — onesto.
+                overload: 0.0,
+                memory_resurfaced: 0.0,
+                absence: 0.0,
+                // Phase 86+ (multi-locus): quante proposizioni INDIPENDENTI porta
+                // l'enunciato. ≥2 = dump ("devo X e comprare Y e non ho finito Z")
+                // → bisogno `Strutturare`. Le subordinate (circostanza di un'unica
+                // idea) non contano: "mi sento solo da quando…" resta 1 locus.
+                locus_count: crate::topology::sentence_proposition::independent_locus_count(
+                    &self.last_sentence_propositions,
+                ),
+            };
+            self.last_need = sense_need(&signals);
+        }
 
         // ─── Phase 74: ActionDecision — UI-r1 SCRIVE come risponderà ─────
         // Legge il ComprehensionReport + SpeakerProfile e decide
@@ -5173,7 +5755,16 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                 // Se produce qualcosa, quella è la sua voce.
                 // Se no, fallback alla traduzione strutturata (Phase 3).
                 let narrative_intent = self.narrative_self.turns.back().map(|t| t.intention.as_str());
-                if let Some(emergent) = crate::topology::expression::compose(
+                // Phase 86+ (Anello 2): l'ATTO legge il bisogno. "posizionarsi"/
+                // "riconoscere-da-conferma" su claim del Mondo → collasso del
+                // cammino saliente; "strutturare" (dump multi-locus) → la
+                // struttura enumerata dei loci. Altrimenti, e come fallback,
+                // la pipeline esistente. Niente recita di edge.
+                let need_voice = self.position_voice()
+                    .or_else(|| self.structure_voice())
+                    .or_else(|| self.speaker_voice())
+                    .or_else(|| self.comprehension_voice());
+                if let Some(emergent) = need_voice.or_else(|| crate::topology::expression::compose(
                     &self.word_topology,
                     &self.lexicon,
                     &self.kg,
@@ -5191,7 +5782,11 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
                     Some(&self.kg_procedural),
                     self.last_action_decision.as_ref(),
                     self.last_comprehension_report.as_ref(),
-                ) {
+                    // Phase 84 (2b): la PROP porta `via` al rendering del pattern.
+                    self.last_sentence_proposition.as_ref(),
+                    // Phase 85 (kg_self): il confronto col sé → posizionamento (rifrazione).
+                    self.last_self_confrontation.as_ref(),
+                )) {
                     self.last_archetype_used = "emergent".to_string();
                     self.last_generated_words = emergent.words_used.clone();
                     for w in &self.last_generated_words {
@@ -6607,9 +7202,16 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         use crate::topology::deliberation::KgFacts;
         use crate::topology::relation::RelationType;
 
+        // I root del comprehension_graph possono portare lemmi-fantasma da
+        // sovra-lemmatizzazione ("oggi"→"oggare", "chiamo"→"chare"). Teniamo solo
+        // ciò che è REALE: nodo del KG o parola del lessico. Così `mentioned` (di
+        // cosa parla l'utente) e i gap non si popolano di parole inventate.
         let roots: Vec<String> = self.last_comprehension_graph.as_ref()
             .map(|g| g.roots.clone())
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|r| self.kg.contains(r)) // solo nodi REALI del mondo (il lessico
+            .collect();                       // contiene anche i lemmi-fantasma, il KG no)
 
         // Classi IsA dirette delle radici
         let mut root_classes: Vec<String> = Vec::new();
@@ -6883,6 +7485,34 @@ fn intention_to_structure(intention: &Intention) -> SentenceStructure {
         Intention::Question { .. } | Intention::Explore { .. }
         | Intention::Withdraw { .. }                        => SentenceStructure::Evocative,
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 84 — Correzione (in modulo dedicato `correction.rs`)
+// ═══════════════════════════════════════════════════════════════════════════
+
+impl PrometeoTopologyEngine {
+    /// Phase 84: l'utente comunica come avrebbe voluto che UI-r1 rispondesse.
+    /// Vedi `topology::correction` per la semantica completa.
+    pub fn correct_response(
+        &mut self,
+        input: &str,
+        given: &str,
+        wanted: &str,
+        via_context: Option<&str>,
+    ) -> crate::topology::correction::CorrectionResult {
+        crate::topology::correction::apply_correction(self, input, given, wanted, via_context)
+    }
+
+    // === IAm-gotchi (glass-box) — Step 5 ===
+    /// L'utente corregge l'intento attribuito all'Altro. Delega al
+    /// modello-dell'interlocutor, che nudgia gli EMA nel quadrante target
+    /// (vedi `InterlocutorModel::apply_intent_correction`). Ritorna false se
+    /// `intent` non è uno dei 4 quadranti correggibili.
+    pub fn correct_interlocutor(&mut self, intent: &str, valence: Option<f64>) -> bool {
+        self.interlocutor.apply_intent_correction(intent, valence)
+    }
+    // === fine IAm-gotchi ===
 }
 
 #[cfg(test)]

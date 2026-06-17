@@ -31,7 +31,7 @@ pub enum InputAct {
 }
 
 /// Soggetto del claim nell'input.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ClaimAgent {
     /// "io sono/ho/sento X" — il parlante dichiara qualcosa di sé
     Speaker,
@@ -78,6 +78,30 @@ pub struct SpeakerClaim {
     /// `complement` porta il tema ("madre"). `None` per il frame nominativo
     /// di default. Fluisce nello slot `via` della proposizione.
     pub complement: Option<String>,
+    /// Lemma del verbo di superficie del claim (es. "uccidere", "lavorare",
+    /// "studiare"). Fluisce in `SentenceProposition.verb_lemma`: la relazione
+    /// porta il tipo, questo il verbo concreto. `None` per le copule pure.
+    pub verb_lemma: Option<String>,
+    /// Il SOGGETTO di superficie, recuperato anche quando è CELATO (sottinteso):
+    /// "vogliamo"→"noi", "devo"→"io", "sei"→"tu". In italiano il soggetto è
+    /// pro-drop (omesso, ricostruito dalla desinenza); questo lo rende esplicito
+    /// per la comprensione. `None` per la 3ª persona (il soggetto è un nome del
+    /// mondo, non un pronome) o se non deducibile.
+    pub subject_surface: Option<String>,
+}
+
+/// Recupera il pronome-soggetto dalla persona del verbo (pro-drop italiano):
+/// la desinenza verbale codifica il soggetto anche quando è omesso. 3ª persona
+/// → `None` (il soggetto è un nome, non un pronome). Meccanismo generale.
+pub fn surface_subject_for(person: crate::topology::grammar::Person) -> Option<String> {
+    use crate::topology::grammar::Person;
+    Some(match person {
+        Person::First       => "io",
+        Person::FirstPlural => "noi",
+        Person::Second      => "tu",
+        Person::SecondPlural => "voi",
+        Person::Third | Person::ThirdPlural => return None,
+    }.to_string())
 }
 
 /// Lettura strutturata dell'input corrente.
@@ -260,10 +284,30 @@ pub fn detect_speaker_claim(
         });
 
     // ── 2. Trova il primo verbo classificato ─────────────────────────────
+    //   Le parole-funzione (articolo/preposizione/avverbio/…) NON sono mai verbi
+    //   finiti: si saltano PRIMA di lemma_of_verb, così "una"→unire (falso
+    //   positivo morfologico) non viene scambiato per un verbo. La categoria
+    //   viene dal kg_proc (verbi curati: percettivo/cognitivo/…) oppure, per i
+    //   verbi-concetto del kg_sem (`IsA azione/atto/…`) non ancora curati nel
+    //   kg_proc, di default "azione" — così riuscire/dormire/concentrarsi sono
+    //   riconosciuti come verbi del claim senza enumerarli a mano.
     let mut verb_match: Option<(usize, String, crate::topology::grammar::Person, &'static str)> = None;
     for (pos, w) in raw_words.iter().enumerate() {
-        if let Some((infinitive, person)) = lemma_of_verb(w, kg_proc) {
-            if let Some(category) = verb_category(&infinitive, kg_proc) {
+        if is_kg_proc_function_word(w, kg_proc) {
+            continue;
+        }
+        // Analisi logica (Phase 86+, no-trucchi): una parola preceduta da
+        // articolo o determinante è la TESTA DI UN SINTAGMA NOMINALE — mai un
+        // verbo coniugato ("il silenzio" ≠ 1sg di silenziare; "io silenzio i
+        // critici" resta verbo perché "io" è pronome). Il contesto decide,
+        // come DATO del kg_proc (classe→funzione), non come euristica.
+        if pos > 0 && is_nominal_intro(&raw_words[pos - 1], kg_proc) {
+            continue;
+        }
+        if let Some((infinitive, person)) = lemma_of_verb(w, kg_proc, kg) {
+            let category = verb_category(&infinitive, kg_proc)
+                .or_else(|| if is_verb_concept(&infinitive, kg) { Some("azione") } else { None });
+            if let Some(category) = category {
                 verb_match = Some((pos, infinitive, person, category));
                 break;
             }
@@ -280,22 +324,146 @@ pub fn detect_speaker_claim(
         return build_dative_claim(raw_words, verb_pos, &infinitive, explicit_agent, kg_proc);
     }
 
+    // ── 2.bis-pron Frame PRONOMINALE-riflessivo: "mi sento solo" ─────────
+    //   Un verbo pronominale (`IsA pronominale` nel kg_proc) con un clitico
+    //   riflessivo presente (`IsA riflessivo`) è una predicazione di STATO:
+    //   l'aggettivo che segue è un FeelsAs, anche se non è un inner-state curato.
+    //   È la COSTRUZIONE a marcare il sentire (capacità grammaticale come dato),
+    //   non il lessico. Senza clitico ("sento la voce") il frame non scatta →
+    //   il ramo percettivo applica il gate inner-state (correttamente rifiuta).
+    if is_pronominal_reflexive(&infinitive, raw_words, kg_proc) {
+        return build_reflexive_claim(raw_words, verb_pos, &infinitive, explicit_agent, person, kg_proc);
+    }
+
+    // ── 2.bis-mod Frame MODALE + infinito: "devo studiare", "voglio cambiare" ─
+    //   Un modale (`IsA modale` nel kg_proc: dovere/volere/potere) modula un
+    //   altro verbo: il CONTENUTO è l'infinito che segue (saltando "a"/"di"),
+    //   non il modale. "voglio cambiare vita" → l'azione è `cambiare` (oggetto
+    //   `vita`), non `Expresses cambiare`. Senza infinito ("voglio un caffè") il
+    //   frame non scatta → il modale resta il verbo (cognitivo). L'agente viene
+    //   dal modale (la persona di "devo"/"voglio").
+    if kg_proc.map(|kp| is_kg_proc_isa(kp, &infinitive, "modale")).unwrap_or(false) {
+        if let Some((inf_pos, inf_lemma)) = infinitive_after(raw_words, verb_pos + 1, kg_proc, kg) {
+            if let Some(c) = build_modal_claim(raw_words, inf_pos, &inf_lemma, explicit_agent, person, lexicon, kg, kg_proc) {
+                return Some(c);
+            }
+        }
+    }
+
+    // ── 2.ter Frame tempi composti: ausiliare + participio passato ───────
+    //   "ho lavorato", "sono andato" → l'ausiliare NON è il verbo di
+    //   contenuto: lo è il participio. Frame come DATO (avere/essere IsA
+    //   ausiliare nel kg_proc) + participio per morfologia (-ato/-uto/-ito).
+    //   Un composto è un atto/evento compiuto → categoria azione. Evita il
+    //   misread "ho lavorato" → "Speaker IsA lavorato" (identità falsa).
+    //   "sono triste"/"sono Marco" non hanno participio → cadono al ramo copula.
+    let is_auxiliary = kg_proc
+        .map(|kp| is_kg_proc_isa(kp, &infinitive, "ausiliare"))
+        .unwrap_or(false);
+    if is_auxiliary {
+        if let Some((part_pos, part_lemma)) = find_past_participle(raw_words, verb_pos + 1, kg_proc) {
+            use crate::topology::grammar::Person as P;
+            let agent = match explicit_agent {
+                Some(a) => a,
+                None => match person {
+                    P::First | P::FirstPlural   => ClaimAgent::Speaker,
+                    P::Second | P::SecondPlural => ClaimAgent::Entity,
+                    P::Third | P::ThirdPlural   => return None,
+                },
+            };
+            // Oggetto dell'azione = oggetto DIRETTO dopo il participio; se
+            // intransitivo ("ho lavorato") o seguito solo da complementi
+            // preposizionali ("ho litigato con sorella"), il verbo stesso è il
+            // contenuto e il nome resta complemento.
+            let predicate = direct_object_after(raw_words, part_pos + 1, kg_proc)
+                .unwrap_or_else(|| part_lemma.clone());
+            return Some(SpeakerClaim {
+                agent,
+                kind: ClaimKind::Action,
+                predicate,
+                verb_category: Some("azione".to_string()),
+                complement: None,
+                verb_lemma: Some(part_lemma),
+                subject_surface: explicit_subject_pronoun(raw_words).or_else(|| surface_subject_for(person)),
+            });
+        }
+    }
+
     // ── 3. Agente: pronome vince; altrimenti deduzione dalla persona ─────
+    //   MA: un clitico (mi/ti/ci/vi) davanti a un verbo di 3ª persona è
+    //   l'OGGETTO, non il soggetto — "mia moglie mi capisce" = la moglie capisce
+    //   ME. L'agente è allora il Mondo (3ª persona), non lo Speaker. Solo un
+    //   pronome-SOGGETTO (io/tu/noi/voi) vale come agente di un verbo di 3ª.
+    //   I frame riflessivo/dativo (dove il clitico È l'esperiente) sono già
+    //   intercettati sopra: qui resta la costruzione transitiva col clitico-oggetto.
     use crate::topology::grammar::Person;
+    let has_subject_pron = raw_words.iter()
+        .any(|w| matches!(w.as_str(), "io" | "tu" | "noi" | "voi"));
+    let clitic_object_third =
+        matches!(person, Person::Third | Person::ThirdPlural) && !has_subject_pron;
     let agent = match explicit_agent {
-        Some(a) => a,
-        None => match person {
+        Some(a) if !clitic_object_third => a,
+        _ => match person {
             Person::First  | Person::FirstPlural  => ClaimAgent::Speaker,
             Person::Second | Person::SecondPlural => ClaimAgent::Entity,
-            Person::Third  | Person::ThirdPlural  => return None, // 3sg/pl non sono claim diretti
+            // 3sg/pl non sono claim diretti — TRANNE l'imperativo. Per gli -are
+            // la 2sg imperativa coincide col 3sg presente ("gira"/"mescola"): la
+            // disambiguazione è STRUTTURALE (niente lista di verbi) — verbo a
+            // INIZIO frase, senza soggetto esplicito, con un oggetto-contenuto
+            // dopo = istruzione rivolta all'interlocutore (Entity). "gira la
+            // valvola" → Entity Does valvola. "piove" (nessun oggetto) → None.
+            Person::Third | Person::ThirdPlural => {
+                let has_object = raw_words.iter()
+                    .skip(verb_pos + 1)
+                    .any(|w| !is_kg_proc_function_word(w, kg_proc));
+                if verb_pos == 0 && has_object {
+                    ClaimAgent::Entity
+                } else {
+                    return None;
+                }
+            }
         },
     };
 
-    // ── 4. Estrai il predicato — prima parola-contenuto dopo il verbo ────
-    let predicate = raw_words.iter()
+    // ── 4. Estrai il predicato — la TESTA del sintagma dopo il verbo ─────
+    //   Non la prima parola-contenuto (sarebbe l'aggettivo attributivo:
+    //   "una grande nostalgia" → "grande"), ma la TESTA del sintagma nominale:
+    //   il nome. Scansiono il sintagma (parole-contenuto consecutive, saltati
+    //   gli articoli/determinanti iniziali, fermandomi alla prima preposizione/
+    //   congiunzione che lo chiude) e scelgo la testa: uno stato interno
+    //   (Feeling) o un nome (IsA non vuoto nel kg_sem); tra pari, l'ultimo del
+    //   sintagma (in italiano il nome segue gli aggettivi attributivi).
+    let np: Vec<String> = raw_words.iter()
         .skip(verb_pos + 1)
-        .find(|w| !is_kg_proc_function_word(w, kg_proc))
-        .cloned()?;
+        .skip_while(|w| is_kg_proc_function_word(w, kg_proc))
+        .take_while(|w| !is_kg_proc_function_word(w, kg_proc))
+        .cloned()
+        .collect();
+    let is_head = |w: &str| -> bool {
+        is_inner_state(w, lexicon, kg)
+            || kg.map(|k| !k.query_objects(&w.to_lowercase(), RelationType::IsA).is_empty())
+                .unwrap_or(false)
+    };
+    // Una parola la cui IsA DIRETTA è `qualità`/`attributo` è un aggettivo
+    // (bello/grande/profondo/rosso), non la testa nominale. Segnale strutturale
+    // dal kg_sem, non POS/morfologia: "futuro bello" → testa=futuro (IsA tempo),
+    // bello demoto (IsA qualità). Vale per l'aggettivo POSPOSTO, che l'euristica
+    // "ultimo del sintagma" da sola sbagliava.
+    let is_quality = |w: &str| -> bool {
+        kg.map(|k| k.query_objects(&w.to_lowercase(), RelationType::IsA)
+            .iter().any(|t| t.eq_ignore_ascii_case("qualità") || t.eq_ignore_ascii_case("attributo")))
+            .unwrap_or(false)
+    };
+    let predicate = if np.len() >= 2 {
+        // Testa = ultimo SOSTANTIVO (head non-qualità). Fallback onesto: ultimo
+        // head qualunque, poi ultimo del sintagma.
+        np.iter().rev().find(|w| is_head(w) && !is_quality(w))
+            .or_else(|| np.iter().rev().find(|w| is_head(w)))
+            .or_else(|| np.last())
+            .cloned()?
+    } else {
+        np.first().cloned()?
+    };
 
     // ── 5. ClaimKind dalla categoria del verbo ───────────────────────────
     //   La mappa categoria→kind è strutturale (lettura della IsA chain),
@@ -331,7 +499,24 @@ pub fn detect_speaker_claim(
         predicate,
         verb_category: Some(category.to_string()),
         complement: None,
+        verb_lemma: Some(infinitive.clone()),
+        subject_surface: explicit_subject_pronoun(raw_words).or_else(|| surface_subject_for(person)),
     })
+}
+
+/// Il pronome-soggetto ESPLICITO presente nell'input, se c'è (io/noi/tu/voi/
+/// lei/lui/loro/egli/ella). Quando assente, il soggetto è celato e si recupera
+/// dalla persona (`surface_subject_for`).
+fn explicit_subject_pronoun(raw_words: &[String]) -> Option<String> {
+    for w in raw_words {
+        match w.to_lowercase().as_str() {
+            p @ ("io" | "noi" | "tu" | "voi" | "lei" | "lui" | "loro" | "egli" | "ella") => {
+                return Some(p.to_string());
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Phase 83: costruisce un claim per un verbo a costruzione dativa.
@@ -355,12 +540,181 @@ fn build_dative_claim(
         .skip(verb_pos + 1)
         .find(|w| !is_kg_proc_function_word(w, kg_proc))
         .cloned();
+    let subject_surface = explicit_subject_pronoun(raw_words)
+        .or(Some(match agent { ClaimAgent::Speaker => "io", ClaimAgent::Entity => "tu" }.to_string()));
     Some(SpeakerClaim {
         agent,
         kind: ClaimKind::Feeling,
         predicate: emotion,
         verb_category: Some("percettivo".to_string()),
         complement: theme,
+        verb_lemma: Some(infinitive.to_string()),
+        subject_surface,
+    })
+}
+
+/// Phase 86+: la costruzione pronominale-riflessiva ("mi sento solo"). Il verbo
+/// è dichiarato pronominale nel kg_proc (`IsA pronominale`) E nell'enunciato c'è
+/// un clitico riflessivo (`IsA riflessivo`: mi/ti/si/ci/vi). Allora l'aggettivo
+/// che segue è uno STATO sentito → FeelsAs, anche senza essere un inner-state
+/// curato. Strutturale: il clitico è il discriminatore (legge dal kg_proc, niente
+/// liste). "sento la voce" (nessun clitico) → false → resta percezione esterna.
+fn is_pronominal_reflexive(
+    infinitive: &str,
+    raw_words: &[String],
+    kg_proc: Option<&KnowledgeGraph>,
+) -> bool {
+    let Some(kp) = kg_proc else { return false; };
+    if !is_kg_proc_isa(kp, infinitive, "pronominale") {
+        return false;
+    }
+    raw_words.iter().any(|w| is_kg_proc_isa(kp, &w.to_lowercase(), "riflessivo"))
+}
+
+/// Costruisce il claim per un verbo pronominale-riflessivo: "mi sento solo" →
+/// `Speaker FeelsAs solo`. Lo stato sentito è la prima parola-contenuto dopo il
+/// verbo; la relazione FeelsAs deriva dalla categoria percettiva (mappa
+/// esistente). Bypassa il gate inner-state: è la costruzione a marcare il sentire.
+fn build_reflexive_claim(
+    raw_words: &[String],
+    verb_pos: usize,
+    infinitive: &str,
+    explicit_agent: Option<ClaimAgent>,
+    person: crate::topology::grammar::Person,
+    kg_proc: Option<&KnowledgeGraph>,
+) -> Option<SpeakerClaim> {
+    use crate::topology::grammar::Person;
+    let agent = explicit_agent.or(match person {
+        Person::First | Person::FirstPlural   => Some(ClaimAgent::Speaker),
+        Person::Second | Person::SecondPlural => Some(ClaimAgent::Entity),
+        Person::Third | Person::ThirdPlural   => None,
+    })?;
+    let predicate = raw_words.iter()
+        .skip(verb_pos + 1)
+        .find(|w| !is_kg_proc_function_word(w, kg_proc))
+        .cloned()?;
+    Some(SpeakerClaim {
+        agent,
+        kind: ClaimKind::Feeling,
+        predicate,
+        verb_category: Some("percettivo".to_string()),
+        complement: None,
+        verb_lemma: Some(infinitive.to_string()),
+        subject_surface: explicit_subject_pronoun(raw_words).or_else(|| surface_subject_for(person)),
+    })
+}
+
+/// Phase 86+: l'infinito-contenuto dopo un modale (o un catenativo), saltando
+/// la preposizione "a"/"di" e le funzionali. "devo [—] studiare", "voglio
+/// cambiare", "riesco A dormire". Finestra breve; ritorna (posizione, lemma).
+fn infinitive_after(
+    raw_words: &[String],
+    from: usize,
+    kg_proc: Option<&KnowledgeGraph>,
+    kg: Option<&KnowledgeGraph>,
+) -> Option<(usize, String)> {
+    let n = raw_words.len();
+    let mut j = from;
+    while j < n && j <= from + 2 {
+        let w = raw_words[j].to_lowercase();
+        // Infinito nudo ("studiare") O infinito con enclitico ("svegliarmi",
+        // "alzarsi", "farlo"): il secondo è la stessa forma con un pronome
+        // clitico agganciato (regola grammaticale, non lista di verbi).
+        if let Some(inf) = infinitive_surface(&w) {
+            if lemma_of_verb(&inf, kg_proc, kg).is_some() {
+                return Some((j, inf));
+            }
+        }
+        if is_kg_proc_function_word(&w, kg_proc) {
+            j += 1;
+            continue;
+        }
+        break;
+    }
+    None
+}
+
+/// La parola è un infinito di superficie? Ritorna l'infinito nudo. Riconosce
+/// l'infinito puro (-are/-ere/-ire) e l'infinito con un PRONOME ENCLITICO
+/// agganciato ("svegliarmi"→svegliare, "alzarsi"→alzare, "farlo"→fare,
+/// "dirgli"→dire): l'italiano cliticizza posponendo il pronome e cadendo la -e
+/// finale dell'infinito. È morfologia (regola finita di posizione clitica), non
+/// una lista di verbi — il chiamante valida poi il lemma contro il KG.
+fn infinitive_surface(w: &str) -> Option<String> {
+    if w.ends_with("are") || w.ends_with("ere") || w.ends_with("ire") {
+        return Some(w.to_string());
+    }
+    // Pronomi enclitici (singoli + combinati comuni), dal più lungo al più corto
+    // per non troncare "glielo" in "lo".
+    const CLITICS: &[&str] = &[
+        "glielo", "gliela", "glieli", "gliele", "gliene",
+        "melo", "mela", "meli", "mele", "mene",
+        "telo", "tela", "teli", "tele", "tene",
+        "celo", "cela", "celi", "cele", "cene",
+        "velo", "vela", "veli", "vele", "vene",
+        "selo", "sela", "seli", "sele", "sene",
+        "mi", "ti", "si", "ci", "vi", "ne", "lo", "la", "li", "le", "gli",
+    ];
+    for clitic in CLITICS {
+        if let Some(stem) = w.strip_suffix(clitic) {
+            // Dopo aver tolto il clitico, lo stem deve finire in -ar/-er/-ir
+            // (l'infinito senza la -e caduta) e avere corpo sufficiente.
+            if stem.len() >= 3
+                && (stem.ends_with("ar") || stem.ends_with("er") || stem.ends_with("ir"))
+            {
+                return Some(format!("{stem}e"));
+            }
+        }
+    }
+    None
+}
+
+/// Phase 86+: costruisce il claim quando un modale modula un infinito. Il
+/// CONTENUTO è l'infinito: la sua categoria dà la relazione, il suo oggetto
+/// diretto (se transitivo) è il predicato, altrimenti l'infinito stesso.
+/// L'agente viene dal modale ("devo"→Speaker). "devo finire il progetto" →
+/// Speaker Does progetto; "devo studiare per l'esame" → Speaker Does studiare.
+fn build_modal_claim(
+    raw_words: &[String],
+    inf_pos: usize,
+    inf_lemma: &str,
+    explicit_agent: Option<ClaimAgent>,
+    person: crate::topology::grammar::Person,
+    lexicon: &Lexicon,
+    kg: Option<&KnowledgeGraph>,
+    kg_proc: Option<&KnowledgeGraph>,
+) -> Option<SpeakerClaim> {
+    use crate::topology::grammar::Person;
+    let agent = explicit_agent.or(match person {
+        Person::First | Person::FirstPlural   => Some(ClaimAgent::Speaker),
+        Person::Second | Person::SecondPlural => Some(ClaimAgent::Entity),
+        Person::Third | Person::ThirdPlural   => None,
+    })?;
+    let category = verb_category(inf_lemma, kg_proc).unwrap_or("azione");
+    let predicate = direct_object_after(raw_words, inf_pos + 1, kg_proc)
+        .unwrap_or_else(|| inf_lemma.to_string());
+    let kind = match category {
+        // Sotto un modale, un verbo denominativo è un'AZIONE ("devo chiamare il
+        // dottore" = chiamare-azione, non auto-denominarsi). Il denominativo vale
+        // solo nel riflessivo "mi chiamo X" (gestito altrove).
+        "denominativo" => ClaimKind::Action,
+        "percettivo" => {
+            if is_inner_state(&predicate, lexicon, kg) { ClaimKind::Feeling } else { ClaimKind::Action }
+        }
+        "copula" => ClaimKind::Identity,
+        _ => ClaimKind::Action, // cognitivo | comunicativo | azione
+    };
+    // denominativo→azione: la relazione dev'essere Does, non IsA → forziamo la
+    // categoria a "azione" così relation_from_verb_category dà Does.
+    let category = if category == "denominativo" { "azione" } else { category };
+    Some(SpeakerClaim {
+        agent,
+        kind,
+        predicate,
+        verb_category: Some(category.to_string()),
+        complement: None,
+        verb_lemma: Some(inf_lemma.to_string()),
+        subject_surface: explicit_subject_pronoun(raw_words).or_else(|| surface_subject_for(person)),
     })
 }
 
@@ -368,6 +722,100 @@ fn build_dative_claim(
 /// `dativo`; l'assenza = frame nominativo di default). I frame sono una
 /// tabella finita — il minimo denominatore della struttura argomentale —
 /// mentre i verbi sono infiniti e quasi tutti a default.
+/// Phase 84 (2c-C): cerca il primo participio passato a partire da `from`,
+/// saltando avverbi/determinanti ("ho **molto** lavorato"). Ritorna
+/// `(posizione, lemma-infinito)`. Morfologia regolare: -ato/-uto/-ito (con
+/// concordanza -a/-i/-e) → -are/-ere/-ire. Nel contesto post-ausiliare la
+/// morfologia è un segnale forte; non serve validare oltre.
+/// Prima parola-contenuto dopo `start` che sia un OGGETTO DIRETTO del verbo.
+/// Restituisce `None` se la prima parola-contenuto è introdotta da una
+/// preposizione di contenuto (con/di/da/per/su/in/contro/…): in quel caso il
+/// nome è un COMPLEMENTO (catturato da `extract_complements`), non l'oggetto —
+/// il verbo è usato intransitivamente ("ho litigato CON sorella" → litigare,
+/// non "sorella"). La preposizione di moto/dativo "a" (hypotheses vuote) NON
+/// interrompe. Strutturale: nessuna lista di verbi transitivi/intransitivi.
+fn direct_object_after(
+    raw_words: &[String],
+    start: usize,
+    kg_proc: Option<&KnowledgeGraph>,
+) -> Option<String> {
+    for w in raw_words.iter().skip(start) {
+        let lw = w.to_lowercase();
+        if !crate::topology::prepositions::hypotheses(&lw).is_empty() {
+            // Preposizione di contenuto → ciò che segue è complemento, non oggetto.
+            return None;
+        }
+        if !is_kg_proc_function_word(w, kg_proc) {
+            return Some(w.clone());
+        }
+    }
+    None
+}
+
+/// Cerca il participio passato di un tempo composto a partire da `from`. Il
+/// participio dev'essere ADIACENTE all'ausiliare, modulo parole-funzione
+/// (clitici/avverbi/articoli): "ho **sempre** fatto" ok. Una parola di CONTENUTO
+/// interposta interrompe — NON è un composto: "ho **voglia** di gelato" è
+/// avere+nome, non "ho gelato" (Phase 86+, bug stanato su input vari: "gelato"
+/// è morfologicamente un participio, ma il chunker lo vede complemento). Mirror
+/// di `analisi_logica::participio_dopo`.
+fn find_past_participle(
+    raw_words: &[String],
+    from: usize,
+    kg_proc: Option<&KnowledgeGraph>,
+) -> Option<(usize, String)> {
+    for j in from..raw_words.len() {
+        let w = raw_words[j].to_lowercase();
+        // Un articolo/determinante introduce un sintagma NOMINALE: ciò che
+        // segue è un NOME, non il participio di un tempo composto — "ho UN
+        // significato" è avere+nome, non il passato prossimo di significare.
+        // Tra ausiliare e participio stanno solo clitici/avverbi ("ho sempre fatto").
+        if is_nominal_intro(&w, kg_proc) {
+            break;
+        }
+        if let Some(lemma) = participle_lemma(&w) {
+            return Some((j, lemma));
+        }
+        // salta le altre parole-funzione (clitici/avverbi/prep); una parola
+        // di contenuto non-participio chiude: non c'è composto.
+        if is_kg_proc_function_word(&w, kg_proc) {
+            continue;
+        }
+        break;
+    }
+    None
+}
+
+/// La parola introduce un sintagma nominale (articolo o determinante, letti
+/// dal kg_proc come DATO — classe→funzione)? Ciò che la segue è un nome.
+fn is_nominal_intro(word: &str, kg_proc: Option<&KnowledgeGraph>) -> bool {
+    let Some(kp) = kg_proc else { return false };
+    let w = word.to_lowercase();
+    is_kg_proc_isa(kp, &w, "articolo") || is_kg_proc_isa(kp, &w, "determinante")
+}
+
+/// Lemma infinito da un participio passato regolare, o `None`.
+fn participle_lemma(word: &str) -> Option<String> {
+    let w = word.to_lowercase();
+    const GROUPS: &[(&[&str], &str)] = &[
+        (&["ato", "ata", "ati", "ate"], "are"),
+        (&["uto", "uta", "uti", "ute"], "ere"),
+        (&["ito", "ita", "iti", "ite"], "ire"),
+    ];
+    for (suffixes, inf) in GROUPS {
+        for suf in *suffixes {
+            if let Some(stem) = w.strip_suffix(suf) {
+                // stem ≥3 esclude "stato"(st)/"dato"(d) e simili monosillabi.
+                if stem.len() >= 3 {
+                    return Some(format!("{}{}", stem, inf));
+                }
+            }
+        }
+    }
+    // Phase 86 (#3): participi IRREGOLARI ("ho preso"→prendere, "ho scritto"→scrivere).
+    crate::topology::grammar::irregular_participle(&w)
+}
+
 fn verb_frame(infinitive: &str, kg_proc: Option<&KnowledgeGraph>) -> Option<String> {
     let kp = kg_proc?;
     let parents = kp.query_objects(infinitive, RelationType::IsA);
@@ -387,9 +835,10 @@ fn verb_frame(infinitive: &str, kg_proc: Option<&KnowledgeGraph>) -> Option<Stri
 /// altrimenti. Il fallback è autocorrettivo: se il candidato infinitivo
 /// non è nel kg_proc, il match fallisce — niente falsi positivi su
 /// sostantivi che terminano in `-o`/`-i`.
-fn lemma_of_verb(
+pub fn lemma_of_verb(
     word: &str,
     kg_proc: Option<&KnowledgeGraph>,
+    kg: Option<&KnowledgeGraph>,
 ) -> Option<(String, crate::topology::grammar::Person)> {
     use crate::topology::grammar::{lemmatize, Person};
 
@@ -398,28 +847,34 @@ fn lemma_of_verb(
     // (1) Irregolari + suffissi noti — ma validati strutturalmente.
     //     `grammar::lemmatize` ha falsi positivi su forme regolari: es.
     //     "chiamo" (= chiamare 1sg) viene letto come `chare` 1pl perché
-    //     termina in "iamo". Quando il kg_proc è disponibile, validiamo
-    //     l'infinito proposto: se non è `IsA verbo`, scartiamo e proviamo
-    //     il fallback morfologico (che produrrà "chiamare", valido).
+    //     termina in "iamo". Validiamo l'infinito proposto come VERBO
+    //     (`is_verb_form`): se non lo è, scartiamo e proviamo il fallback
+    //     morfologico (che produrrà "chiamare", valido).
     if let Some(r) = lemmatize(&w) {
-        match kg_proc {
-            None => return Some((r.infinitive, r.person)),
-            Some(kp) if is_kg_proc_isa(kp, &r.infinitive, "verbo") =>
-                return Some((r.infinitive, r.person)),
-            _ => { /* falso positivo: continua al fallback morfologico */ }
+        if kg_proc.is_none() && kg.is_none() {
+            // Path test: nessun grafo per validare → fidati della morfologia.
+            return Some((r.infinitive, r.person));
         }
+        if is_verb_form(&r.infinitive, kg_proc, kg) {
+            return Some((r.infinitive, r.person));
+        }
+        // falso positivo morfologico: continua al fallback
     }
 
-    let kp = kg_proc?;
-
-    // (2) Il token stesso è già infinito? (es. "essere", "andare" in un'enumerazione)
-    if is_kg_proc_isa(kp, &w, "verbo") {
+    // (2) Il token stesso è già un INFINITO? (es. "essere", "andare" in
+    //     un'enumerazione). Richiede la MORFOLOGIA da infinito (-are/-ere/-ire):
+    //     senza questo gate, le NOMINALIZZAZIONI (tradimento/movimento/
+    //     sentimento, tutte `IsA azione` nel kg_sem) venivano scambiate per
+    //     verbi da `is_verb_concept`, rubando il ruolo di pivot al verbo vero.
+    if (w.ends_with("are") || w.ends_with("ere") || w.ends_with("ire"))
+        && is_verb_form(&w, kg_proc, kg)
+    {
         return Some((w.clone(), Person::Third)); // infinito non porta persona
     }
 
     // (3) Fallback morfologico: prova suffissi del presente regolare.
     //     Lo stem deve avere lunghezza ≥3 per evitare match su monosillabi;
-    //     il candidato infinito deve essere validato come verbo nel kg_proc.
+    //     il candidato infinito deve essere validato come verbo (`is_verb_form`).
     const PRESENT_SUFFIXES: &[(&str, Person)] = &[
         ("iamo", Person::FirstPlural),
         ("ate",  Person::SecondPlural),
@@ -435,17 +890,143 @@ fn lemma_of_verb(
 
     for (suf, person) in PRESENT_SUFFIXES {
         if let Some(stem) = w.strip_suffix(suf) {
-            if stem.len() < 3 { continue; }
+            // stem ≥2 cattura verbi brevi ("amo"→am→amare); la validazione
+            // `is_verb_form` (kg) scarta i candidati-spazzatura, quindi
+            // possiamo permetterci stem corti senza falsi positivi sui nomi.
+            if stem.len() < 2 { continue; }
             for inf_suf in &["are", "ere", "ire"] {
                 let candidate = format!("{}{}", stem, inf_suf);
-                if is_kg_proc_isa(kp, &candidate, "verbo") {
+                if is_verb_form(&candidate, kg_proc, kg) {
                     return Some((candidate, *person));
                 }
             }
         }
     }
 
+    // (3-bis) Participio passato REGOLARE come forma verbale (-ato/-uto/-ito +
+    //     concordanza). "lavorato"→lavorare, "andata"→andare. KG-validato come
+    //     gli altri; nel contesto post-articolo il chiamante (coverage) applica
+    //     la guardia nominale ("il gelato" ≠ verbo). Gli irregolari passano da
+    //     `lemmatize` (1b) sopra.
+    const PARTICIPLE: &[(&[&str], &str, Person)] = &[
+        (&["ato", "ata", "ati", "ate"], "are", Person::Third),
+        (&["uto", "uta", "uti", "ute"], "ere", Person::Third),
+        (&["ito", "ita", "iti", "ite"], "ire", Person::Third),
+    ];
+    for (sufs, inf_suf, person) in PARTICIPLE {
+        for suf in *sufs {
+            if let Some(stem) = w.strip_suffix(suf) {
+                if stem.len() < 2 { continue; }
+                let candidate = format!("{}{}", stem, inf_suf);
+                if is_verb_form(&candidate, kg_proc, kg) {
+                    return Some((candidate, *person));
+                }
+            }
+        }
+    }
+
+    // (3-ter) Gerundio (-ando→are, -endo→ere/ire): "cercando"→cercare,
+    //     "scrivendo"→scrivere. La progressiva "sto cercando" è gemella del
+    //     composto "ho cercato". KG-validato.
+    if let Some(stem) = w.strip_suffix("ando") {
+        if stem.len() >= 2 {
+            let candidate = format!("{}are", stem);
+            if is_verb_form(&candidate, kg_proc, kg) {
+                return Some((candidate, Person::Third));
+            }
+        }
+    }
+    if let Some(stem) = w.strip_suffix("endo") {
+        if stem.len() >= 2 {
+            for inf_suf in &["ere", "ire"] {
+                let candidate = format!("{}{}", stem, inf_suf);
+                if is_verb_form(&candidate, kg_proc, kg) {
+                    return Some((candidate, Person::Third));
+                }
+            }
+        }
+    }
+
+    // (4) Fallback FUTURO regolare. Il futuro di -are e -ere collassa sullo
+    //     stesso tema (-er-): "amerà"/"temerà" → ambigui dalla sola superficie,
+    //     così come "-ir-" per -ire. Generiamo i candidati e lasciamo che il KG
+    //     disambigui (`is_verb_form`) — stesso principio del presente, nessuna
+    //     lista. Ordine suffissi: prima i lunghi. La radice del futuro porta
+    //     già l'infisso, quindi i candidati sono `stem(+a/e/i)+re`:
+    //       "-erò/erai/erà/eremo/erete/eranno" → {are, ere}
+    //       "-irò/irai/irà/iremo/irete/iranno" → {ire}
+    use crate::topology::grammar::Person as P;
+    const FUTURE_ER: &[(&str, P)] = &[
+        ("eranno", P::ThirdPlural), ("eremo", P::FirstPlural), ("erete", P::SecondPlural),
+        ("erò", P::First), ("erai", P::Second), ("erà", P::Third),
+    ];
+    const FUTURE_IR: &[(&str, P)] = &[
+        ("iranno", P::ThirdPlural), ("iremo", P::FirstPlural), ("irete", P::SecondPlural),
+        ("irò", P::First), ("irai", P::Second), ("irà", P::Third),
+    ];
+    for (suf, person) in FUTURE_ER {
+        if let Some(stem) = w.strip_suffix(suf) {
+            if stem.len() < 2 { continue; }
+            for inf_suf in &["are", "ere"] {
+                let candidate = format!("{}{}", stem, inf_suf);
+                if is_verb_form(&candidate, kg_proc, kg) {
+                    return Some((candidate, *person));
+                }
+            }
+        }
+    }
+    for (suf, person) in FUTURE_IR {
+        if let Some(stem) = w.strip_suffix(suf) {
+            if stem.len() < 2 { continue; }
+            let candidate = format!("{}ire", stem);
+            if is_verb_form(&candidate, kg_proc, kg) {
+                return Some((candidate, *person));
+            }
+        }
+    }
+
     None
+}
+
+/// Phase 84 (2c-A): un infinito è un verbo se UN segnale lo conferma —
+/// (i) kg_proc lo marca `IsA verbo` (verbi curati), oppure (ii) la sua catena
+/// IsA nel kg_sem raggiunge un concetto-verbo. Il lessico NON porta POS
+/// affidabili sui verbi (verificato dal vivo: POS=None su amare/pensare/…),
+/// quindi la verbità è morfologia (`lemmatize`, a monte) + conferma semantica
+/// (qui) — mai una lista curata di tutti i verbi italiani.
+fn is_verb_form(
+    infinitive: &str,
+    kg_proc: Option<&KnowledgeGraph>,
+    kg: Option<&KnowledgeGraph>,
+) -> bool {
+    if let Some(kp) = kg_proc {
+        if is_kg_proc_isa(kp, infinitive, "verbo") {
+            return true;
+        }
+    }
+    is_verb_concept(infinitive, kg)
+}
+
+/// Catena IsA (1-2 hop) nel kg_sem verso un concetto-verbo. I root sono
+/// concetti (non parole) — insieme piccolo e stabile, non cresce col lessico.
+fn is_verb_concept(word: &str, kg: Option<&KnowledgeGraph>) -> bool {
+    const VERB_ROOTS: &[&str] = &[
+        "azione", "atto", "processo", "evento",
+        "movimento", "accadimento", "attività", "fare",
+    ];
+    let Some(kg) = kg else { return false; };
+    let w = word.to_lowercase();
+    for p in kg.query_objects(&w, RelationType::IsA) {
+        if VERB_ROOTS.contains(&p.to_lowercase().as_str()) {
+            return true;
+        }
+        for gp in kg.query_objects(p, RelationType::IsA) {
+            if VERB_ROOTS.contains(&gp.to_lowercase().as_str()) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Phase 80: legge la categoria del verbo (copula/percettivo/cognitivo/
@@ -457,7 +1038,7 @@ fn lemma_of_verb(
 /// Questa priorità riflette la specificità semantica del verbo (non un
 /// dispatch arbitrario): "chiamare" come denominativo è informativo,
 /// "chiamare" come azione generica è una banalità.
-fn verb_category(
+pub fn verb_category(
     infinitive: &str,
     kg_proc: Option<&KnowledgeGraph>,
 ) -> Option<&'static str> {
@@ -474,7 +1055,7 @@ fn verb_category(
 /// pronome, articolo, preposizione, marcatore, congiunzione, oppure
 /// `IsA copula`. La distinzione vive nei dati: aggiungere/togliere
 /// parole-funzione è curation.
-fn is_kg_proc_function_word(word: &str, kg_proc: Option<&KnowledgeGraph>) -> bool {
+pub fn is_kg_proc_function_word(word: &str, kg_proc: Option<&KnowledgeGraph>) -> bool {
     let Some(kp) = kg_proc else { return false; };
     let w = word.to_lowercase();
     let parents = kp.query_objects(&w, RelationType::IsA);
@@ -483,7 +1064,14 @@ fn is_kg_proc_function_word(word: &str, kg_proc: Option<&KnowledgeGraph>) -> boo
         if matches!(p_lc.as_str(),
             "pronome" | "articolo" | "preposizione" |
             "marcatore" | "congiunzione" | "copula" |
-            "determinante") {
+            "determinante" |
+            // Phase 86+ (circostanza): un avverbio modifica, non è mai
+            // soggetto/oggetto/predicato → si salta nella selezione del predicato
+            // ("sono sempre felice" → predicato=felice, non "sempre"). Allinea a
+            // is_function_word_simple, che già lo include.
+            "avverbio" |
+            // Un'interiezione è un atto espressivo a sé, mai un argomento.
+            "interiezione") {
             return true;
         }
     }
@@ -491,7 +1079,7 @@ fn is_kg_proc_function_word(word: &str, kg_proc: Option<&KnowledgeGraph>) -> boo
 }
 
 /// Helper: verifica `subject IsA target` 1-hop nel kg_proc.
-fn is_kg_proc_isa(kg_proc: &KnowledgeGraph, subject: &str, target: &str) -> bool {
+pub(crate) fn is_kg_proc_isa(kg_proc: &KnowledgeGraph, subject: &str, target: &str) -> bool {
     kg_proc.query_objects(subject, RelationType::IsA)
         .iter().any(|p| p.to_lowercase() == target.to_lowercase())
 }
@@ -590,7 +1178,7 @@ fn is_likely_proper_name(
 /// e stabile, non cresce con il vocabolario. Qualunque significante che
 /// risale a uno di essi (es. "fame" → "bisogno", "buio" → niente di emotivo)
 /// emerge come stato interno o no.
-fn is_inner_state(word: &str, lexicon: &Lexicon, kg: Option<&KnowledgeGraph>) -> bool {
+pub(crate) fn is_inner_state(word: &str, lexicon: &Lexicon, kg: Option<&KnowledgeGraph>) -> bool {
     const INNER_STATE_ROOTS: &[&str] = &[
         "emozione", "sentimento", "stato_d_animo", "sensazione",
         "affetto", "umore", "bisogno", "dolore", "sofferenza",

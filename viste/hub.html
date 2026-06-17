@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI-r1 · admin</title>
+<link rel="stylesheet" href="/campovasto/fonts/jetbrains-mono.css">
+<style>
+  /* Colori/token: fonte unica = js/theme.js. Nessun hex letterale. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--color-bg); color: var(--color-text);
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.5;
+  }
+  body { max-width: 1080px; margin: 0 auto; padding: var(--space-lg); }
+
+  header.bar { display: flex; align-items: baseline; gap: var(--space-md); flex-wrap: wrap; }
+  header.bar h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  header.bar .sub { color: var(--color-text-dim); font-size: 12px; }
+  .vitali {
+    margin-left: auto; display: flex; gap: var(--space-md); align-items: center;
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: 8px; padding: 6px var(--space-md); font-size: 12px;
+  }
+  .vitali .v { display: flex; flex-direction: column; line-height: 1.2; }
+  .vitali .v .lbl { color: var(--color-text-dim); font-size: 10px; }
+  .vitali .v .val { color: var(--color-text); font-weight: 600; }
+  .vitali .v .val.hi { color: var(--c-accent); }
+  .ws { width: 8px; height: 8px; border-radius: 50%; background: var(--color-border); }
+  .ws.ok { background: var(--c-ok); box-shadow: 0 0 6px var(--c-ok); }
+
+  .grid {
+    margin-top: var(--space-lg); display: grid; gap: var(--space-md);
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .card {
+    display: block; text-decoration: none; color: var(--color-text);
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: 10px; padding: var(--space-md);
+    transition: var(--transition-smooth);
+  }
+  .card:hover { border-color: var(--bordo-hover); transform: translateY(-2px); }
+  .card .name { font-size: 15px; font-weight: 600; }
+  .card .desc { margin-top: 6px; font-size: 12px; color: var(--color-text-dim); }
+  .card.soon { opacity: 0.7; }
+  .card .badge {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--color-bg); background: var(--c-accent);
+    border-radius: 4px; padding: 1px 6px; margin-left: 8px; vertical-align: middle;
+  }
+  .card .badge.soon { background: var(--color-text-dim); }
+  .card .badge.exp  { background: var(--c-warn); }
+
+  /* Gate = card primaria, larga e dominante */
+  .card.primary { grid-column: 1 / -1; border-left: 3px solid var(--c-accent); }
+  .card.primary .name { font-size: 18px; }
+
+  .maint {
+    margin-top: var(--space-lg); padding-top: var(--space-md);
+    border-top: 1px solid var(--color-border);
+  }
+  .maint h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--h3-color); margin-bottom: var(--space-sm); }
+  .maint .row { display: flex; gap: var(--space-sm); flex-wrap: wrap; align-items: center; }
+  .maint button {
+    font-family: inherit; font-size: 12px; cursor: pointer; color: var(--color-text);
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: 6px; padding: 6px 12px; transition: var(--transition-smooth);
+  }
+  .maint button:hover { border-color: var(--bordo-hover); }
+  .maint .note { font-size: 11px; color: var(--testo-tenue); margin-left: auto; }
+  .maint .status { font-size: 11px; color: var(--color-text-dim); margin-top: 8px; min-height: 14px; }
+</style>
+</head>
+<body>
+  <header class="bar">
+    <h1>UI-r1 · admin</h1>
+    <span class="sub">hub — il peso vive nelle viste dedicate</span>
+    <div class="vitali" id="vitali">
+      <div class="v"><span class="lbl">parole</span><span class="val hi" id="v-vocab">—</span></div>
+      <div class="v"><span class="lbl">simplessi</span><span class="val" id="v-simplex">—</span></div>
+      <div class="v"><span class="lbl">perturb.</span><span class="val" id="v-perturb">—</span></div>
+      <div class="v"><span class="lbl">energia</span><span class="val" id="v-energy">—</span></div>
+      <span class="ws" id="ws" title="connessione live"></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <a class="card primary" href="/comprensione">
+      <span class="name">★ Gate di comprensione</span>
+      <div class="desc">L'analisi di un input esibita slot per slot: cosa è legato, cosa è rimasto sciolto, il verdetto di saturazione. Il cuore del progetto. (Pagina dedicata, stateless.)</div>
+    </a>
+
+    <a class="card" href="/campovasto/">
+      <span class="name">Campo / KG</span>
+      <div class="desc">L'esploratore del knowledge graph. ~25.000 parole, firme 8D, relazioni.</div>
+    </a>
+    <a class="card" href="/frattali">
+      <span class="name">Frattali</span>
+      <div class="desc">Lente 3D alternativa sul KG: i 64 attrattori e la nuvola di parole.</div>
+    </a>
+    <a class="card" href="/stato-interno">
+      <span class="name">Stato interno</span>
+      <div class="desc">Cosa UI-r1 non ha ancora capito: le domande aperte sui propri vuoti.</div>
+    </a>
+
+    <a class="card" href="/dialogo">
+      <span class="name">Chat<span class="badge exp">sperimentale</span></span>
+      <div class="desc">Turno reattivo. L'output è ruvido — secondario finché il Gate non è solido.</div>
+    </a>
+    <a class="card" href="/curazione">
+      <span class="name">Cura KG</span>
+      <div class="desc">Strumento di curazione del grafo: parole, firme, relazioni.</div>
+    </a>
+    <a class="card" href="/community">
+      <span class="name">Comunità</span>
+      <div class="desc">Insegnamento collettivo: campo, voce, traccia.</div>
+    </a>
+  </div>
+
+  <div class="maint">
+    <h2>Manutenzione</h2>
+    <div class="row">
+      <button id="m-dream" title="Avanza il ciclo onirico: l'entità 'digerisce' tra i turni — decadimento del campo, consolidamento delle memorie (STM→MTM→LTM), fase REM.">tick sogno</button>
+      <button id="m-grow" title="Cristallizza i pattern semantici ricorrenti in memoria (simplessi) e propone nuove connessioni.">consolida</button>
+      <button id="m-persist" title="Scrive lo stato corrente sul file .bin — il formato riletto all'avvio.">persisti .bin</button>
+      <span class="note">controlli di sviluppo — mutano la sessione viva (passa il mouse per la spiegazione)</span>
+    </div>
+    <div class="status" id="m-status"></div>
+  </div>
+
+<script type="module">
+import { UI, applyThemeToCss } from '/campovasto/js/theme.js';
+applyThemeToCss();
+const root = document.documentElement;
+root.style.setProperty('--c-accent', UI.radarStroke);
+root.style.setProperty('--c-ok',     UI.pathGlow);
+root.style.setProperty('--c-warn',   UI.unknownBg);
+
+const $ = id => document.getElementById(id);
+const fmt = n => (typeof n === 'number' ? n.toLocaleString('it-IT') : '—');
+
+async function refreshVitali(){
+  try {
+    const d = await (await fetch('/api/state')).json();
+    const r = d.report || d;
+    $('v-vocab').textContent   = fmt(r.vocabulary_size);
+    $('v-simplex').textContent = fmt(r.simplex_count);
+    $('v-perturb').textContent = fmt(r.total_perturbations);
+    $('v-energy').textContent  = ((d.vital || {}).activation ?? 0).toFixed(3);
+  } catch {}
+}
+
+function connectWS(){
+  try {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onopen  = () => $('ws').classList.add('ok');
+    ws.onclose = () => { $('ws').classList.remove('ok'); setTimeout(connectWS, 3000); };
+    ws.onmessage = () => {};
+  } catch { setTimeout(connectWS, 3000); }
+}
+
+async function maint(url, label){
+  $('m-status').textContent = `${label}…`;
+  try { const r = await fetch(url, { method: 'POST' }); $('m-status').textContent = r.ok ? `${label}: ok` : `${label}: errore ${r.status}`; }
+  catch { $('m-status').textContent = `${label}: non raggiungibile`; }
+  refreshVitali();
+}
+$('m-dream').onclick   = () => maint('/api/dream',   'tick sogno');
+$('m-grow').onclick    = () => maint('/api/grow',    'consolida');
+$('m-persist').onclick = () => maint('/api/persist', 'persisti');
+
+refreshVitali();
+setInterval(refreshVitali, 5000);
+connectWS();
+</script>
+</body>
+</html>

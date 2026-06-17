@@ -82,6 +82,20 @@ pub enum ObjectRef {
     Variable(String),
 }
 
+/// Un complemento della frase: una preposizione + il suo nome, con la relazione
+/// kg_sem disambiguata (Phase 86 Stadio 2). "ho paura **del futuro**" →
+/// Complement{prep:"del", noun:"futuro", relation: <disambiguata dal KG>}.
+/// È l'analisi logica *completa*: oltre il singolo `via`, ogni sintagma
+/// preposizionale diventa un legame tipato.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Complement {
+    pub preposition: String,
+    pub noun: String,
+    /// Relazione disambiguata contro il KG (None se la preposizione non ha
+    /// ipotesi-contenuto, es. "a" dativo).
+    pub relation: Option<RelationType>,
+}
+
 /// La proposizione che una frase porta.
 ///
 /// È la lettura *strutturale* dell'enunciato come triple, prima di qualsiasi
@@ -97,9 +111,42 @@ pub struct SentenceProposition {
     /// È il complemento che ANCORA l'oggetto al mondo: senza il via, il claim
     /// resta interno ("ho paura"); con il via, è già articolato.
     pub via: Option<String>,
+    /// Lemma del verbo di SUPERFICIE che ha realizzato la relazione (es.
+    /// "uccidere" in "il tradimento uccide la fiducia", "iniziare" in "il giorno
+    /// inizia"). La `relation` porta il TIPO (Does/IsA/FeelsAs…); questo porta il
+    /// TOKEN concreto, così la comprensione non perde *quale* azione è e
+    /// l'espressione può realizzarla invece del generico "compie". `None` quando
+    /// non c'è un verbo lessicale di contenuto (copula "è", o frame senza verbo).
+    /// Letto dalla stessa lemmatizzazione che categorizza il verbo — generale, mai
+    /// per-verbo.
+    pub verb_lemma: Option<String>,
     /// Polarità della proposizione (false se l'utterance contiene una negazione
     /// che precede il verbo). Per ora rilevata via parola letterale "non".
     pub polarity: bool,
+    /// Tutti i complementi preposizionali (Phase 86 Stadio 2), ciascuno con la
+    /// relazione disambiguata. `via` resta il complemento di specificazione
+    /// primario (compat); `complements` è l'analisi logica completa.
+    pub complements: Vec<Complement>,
+    /// Il soggetto di superficie quando è CELATO (pro-drop italiano):
+    /// "vogliamo"→"noi", "devo"→"io". Recuperato dalla desinenza del verbo.
+    /// `None` per soggetti del mondo (in `subject`) o domande.
+    pub subject_surface: Option<String>,
+}
+
+/// Una proposizione ancorata alla sua CLAUSOLA (multi-locus, Phase 86+).
+/// Un enunciato è un `Vec<ClauseProposition>`; la primaria (prima indipendente)
+/// è quella da cui la voce a turno singolo risponde, il numero di loci
+/// indipendenti con proposizione alimenta il bisogno `Strutturare` (i dump).
+#[derive(Debug, Clone)]
+pub struct ClauseProposition {
+    /// La proposizione della clausola. `None` quando la clausola non porta una
+    /// proposizione estraibile (onesto: meglio nessuna che una sbagliata —
+    /// la subordinata NON deve diventare primaria al posto della principale).
+    pub prop: Option<SentenceProposition>,
+    /// Intervallo di token della clausola nell'enunciato.
+    pub range: std::ops::Range<usize>,
+    /// La clausola è subordinata (mai candidabile a primaria).
+    pub subordinate: bool,
 }
 
 /// Risultato del confronto fra una SentenceProposition e il kg_sem.
@@ -140,10 +187,45 @@ pub struct KgConfrontation {
 ///
 /// Restituisce None se nessun SpeakerClaim è stato rilevato e nessuna
 /// proposizione di terza persona può essere ricostruita.
+/// Riduzione nominale validata di un token in ruolo ARGOMENTO (oggetto/via): al
+/// singolare se il KG lo conferma, altrimenti superficie (deferisce sull'ambiguo).
+/// Senza KG, identità. È la lemmatizzazione per ruolo applicata agli argomenti.
+fn reduce_nominal(w: &str, kg: Option<&KnowledgeGraph>) -> String {
+    reduce_nominal_gendered(w, kg, None)
+}
+
+/// Come `reduce_nominal` ma col genere noto dall'articolo (accordo grammaticale):
+/// scioglie la falsa-ambiguità dei plurali ("i gatti"→"gatto", non deferito).
+fn reduce_nominal_gendered(w: &str, kg: Option<&KnowledgeGraph>, masc: Option<bool>) -> String {
+    match kg {
+        Some(k) => crate::topology::grammar::kg_validated_nominal_gendered(w, masc, |c| k.contains(c)),
+        None => w.to_string(),
+    }
+}
+
+/// Genere del nome `target` dedotto dall'articolo che lo precede in `raw_words`
+/// (accordo grammaticale, non morfologia indovinata). i/gli/il/lo/un/uno →
+/// maschile; le/la/una → femminile; `l'`/articolo assente/altro → None (ambiguo:
+/// non si indovina, [[feedback-no-tricks-toward-reality]]). Usato per ridurre i
+/// plurali argomento al singolare giusto ("le piante"→pianta, "i gatti"→gatto).
+fn article_gender(raw_words: &[String], target: &str) -> Option<bool> {
+    let t = target.to_lowercase();
+    let idx = raw_words.iter().position(|w| w.to_lowercase() == t)?;
+    if idx == 0 {
+        return None;
+    }
+    match raw_words[idx - 1].to_lowercase().as_str() {
+        "i" | "gli" | "il" | "lo" | "un" | "uno" => Some(true),
+        "le" | "la" | "una" => Some(false),
+        _ => None,
+    }
+}
+
 pub fn extract_proposition(
     raw_words: &[String],
     claim: Option<&SpeakerClaim>,
     kg_proc: Option<&KnowledgeGraph>,
+    kg: Option<&KnowledgeGraph>,
 ) -> Option<SentenceProposition> {
     // ── 1. Polarità: cerchiamo "non" prima del primo verbo riconosciuto ────
     let polarity = !raw_words.iter().any(|w| w.eq_ignore_ascii_case("non"));
@@ -153,17 +235,32 @@ pub fn extract_proposition(
     //    "cosa pensi?" → Variable("cosa") + ... + Entity
     if let Some(interrog) = find_interrogative(raw_words) {
         let (subject, object) = build_question(&interrog, raw_words, kg_proc);
+        let _ = object;
         return Some(SentenceProposition {
             subject,
             relation: RelationType::IsA, // default per domande aperte (chi/cosa/quale)
             object: Some(ObjectRef::Variable(interrog)),
             via: None,
+            verb_lemma: None, // domanda aperta: il verbo è copula/da-riempire
             polarity,
-            // (signature: tener conto del campo via in costruzioni del tipo
-            //  "di cosa hai paura?" → la variable è nell'object, il via è
-            //  "paura"; per ora teniamo semplice e lasciamo questo caso a
-            //  iterazioni successive.)
-        }).map(|mut p| { p.object = Some(ObjectRef::Variable(interrog_label(&p))); p });
+            complements: vec![],
+            subject_surface: None,
+        }).map(|mut p| {
+            p.object = Some(ObjectRef::Variable(interrog_label(&p)));
+            p.complements = extract_complements(raw_words, kg_proc, kg, &p);
+            p
+        });
+    }
+
+    // ── 3.bis Caso soggetto-Mondo (Phase 84, 2c-D): nessun claim Speaker/
+    //    Entity, ma una frase in 3a persona sul mondo ("il mare è profondo").
+    //    → World(soggetto) IsA oggetto. Solo copula per ora; i verbi d'azione
+    //    in 3a persona ("il sole splende") richiederanno il kg_sem qui.
+    if claim.is_none() {
+        if let Some(mut p) = extract_world_proposition(raw_words, kg_proc, kg, polarity) {
+            p.complements = extract_complements(raw_words, kg_proc, kg, &p);
+            return Some(p);
+        }
     }
 
     // ── 3. Caso con SpeakerClaim (Phase 80): la frase ha un agente+verbo+predicato ─
@@ -173,27 +270,176 @@ pub fn extract_proposition(
         ClaimAgent::Entity  => SubjectRef::Entity,
     };
     let relation = relation_from_verb_category(claim);
-    let object = Some(ObjectRef::Word(claim.predicate.clone()));
+    // Phase 86+: lemmatizzazione PER RUOLO. L'oggetto e la via sono ARGOMENTI
+    // (nomi) → riduzione nominale validata ("biciclette"→"bicicletta"), mai un
+    // infinito (il ruolo ha disambiguato nome-vs-verbo). Deferisce sull'ambiguo.
+    let object = Some(ObjectRef::Word(reduce_nominal_gendered(
+        &claim.predicate, kg, article_gender(raw_words, &claim.predicate))));
     // Phase 83: se il frame del verbo ha già separato un complemento (il tema
     // dativo, es. "madre" in "mi manca mia madre"), QUELLO è la via — non
     // serve ricavarlo dalle preposizioni. Altrimenti, frame nominativo: via
     // dalla preposizione di specificazione ("del futuro").
     let via = claim.complement.clone()
-        .or_else(|| extract_via(raw_words, &claim.predicate, kg_proc));
+        .or_else(|| extract_via(raw_words, &claim.predicate, kg_proc))
+        .map(|v| reduce_nominal_gendered(&v, kg, article_gender(raw_words, &v)));
 
-    Some(SentenceProposition { subject, relation, object, via, polarity })
+    let mut prop = SentenceProposition {
+        subject, relation, object, via,
+        verb_lemma: claim.verb_lemma.clone(),
+        polarity, complements: vec![],
+        subject_surface: claim.subject_surface.clone(),
+    };
+    prop.complements = extract_complements(raw_words, kg_proc, kg, &prop);
+    Some(prop)
+}
+
+/// Multi-locus (Phase 86+): una proposizione per CLAUSOLA dell'enunciato.
+///
+/// Usa il chunker clausa-aware (`analisi_logica::analizza`) per segmentare, poi
+/// estrae la proposizione di ogni clausola sul suo *slice* di token, con il
+/// claim rilevato PER CLAUSOLA. Risolve la frase multi-clausola: "mi sento solo
+/// da quando me ne sono andato" → la principale "mi sento solo" non viene più
+/// scavalcata dalla subordinata. Le clausole senza proposizione restano nel Vec
+/// (con `prop=None`) così la selezione della primaria resta strutturale.
+///
+/// Senza entrambi i grafi (path di test) ricade su una proposizione singola
+/// sull'intero enunciato — backward-compatible con `extract_proposition`.
+pub fn extract_propositions(
+    raw_words: &[String],
+    lexicon: &crate::topology::lexicon::Lexicon,
+    kg_proc: Option<&KnowledgeGraph>,
+    kg: Option<&KnowledgeGraph>,
+) -> Vec<ClauseProposition> {
+    let (Some(kp), Some(k)) = (kg_proc, kg) else {
+        let claim = crate::topology::input_reading::detect_speaker_claim(
+            raw_words, lexicon, kg, kg_proc,
+        );
+        let prop = extract_proposition(raw_words, claim.as_ref(), kg_proc, kg);
+        return vec![ClauseProposition { prop, range: 0..raw_words.len(), subordinate: false }];
+    };
+    let analisi = crate::topology::analisi_logica::analizza(raw_words, kp, k);
+    let mut out = Vec::with_capacity(analisi.clausole.len());
+    for c in &analisi.clausole {
+        let slice = &raw_words[c.range.clone()];
+        if slice.is_empty() { continue; }
+        let claim = crate::topology::input_reading::detect_speaker_claim(
+            slice, lexicon, kg, kg_proc,
+        );
+        let prop = extract_proposition(slice, claim.as_ref(), kg_proc, kg);
+        out.push(ClauseProposition { prop, range: c.range.clone(), subordinate: c.subordinate });
+    }
+
+    // Phase 86+: ELLISSI DEL SOGGETTO nelle coordinate. In un dump "devo chiamare
+    // il dottore E prendere le medicine" la 2ª clausola non ha soggetto esplicito
+    // e il suo verbo è all'infinito → niente claim. Ma il soggetto è ELISO e
+    // co-riferisce a quello della principale (Speaker/Entity). Lo rendiamo
+    // esplicito: re-estraiamo la clausola coordinata con il pronome iniettato.
+    // Solo coordinate (non subordinate), solo se la principale ha un agente.
+    let inherited_pron: Option<&str> = primary_index(&out)
+        .and_then(|i| out[i].prop.as_ref())
+        .and_then(|p| match p.subject {
+            SubjectRef::Speaker => Some("io"),
+            SubjectRef::Entity => Some("tu"),
+            _ => None,
+        });
+    if let Some(pron) = inherited_pron {
+        let primary = primary_index(&out);
+        for idx in 0..out.len() {
+            if out[idx].prop.is_some() || out[idx].subordinate || Some(idx) == primary {
+                continue;
+            }
+            let mut injected: Vec<String> = Vec::with_capacity(out[idx].range.len() + 1);
+            injected.push(pron.to_string());
+            injected.extend_from_slice(&raw_words[out[idx].range.clone()]);
+            let claim = crate::topology::input_reading::detect_speaker_claim(
+                &injected, lexicon, kg, kg_proc,
+            );
+            if let Some(p) = extract_proposition(&injected, claim.as_ref(), kg_proc, kg) {
+                out[idx].prop = Some(p);
+            }
+        }
+    }
+    out
+}
+
+/// L'indice della proposizione PRIMARIA: la prima clausola INDIPENDENTE; in
+/// mancanza, la prima clausola. La voce a turno singolo risponde da qui (le
+/// subordinate sono circostanza, non il cuore dell'enunciato).
+pub fn primary_index(props: &[ClauseProposition]) -> Option<usize> {
+    if props.is_empty() { return None; }
+    Some(props.iter().position(|c| !c.subordinate).unwrap_or(0))
+}
+
+/// Quanti loci INDIPENDENTI con una proposizione reale (≥2 ⇒ dump → bisogno
+/// `Strutturare`). Le subordinate (circostanza di un'unica idea) non contano.
+pub fn independent_locus_count(props: &[ClauseProposition]) -> usize {
+    props.iter().filter(|c| !c.subordinate && c.prop.is_some()).count()
+}
+
+/// Phase 86 Stadio 2: estrae TUTTI i complementi preposizionali della frase e
+/// disambigua la relazione di ciascuno contro il KG. La "testa" a cui il
+/// complemento si lega è l'oggetto-contenuto (il predicato) se presente,
+/// altrimenti il soggetto-Mondo. Senza kg, nessun complemento (niente
+/// disambiguazione affidabile).
+fn extract_complements(
+    raw_words: &[String],
+    kg_proc: Option<&KnowledgeGraph>,
+    kg: Option<&KnowledgeGraph>,
+    prop: &SentenceProposition,
+) -> Vec<Complement> {
+    let Some(kg) = kg else { return vec![] };
+    // testa: oggetto-parola, oppure soggetto-Mondo
+    let head = match &prop.object {
+        Some(ObjectRef::Word(w)) => Some(w.to_lowercase()),
+        _ => None,
+    }.or_else(|| match &prop.subject {
+        SubjectRef::World(w) => Some(w.to_lowercase()),
+        _ => None,
+    });
+    let Some(head) = head else { return vec![] };
+
+    let mut out: Vec<Complement> = Vec::new();
+    for (i, w) in raw_words.iter().enumerate() {
+        let prep = w.to_lowercase();
+        // È una preposizione con ipotesi-contenuto? (di/da/per/con/su/in/contro/…)
+        if crate::topology::prepositions::hypotheses(&prep).is_empty() {
+            continue;
+        }
+        // Prima parola-contenuto dopo la preposizione.
+        let Some(noun) = raw_words[i + 1..].iter()
+            .find(|x| !is_function_word_simple(&x.to_lowercase(), kg_proc))
+            .map(|x| x.to_lowercase())
+        else { continue };
+        if noun == head || noun == prep { continue; }
+        // Evita duplicati sullo stesso nome.
+        if out.iter().any(|c| c.noun == noun) { continue; }
+        let relation = crate::topology::prepositions::disambiguate(&head, &prep, &noun, kg)
+            .map(|r| r.relation);
+        out.push(Complement { preposition: prep, noun, relation });
+    }
+    out
 }
 
 /// Cerca un pronome interrogativo nei token. Il pronome è interrogativo se
 /// `IsA interrogativo` nel kg_proc; in alternativa per i casi base usiamo
 /// la lista canonica (chi/cosa/che/dove/quando/perché/come/quale/quanto).
 fn find_interrogative(raw_words: &[String]) -> Option<String> {
-    // Interrogativi "forti": sempre interrogativi quando presenti.
+    // Interrogativi "forti": interrogativi quando presenti — MA non quando
+    // introdotti da una preposizione, che li rende subordinatori (temporali/
+    // modali): "da quando", "di come", "per quanto". Phase 86 (A2, bench
+    // 2026-06-08): senza, "mi sento solo da quando me ne sono andato" veniva
+    // letto come domanda fantasma su "quando", perdendo `Speaker FeelsAs solo`.
     const STRONG: &[&str] = &[
         "chi", "cosa", "dove", "quando", "perché", "perche", "come", "quale", "quanto",
     ];
-    if let Some(w) = raw_words.iter()
-        .find(|w| STRONG.contains(&w.to_lowercase().as_str()))
+    const SUBORDINATING_PREP: &[&str] = &["da", "di", "per", "in", "con", "su", "a", "fin", "fino"];
+    if let Some((_, w)) = raw_words.iter().enumerate()
+        .filter(|(_, w)| STRONG.contains(&w.to_lowercase().as_str()))
+        .find(|(i, _)| {
+            *i == 0 || !SUBORDINATING_PREP.contains(
+                &raw_words[i - 1].to_lowercase().trim_end_matches('\'')
+            )
+        })
     {
         return Some(w.clone());
     }
@@ -238,6 +484,143 @@ fn interrog_label(p: &SentenceProposition) -> String {
     match &p.object {
         Some(ObjectRef::Variable(w)) => w.clone(),
         _ => String::new(),
+    }
+}
+
+/// Phase 84 (2c-D): costruisce una proposizione sul Mondo da una frase in 3a
+/// persona con copula ("il mare è profondo" → `World(mare) IsA profondo`).
+/// La copula è individuata leggendo il kg_proc (`<lemma> IsA copula`); il
+/// soggetto è l'ultima parola-contenuto prima della copula, l'oggetto la prima
+/// dopo. Niente liste di verbi: copula = dato del kg_proc, soggetto/oggetto =
+/// prime parole non-funzionali. I verbi d'azione 3a persona ("il sole splende")
+/// non sono coperti qui (servirebbe il kg_sem per la verbità) — `None`.
+fn extract_world_proposition(
+    raw_words: &[String],
+    kg_proc: Option<&KnowledgeGraph>,
+    kg: Option<&KnowledgeGraph>,
+    polarity: bool,
+) -> Option<SentenceProposition> {
+    use crate::topology::grammar::{lemmatize, Person};
+    let kp = kg_proc?;
+    let is_copula = |w: &str| -> bool {
+        let lw = w.to_lowercase();
+        let lemma = lemmatize(&lw).map(|r| r.infinitive).unwrap_or_else(|| lw.clone());
+        kp.query_objects(&lemma, RelationType::IsA)
+            .iter().any(|p| p.eq_ignore_ascii_case("copula"))
+            || kp.query_objects(&lw, RelationType::IsA)
+                .iter().any(|p| p.eq_ignore_ascii_case("copula"))
+    };
+    // Pivot della frase-mondo. PRIMO tentativo: la copula ("è" → IsA) oppure
+    // "avere" ("ha"/"hanno" → Has). È la traduzione uno-a-uno categoria→relazione
+    // applicata a un soggetto del Mondo: "il mare è profondo" → World(mare) IsA
+    // profondo; "il silenzio ha un significato" → World(silenzio) Has significato.
+    // "avere" prima della copula generica: nel kg_proc è `IsA copula`, ma con un
+    // oggetto-contenuto sul Mondo significa possesso (Has), non identità.
+    //
+    // FALLBACK (Phase 86 #2): un verbo d'azione/transitivo in 3a persona
+    // ("il tradimento uccide la fiducia"). NON è un claim Speaker/Entity (3a
+    // persona → detect_speaker_claim ritorna None), ma è una proposizione sul
+    // Mondo. Richiede il kg_sem per la verbità (`lemma_of_verb` usa la catena
+    // IsA del kg_sem); la relazione viene dalla categoria del verbo (default
+    // `Does` per un transitivo non categorizzato). Senza kg, niente fallback
+    // → nessuna regressione rispetto a prima.
+    // Cattura anche il LEMMA del verbo (non solo posizione+relazione): copula e
+    // avere sono grammaticali → verb_lemma None; un verbo d'azione porta il suo
+    // lemma di superficie ("uccidere", "iniziare") così non si perde *quale*
+    // azione è. Generale: lo stesso `inf` che sceglie la relazione.
+    let (verb_pos, relation, verb_lemma) = raw_words.iter().enumerate().find_map(|(i, w)| {
+        let lw = w.to_lowercase();
+        let lemma = lemmatize(&lw).map(|r| r.infinitive).unwrap_or_else(|| lw.clone());
+        if lemma == "avere" || lw == "ha" || lw == "hanno" {
+            return Some((i, RelationType::Has, None::<String>));
+        }
+        if is_copula(w) { return Some((i, RelationType::IsA, None::<String>)); }
+        None
+    }).or_else(|| {
+        raw_words.iter().enumerate().find_map(|(i, w)| {
+            let (inf, person) = crate::topology::input_reading::lemma_of_verb(w, kg_proc, kg)?;
+            // Solo 3a persona: 1a/2a sono claim Speaker/Entity, già gestiti a monte.
+            if !matches!(person, Person::Third | Person::ThirdPlural) { return None; }
+            let rel = world_relation_for_verb(&inf, kg_proc);
+            Some((i, rel, Some(inf)))
+        })
+    })?;
+
+    let subject = raw_words[..verb_pos].iter().rev()
+        .find(|w| !is_function_word_simple(&w.to_lowercase(), kg_proc))?
+        .to_lowercase();
+
+    // Oggetto DIRETTO vs COMPLEMENTO. L'oggetto diretto si raggiunge dal verbo
+    // SOLO attraverso articoli/determinanti. Una parola-contenuto introdotta da
+    // una PREPOSIZIONE è un complemento (provenienza/luogo/oblige), non
+    // l'oggetto: "il giorno inizia DAL mattino" → verbo intransitivo, mattino è
+    // complemento — NON "giorno compie mattino". Direct objects in italiano non
+    // prendono preposizione: la disambiguazione è strutturale.
+    let is_prep = |w: &str| crate::topology::input_reading::is_kg_proc_isa(kp, w, "preposizione");
+    let mut direct: Option<String> = None;
+    let mut complement: Option<String> = None;
+    let mut saw_prep = false;
+    for w in raw_words.iter().skip(verb_pos + 1) {
+        let lw = w.to_lowercase();
+        if is_prep(&lw) { saw_prep = true; continue; }
+        if is_function_word_simple(&lw, kg_proc) { continue; }
+        if saw_prep { complement = Some(lw); } else { direct = Some(lw); }
+        break;
+    }
+
+    // Via: la specificazione dopo l'oggetto ("...uccide la fiducia PER
+    // vigliaccheria" → via=vigliaccheria), o il complemento di provenienza/
+    // luogo quando il verbo è intransitivo ("inizia dal mattino" → via=mattino).
+    let via = direct.as_ref()
+        .and_then(|o| extract_via(raw_words, o, kg_proc))
+        .or_else(|| complement.clone());
+
+    // Oggetto CLITICO proclitico: "mia moglie mi capisce" → il paziente è il
+    // clitico (mi) PRIMA del verbo, non dopo. Un pronome immediatamente prima del
+    // verbo (kg_proc `IsA pronome`/`IsA riflessivo`) è l'oggetto della transitiva.
+    // Allora la proposizione è valida anche senza oggetto post-verbale: cattura
+    // World(soggetto) Does <verbo> [polarità], il verbo non si perde più.
+    let has_proclitic_object = verb_pos > 0 && {
+        let prev = raw_words[verb_pos - 1].to_lowercase();
+        crate::topology::input_reading::is_kg_proc_isa(kp, &prev, "pronome")
+            || crate::topology::input_reading::is_kg_proc_isa(kp, &prev, "riflessivo")
+    };
+
+    // Conservativo: con un oggetto diretto, proposizione piena come prima. Con
+    // SOLO un complemento, proposizione senza oggetto (intransitivo + via). Con un
+    // oggetto clitico proclitico, proposizione transitiva (paziente cliticizzato).
+    // Con nulla, nessuna proposizione (come prima — niente regressione).
+    let object = match (&direct, &complement) {
+        (Some(o), _) => Some(ObjectRef::Word(o.clone())),
+        (None, Some(_)) => None,
+        (None, None) if has_proclitic_object => None,
+        (None, None) => return None,
+    };
+
+    Some(SentenceProposition {
+        subject: SubjectRef::World(subject),
+        relation,
+        object,
+        via,
+        verb_lemma,
+        polarity,
+        complements: vec![],
+        subject_surface: None,
+    })
+}
+
+/// Mappa la categoria di un verbo (kg_proc) alla relazione kg_sem, per un
+/// soggetto del Mondo. Speculare a `relation_from_verb_category` ma senza
+/// `ClaimKind` (qui il soggetto è un nodo del mondo, non il parlante). Un verbo
+/// transitivo non categorizzato → `Does` (compie un'azione sull'oggetto): la
+/// struttura S-V-O è catturata; il pathfinding troverà comunque la relazione
+/// reale fra i due nodi nel kg_sem.
+fn world_relation_for_verb(inf: &str, kg_proc: Option<&KnowledgeGraph>) -> RelationType {
+    match crate::topology::input_reading::verb_category(inf, kg_proc).as_deref() {
+        Some("copula") => RelationType::IsA,
+        Some("cognitivo") | Some("comunicativo") => RelationType::Expresses,
+        Some("percettivo") => RelationType::FeelsAs,
+        _ => RelationType::Does, // azione, denominativo, non categorizzato
     }
 }
 
@@ -289,6 +672,82 @@ fn is_specification_preposition(w: &str, kg_proc: Option<&KnowledgeGraph>) -> bo
     has_prep && has_spec
 }
 
+/// Phase 86+ (analisi logica, strumento RESIDUO): i token dell'input che NON
+/// risultano assegnati ad alcun ruolo dall'analisi corrente — la misura di
+/// "nessuna parola saltata" (design `analisi_logica_grammatica_kg_proc.md`).
+/// Un token è ASSEGNATO se: (a) è una parola-funzione (classe chiusa dal kg_proc),
+/// (b) è una forma verbale riconosciuta (presente o participio — il predicato o
+/// un verbo), (c) compare come contenuto della proposizione (soggetto-Mondo /
+/// oggetto / via / complemento + la sua preposizione). Tutto il resto è RESIDUO:
+/// oggi tipicamente attributi (aggettivi), complementi di tempo non-preposizionali,
+/// marcatori di subordinata. **Sotto-stima i verbi** (accetta ogni forma verbale,
+/// anche di subordinate) per non avere falsi positivi — è un floor onesto del gap.
+pub fn unaccounted_tokens(
+    raw_words: &[String],
+    prop: Option<&SentenceProposition>,
+    kg_proc: Option<&KnowledgeGraph>,
+    kg: Option<&KnowledgeGraph>,
+) -> Vec<String> {
+    use std::collections::HashSet;
+    let mut accounted: HashSet<String> = HashSet::new();
+    if let Some(p) = prop {
+        if let SubjectRef::World(w) = &p.subject {
+            accounted.insert(w.to_lowercase());
+        }
+        if let Some(ObjectRef::Word(w)) = &p.object {
+            accounted.insert(w.to_lowercase());
+        }
+        if let Some(v) = &p.via {
+            accounted.insert(v.to_lowercase());
+        }
+        for c in &p.complements {
+            accounted.insert(c.noun.to_lowercase());
+            accounted.insert(c.preposition.to_lowercase());
+        }
+    }
+    // Funzioni assegnate dal chunker (analisi logica): attributi + circostanze.
+    let mut assegnati = std::collections::HashSet::new();
+    if let (Some(kp), Some(k)) = (kg_proc, kg) {
+        assegnati.extend(crate::topology::analisi_logica::attributo_indices(raw_words, kp, k));
+    }
+    if let Some(kp) = kg_proc {
+        assegnati.extend(crate::topology::analisi_logica::circostanza_indices(raw_words, kp));
+    }
+    let attributi = assegnati;
+    let mut out = Vec::new();
+    for (i, w) in raw_words.iter().enumerate() {
+        let lw = w.to_lowercase();
+        if lw.is_empty() || !lw.chars().any(|c| c.is_alphabetic()) {
+            continue;
+        }
+        if accounted.contains(&lw) {
+            continue;
+        }
+        if attributi.contains(&i) {
+            continue; // ruolo: attributo (gruppo nominale)
+        }
+        if is_function_word_simple(&lw, kg_proc) {
+            continue;
+        }
+        if crate::topology::input_reading::lemma_of_verb(w, kg_proc, kg).is_some()
+            || is_participle_form(&lw)
+        {
+            continue;
+        }
+        out.push(lw);
+    }
+    out
+}
+
+/// Forma di participio passato (suffisso regolare, stem ≥3). Usato solo dallo
+/// strumento RESIDUO per non flaggare i verbi composti.
+fn is_participle_form(w: &str) -> bool {
+    const SUF: &[&str] = &[
+        "ato", "ata", "ati", "ate", "uto", "uta", "uti", "ute", "ito", "ita", "iti", "ite",
+    ];
+    SUF.iter().any(|s| w.strip_suffix(s).map(|st| st.len() >= 3).unwrap_or(false))
+}
+
 fn is_function_word_simple(w: &str, kg_proc: Option<&KnowledgeGraph>) -> bool {
     const CANON: &[&str] = &[
         "il", "lo", "la", "i", "gli", "le", "l'",
@@ -302,7 +761,18 @@ fn is_function_word_simple(w: &str, kg_proc: Option<&KnowledgeGraph>) -> bool {
     parents.iter().any(|p| {
         matches!(p.to_lowercase().as_str(),
             "pronome" | "articolo" | "preposizione" |
-            "marcatore" | "congiunzione" | "copula")
+            "marcatore" | "congiunzione" | "copula" |
+            // Phase 86 (triage bench 2026-06-08): un AVVERBIO è un modificatore,
+            // mai un soggetto/oggetto di contenuto. Senza questo, "forse è colpa
+            // mia" → soggetto-Mondo="forse" (già `IsA avverbio` nel kg_proc).
+            "avverbio" |
+            // Phase 86 (A1, 2026-06-08): un DETERMINANTE (possessivo/dimostrativo/
+            // quantificatore: mia/mio/questa/alcuna) non è mai testa di contenuto.
+            // Allinea questa funzione a `is_kg_proc_function_word`: senza, "con
+            // mia sorella" → complemento/via = "mia" invece di "sorella".
+            "determinante" |
+            // Un'interiezione (boh/mah) è atto espressivo a sé, non argomento.
+            "interiezione")
     })
 }
 
@@ -321,8 +791,12 @@ fn relation_from_verb_category(claim: &SpeakerClaim) -> RelationType {
         // "sento/provo X" — percezione di stato interno → FeelsAs.
         (Some("percettivo"), _)   => RelationType::FeelsAs,
         // "ho fame" / "sono triste" — copula + stato interno → FeelsAs.
-        // "io sono Marco" — copula + non-inner → IsA.
         (Some("copula"), ClaimKind::Feeling)  => RelationType::FeelsAs,
+        // copula + non-stato: ESSERE ≠ AVERE. "sono Marco" → identità (IsA);
+        // "ho un cane" / "ho sonno" → possesso/stato posseduto (Has), MAI "io è
+        // cane". La distinzione la porta il verbo di superficie (verb_lemma).
+        (Some("copula"), _) if claim.verb_lemma.as_deref() == Some("avere")
+                                              => RelationType::Has,
         (Some("copula"), _)                   => RelationType::IsA,
         // "penso/credo/voglio X" — espressione cognitiva.
         (Some("cognitivo"), _)    => RelationType::Expresses,
@@ -391,6 +865,21 @@ pub fn confront_with_kg(
             let o_lc = o.to_lowercase();
             out.matches = kg_sem.query_objects(&s_lc, prop.relation)
                 .iter().any(|t| t.eq_ignore_ascii_case(&o_lc));
+
+            // INCONGRUENZA strutturale: l'input asserisce un'IDENTITÀ o
+            // SOMIGLIANZA (X è/come Y) tra due concetti che il grafo conosce
+            // come OPPOSTI ("la paura è coraggio" ↔ paura OppositeOf coraggio).
+            // È la tensione fra ciò che il mondo dell'input dice e ciò che il
+            // MIO grafo sostiene — da evidenziare, non da nascondere.
+            if matches!(prop.relation, RelationType::IsA | RelationType::SimilarTo) {
+                let opposite = kg_sem.query_objects(&s_lc, RelationType::OppositeOf)
+                    .iter().any(|t| t.eq_ignore_ascii_case(&o_lc))
+                    || kg_sem.query_objects(&o_lc, RelationType::OppositeOf)
+                        .iter().any(|t| t.eq_ignore_ascii_case(&s_lc));
+                if opposite {
+                    out.contradictions.push((s.clone(), o.clone()));
+                }
+            }
         }
     }
 
@@ -405,6 +894,95 @@ fn node_has_any_kg_edge(kg: &KnowledgeGraph, word: &str) -> bool {
         }
     }
     false
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// confront_with_self — la frase confrontata col SÉ (Phase 85, Livello 1)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Un edge del sé colpito dalla proposizione, con la sua magnitudine
+/// (= confidenza dell'edge: la sua resistenza). Continua, mai soglia.
+#[derive(Debug, Clone)]
+pub struct SelfHit {
+    pub subject:  String,
+    pub relation: RelationType,
+    pub object:   String,
+    pub magnitude: f64,
+    /// Polarità dell'edge del SÉ (= l'impegno dell'entità su questa tripla).
+    /// È ciò che l'entità *tiene*: il rendering del posizionamento articola
+    /// questa polarità ("non è" se false), non quella della PROP in ingresso.
+    pub polarity: bool,
+}
+
+/// Esito del confronto fra una SentenceProposition e `kg_self` — l'OPINIONE
+/// come secondo legame (gemello di `KgConfrontation`). Non è una decisione: è
+/// una struttura percettiva che i decisori a valle leggeranno per risonanza
+/// (seminerà `dissonanza`/`conferma` nel kg_proc — increment successivo).
+///
+/// Livello 1 (questo increment): solo conflitto/risonanza per match-tripla
+/// esatto su soggetti `World`. `estensione` è differita (design §4.3).
+#[derive(Debug, Clone, Default)]
+pub struct SelfConfrontation {
+    /// La PROP afferma ciò che il sé nega (o viceversa): polarità discordi.
+    pub conflitti: Vec<SelfHit>,
+    /// La PROP conferma un impegno del sé: polarità concordi.
+    pub risonanze: Vec<SelfHit>,
+}
+
+impl SelfConfrontation {
+    pub fn is_empty(&self) -> bool {
+        self.conflitti.is_empty() && self.risonanze.is_empty()
+    }
+    /// Magnitudine del conflitto più forte (0.0 se nessuno). A valle diventa
+    /// l'intensità del percetto `dissonanza`.
+    pub fn max_conflitto(&self) -> f64 {
+        self.conflitti.iter().map(|h| h.magnitude).fold(0.0, f64::max)
+    }
+    /// Magnitudine della risonanza più forte (intensità di `conferma`).
+    pub fn max_risonanza(&self) -> f64 {
+        self.risonanze.iter().map(|h| h.magnitude).fold(0.0, f64::max)
+    }
+}
+
+/// Confronta la proposizione col grafo del sé. **Livello 1**: match-tripla
+/// esatto (`subject=World(s)` ∧ `relation` ∧ `object=Word(o)`, identità
+/// case-insensitive); polarità **concordi → risonanza**, **discordi →
+/// conflitto**; magnitudine = `edge.confidence`. Soggetti `Speaker`/`Entity` e
+/// le opposizioni via kg_sem sono **Livello 2** (differito).
+/// Vedi `docs/raw/architettura/kg_self_design.md` §4.3.
+pub fn confront_with_self(
+    prop: &SentenceProposition,
+    kg_self: &crate::topology::kg_self::KgSelf,
+) -> SelfConfrontation {
+    let mut out = SelfConfrontation::default();
+
+    // Livello 1: solo (World(s), R, Word(o)). Altri casi → Livello 2.
+    let (subj, obj) = match (&prop.subject, &prop.object) {
+        (SubjectRef::World(s), Some(ObjectRef::Word(o))) => (s, o),
+        _ => return out,
+    };
+
+    for e in kg_self.edges.iter() {
+        if e.relation == prop.relation
+            && e.subject.eq_ignore_ascii_case(subj)
+            && e.object.eq_ignore_ascii_case(obj)
+        {
+            let hit = SelfHit {
+                subject:  e.subject.clone(),
+                relation: e.relation,
+                object:   e.object.clone(),
+                magnitude: e.confidence,
+                polarity:  e.polarity,
+            };
+            // Polarità concordi → la PROP conferma il sé; discordi → conflitto.
+            if e.polarity == prop.polarity {
+                out.risonanze.push(hit);
+            } else {
+                out.conflitti.push(hit);
+            }
+        }
+    }
+    out
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -426,6 +1004,8 @@ mod tests {
             predicate: pred.to_string(),
             verb_category: vc.map(|s| s.to_string()),
             complement: None,
+            verb_lemma: None,
+            subject_surface: None,
         }
     }
 
@@ -443,10 +1023,55 @@ mod tests {
     }
 
     #[test]
+    fn test_confront_with_self_level1() {
+        use crate::topology::kg_self::{KgSelf, SelfEdge};
+        // Il confronto opera sulle OPINIONI (derivate+validate, innate=false):
+        // le innate sono dismesse — al load si dissolvono in pendenze.
+        let edge = |s: &str, r: RelationType, o: &str, conf: f64, pol: bool| SelfEdge {
+            subject: s.to_string(), relation: r, object: o.to_string(),
+            confidence: conf, polarity: pol, innate: false, via: None,
+        };
+        let kg_self = KgSelf { pendenze: vec![], edges: vec![
+            edge("incertezza", RelationType::IsA,  "fallimento",  0.88, false), // NON-opinione
+            edge("silenzio",   RelationType::Has,  "significato", 0.89, true),
+        ]};
+        let prop = |subj: &str, r: RelationType, obj: &str, pol: bool| SentenceProposition {
+            subject: SubjectRef::World(subj.to_string()),
+            relation: r,
+            object: Some(ObjectRef::Word(obj.to_string())),
+            via: None, verb_lemma: None, polarity: pol, complements: vec![],
+            subject_surface: None,
+        };
+
+        // "l'incertezza è un fallimento" → afferma (+) ciò che il sé nega (−) → CONFLITTO
+        let c = confront_with_self(&prop("incertezza", RelationType::IsA, "fallimento", true), &kg_self);
+        assert_eq!(c.conflitti.len(), 1, "polarità discordi → conflitto");
+        assert!(c.risonanze.is_empty());
+        assert!((c.max_conflitto() - 0.88).abs() < 1e-9, "magnitudine = confidenza dell'edge");
+
+        // "il silenzio ha un significato" → concorda (+/+) → RISONANZA
+        let r = confront_with_self(&prop("silenzio", RelationType::Has, "significato", true), &kg_self);
+        assert_eq!(r.risonanze.len(), 1, "polarità concordi → risonanza");
+        assert!(r.conflitti.is_empty());
+
+        // input che non tocca il sé → vuoto
+        assert!(confront_with_self(&prop("mare", RelationType::IsA, "profondo", true), &kg_self).is_empty());
+
+        // soggetto-sé (Entity) → Livello 2, differito → vuoto in Livello 1
+        let p_self = SentenceProposition {
+            subject: SubjectRef::Entity, relation: RelationType::IsA,
+            object: Some(ObjectRef::Word("calcolo".to_string())), via: None, verb_lemma: None, polarity: true,
+            complements: vec![],
+            subject_surface: None,
+        };
+        assert!(confront_with_self(&p_self, &kg_self).is_empty(), "self-subject è Livello 2");
+    }
+
+    #[test]
     fn io_sono_triste_yields_speaker_feelsas_triste() {
         let kg_proc = kg_proc_minimal();
         let c = claim(ClaimAgent::Speaker, ClaimKind::Feeling, "triste", Some("copula"));
-        let p = extract_proposition(&words("io sono triste"), Some(&c), Some(&kg_proc))
+        let p = extract_proposition(&words("io sono triste"), Some(&c), Some(&kg_proc), None)
             .expect("proposizione attesa");
         assert_eq!(p.subject, SubjectRef::Speaker);
         assert_eq!(p.relation, RelationType::FeelsAs);
@@ -459,7 +1084,7 @@ mod tests {
     fn ho_paura_del_futuro_yields_via_futuro() {
         let kg_proc = kg_proc_minimal();
         let c = claim(ClaimAgent::Speaker, ClaimKind::Feeling, "paura", Some("copula"));
-        let p = extract_proposition(&words("ho paura del futuro"), Some(&c), Some(&kg_proc))
+        let p = extract_proposition(&words("ho paura del futuro"), Some(&c), Some(&kg_proc), None)
             .expect("proposizione attesa");
         assert_eq!(p.subject, SubjectRef::Speaker);
         assert_eq!(p.relation, RelationType::FeelsAs);
@@ -472,7 +1097,7 @@ mod tests {
     fn mi_chiamo_francesco_yields_isa_francesco() {
         let kg_proc = kg_proc_minimal();
         let c = claim(ClaimAgent::Speaker, ClaimKind::Identity, "francesco", Some("denominativo"));
-        let p = extract_proposition(&words("mi chiamo francesco"), Some(&c), Some(&kg_proc))
+        let p = extract_proposition(&words("mi chiamo francesco"), Some(&c), Some(&kg_proc), None)
             .expect("proposizione attesa");
         assert_eq!(p.subject, SubjectRef::Speaker);
         assert_eq!(p.relation, RelationType::IsA);
@@ -483,7 +1108,7 @@ mod tests {
     fn vado_al_mare_yields_does_with_predicate_mare() {
         let kg_proc = kg_proc_minimal();
         let c = claim(ClaimAgent::Speaker, ClaimKind::Action, "mare", Some("azione"));
-        let p = extract_proposition(&words("vado al mare"), Some(&c), Some(&kg_proc))
+        let p = extract_proposition(&words("vado al mare"), Some(&c), Some(&kg_proc), None)
             .expect("proposizione attesa");
         assert_eq!(p.subject, SubjectRef::Speaker);
         assert_eq!(p.relation, RelationType::Does);
@@ -497,7 +1122,7 @@ mod tests {
     fn chi_sei_yields_variable_object_with_entity_subject() {
         let kg_proc = kg_proc_minimal();
         // Nessun SpeakerClaim per le domande senza claim esplicito.
-        let p = extract_proposition(&words("chi sei"), None, Some(&kg_proc))
+        let p = extract_proposition(&words("chi sei"), None, Some(&kg_proc), None)
             .expect("proposizione attesa");
         assert_eq!(p.subject, SubjectRef::Entity,
             "domanda con verbo 2sg → soggetto = UI-r1 (Entity)");
@@ -508,7 +1133,7 @@ mod tests {
     fn non_ho_paura_yields_polarity_false() {
         let kg_proc = kg_proc_minimal();
         let c = claim(ClaimAgent::Speaker, ClaimKind::Feeling, "paura", Some("copula"));
-        let p = extract_proposition(&words("non ho paura"), Some(&c), Some(&kg_proc))
+        let p = extract_proposition(&words("non ho paura"), Some(&c), Some(&kg_proc), None)
             .expect("proposizione attesa");
         assert!(!p.polarity, "polarità doveva essere false in presenza di `non`");
     }
@@ -516,9 +1141,47 @@ mod tests {
     #[test]
     fn no_claim_no_interrog_yields_none() {
         let kg_proc = kg_proc_minimal();
-        let p = extract_proposition(&words("il sole splende"), None, Some(&kg_proc));
+        let p = extract_proposition(&words("il sole splende"), None, Some(&kg_proc), None);
         assert!(p.is_none(),
             "senza claim e senza pronome interrogativo, niente proposizione (per ora)");
+    }
+
+    #[test]
+    fn transitivo_mondo_phase86() {
+        // Phase 86 #2: "il tradimento uccide la fiducia" → World(tradimento) Does
+        // fiducia. Verbo 3a persona transitivo, riconosciuto via kg_sem
+        // (uccidere IsA azione → verb-concept); relazione default Does (verbo non
+        // categorizzato nel kg_proc); soggetto prima del verbo, oggetto dopo.
+        let kg_proc = kg_proc_minimal();
+        let mut kg = KnowledgeGraph::new();
+        kg.add("uccidere", RelationType::IsA, "azione");
+        let p = extract_proposition(
+            &words("il tradimento uccide la fiducia"),
+            None, Some(&kg_proc), Some(&kg),
+        ).expect("proposizione transitiva sul Mondo attesa");
+        assert_eq!(p.subject, SubjectRef::World("tradimento".to_string()));
+        assert_eq!(p.object, Some(ObjectRef::Word("fiducia".to_string())));
+        assert_eq!(p.relation, RelationType::Does);
+    }
+
+    #[test]
+    fn complementi_disambiguati_phase86_stadio2() {
+        // "ho paura del futuro": il complemento "del futuro" è disambiguato
+        // contro il KG. Il mondo tiene "futuro Causes paura" → la preposizione
+        // "di" (candidate [PartOf,Has,IsA,Causes]) si fissa su Causes.
+        let kg_proc = kg_proc_minimal();
+        let mut kg = KnowledgeGraph::new();
+        kg.add("futuro", RelationType::Causes, "paura");
+        let c = claim(ClaimAgent::Speaker, ClaimKind::Feeling, "paura", Some("percettivo"));
+        let p = extract_proposition(
+            &words("ho paura del futuro"),
+            Some(&c), Some(&kg_proc), Some(&kg),
+        ).expect("proposizione attesa");
+        let comp = p.complements.iter().find(|c| c.noun == "futuro")
+            .expect("complemento 'futuro' atteso");
+        assert_eq!(comp.preposition, "del");
+        assert_eq!(comp.relation, Some(RelationType::Causes),
+            "il KG (futuro Causes paura) disambigua 'di' in Causes");
     }
 
     // ─── Confronto con kg_sem ─────────────────────────────────────────────
@@ -540,7 +1203,10 @@ mod tests {
             relation: RelationType::FeelsAs,
             object: Some(ObjectRef::Word("paura".to_string())),
             via: Some("futuro".to_string()),
+            verb_lemma: None,
             polarity: true,
+            complements: vec![],
+            subject_surface: None,
         };
         let conf = confront_with_kg(&prop, &kg_sem);
         assert!(conf.object_in_kg, "paura ha archi nel kg_sem");
@@ -556,7 +1222,10 @@ mod tests {
             relation: RelationType::IsA,
             object: Some(ObjectRef::Word("xyzzy".to_string())),
             via: None,
+            verb_lemma: None,
             polarity: true,
+            complements: vec![],
+            subject_surface: None,
         };
         let conf = confront_with_kg(&prop, &kg_sem);
         assert!(!conf.object_in_kg);
@@ -574,7 +1243,7 @@ mod tests {
         let c = claim(ClaimAgent::Speaker, ClaimKind::Feeling, "rabbia", Some("percettivo"));
         let p = extract_proposition(
             &words("provo una rabbia che non so spiegare"),
-            Some(&c), Some(&kg_proc),
+            Some(&c), Some(&kg_proc), None,
         ).expect("proposizione attesa");
         assert_eq!(p.subject, SubjectRef::Speaker);
         assert_eq!(p.relation, RelationType::FeelsAs);
@@ -585,7 +1254,7 @@ mod tests {
     fn che_iniziale_resta_interrogativo() {
         // "che fai?" — "che" in posizione iniziale è interrogativo.
         let kg_proc = kg_proc_minimal();
-        let p = extract_proposition(&words("che fai"), None, Some(&kg_proc))
+        let p = extract_proposition(&words("che fai"), None, Some(&kg_proc), None)
             .expect("proposizione attesa");
         assert!(matches!(p.object, Some(ObjectRef::Variable(ref v)) if v == "che"));
     }
@@ -595,7 +1264,7 @@ mod tests {
         // "che cosa rende vivo un pensiero?" — l'interrogativo forte "cosa"
         // vince sul "che", che da solo non è più catturato.
         let kg_proc = kg_proc_minimal();
-        let p = extract_proposition(&words("che cosa rende vivo un pensiero"), None, Some(&kg_proc))
+        let p = extract_proposition(&words("che cosa rende vivo un pensiero"), None, Some(&kg_proc), None)
             .expect("proposizione attesa");
         assert!(matches!(p.object, Some(ObjectRef::Variable(ref v)) if v == "cosa"));
     }
@@ -608,7 +1277,7 @@ mod tests {
         let kg_proc = kg_proc_minimal();
         let mut c = claim(ClaimAgent::Speaker, ClaimKind::Feeling, "mancanza", Some("percettivo"));
         c.complement = Some("madre".to_string());
-        let p = extract_proposition(&words("mi manca mia madre"), Some(&c), Some(&kg_proc))
+        let p = extract_proposition(&words("mi manca mia madre"), Some(&c), Some(&kg_proc), None)
             .expect("proposizione attesa");
         assert_eq!(p.subject, SubjectRef::Speaker);
         assert_eq!(p.relation, RelationType::FeelsAs);

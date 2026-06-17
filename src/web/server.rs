@@ -117,39 +117,36 @@ pub async fn run(port: u16) {
     let app = Router::new()
         .route("/", get(api::index))
         .route("/admin", get(api::admin_index))
+        .route("/stato-interno", get(api::stato_interno_index))
+        .route("/frattali", get(api::frattali_index))
         .route("/api/state", get(api::get_state))
         .route("/api/input", post(api::post_input))
+        .route("/api/comprehend", post(api::post_comprehend))
         .route("/api/dream", post(api::post_dream))
         .route("/api/grow", post(api::post_grow))
-        .route("/api/topology", get(api::get_topology))
-        .route("/api/navigate/{from}/{to}", get(api::get_navigate))
-        .route("/api/projection", get(api::get_projection))
-        .route("/api/introspect", get(api::get_introspect))
-        .route("/api/why", get(api::get_why))
-        .route("/api/ask", get(api::get_ask))
-        .route("/api/open-questions", get(api::get_open_questions))
-        .route("/api/clarity", post(api::post_clarity))
-        .route("/api/thought-chain", get(api::get_thought_chain))
-        .route("/api/generate", get(api::get_generate))
+        // Sonde dismesse (Phase 67 / introspezione vecchia) ritirate — Tier 2 piano_ritiro_moduli.md
         .route("/api/save", post(api::post_save))
         .route("/api/will", get(api::get_will))
         .route("/api/will/focus", post(api::post_will_focus))
         .route("/api/dream/report", get(api::get_dream_report))
-        .route("/api/compounds", get(api::get_compounds))
         .route("/api/wordfield", get(api::get_wordfield))
-        .route("/api/phase/{a}/{b}", get(api::get_phase))
-        .route("/api/tension/{a}/{b}", get(api::get_tension))
-        .route("/api/locus-simulate", post(api::post_locus_simulate))
         .route("/api/narrative", get(api::get_narrative))
         .route("/api/thoughts", get(api::get_thoughts))
         .route("/api/visuals", get(api::get_visuals))
-        .route("/api/simpdb", get(api::get_simpdb))
         .route("/api/universe", get(api::get_universe))
         .route("/api/word_neighbors", get(api::get_word_neighbors))
         .route("/api/word_detail", get(api::get_word_detail))
         .route("/api/word_connect", post(api::post_word_connect))
+        .route("/api/clarity", post(api::post_clarity))
+        .route("/api/explore", get(api::get_explore))
+        .route("/api/correct", post(api::post_correct))
+        // === IAm-gotchi (glass-box) — Step 5 ===
+        .route("/api/correct_interlocutor", post(api::post_correct_interlocutor))
+        // === fine IAm-gotchi ===
         .route("/api/concept", get(api::get_concept))
         .route("/api/self", get(api::get_self))
+        .route("/api/speaker", get(api::get_speaker_profile))
+        .route("/api/persist", post(api::post_persist))
         .route("/api/episodes", get(api::get_episodes))
         .route("/api/episodes/recall", get(api::recall_episodes))
         // Phase 82 — Memoria-sfera di haiku
@@ -160,7 +157,6 @@ pub async fn run(port: u16) {
         // Phase 83 — Educazione grammaticale live (simplessi tipizzati)
         .route("/api/grammar_simplex", post(api::post_grammar_simplex))
         // Community session
-        .route("/universo", get(api::universo_index))
         .route("/community", get(api::community_index))
         .route("/api/community/teach", post(api::post_community_teach))
         .route("/api/community/connect", post(api::post_community_connect))
@@ -169,16 +165,12 @@ pub async fn run(port: u16) {
         .route("/api/community/session", get(api::get_community_session))
         .route("/api/community/field", get(api::get_community_field))
         .route("/api/community/reset", post(api::post_community_reset))
-        // Phase 52: Dialogo interiore
-        .route("/api/inner-dialogue", get(api::get_inner_dialogue))
-        .route("/api/respond", post(api::post_respond))
+        // Phase 52: Dialogo interiore — ritirato (Tier 2)
         // Gestione archi e relazioni
         .route("/api/relations", get(api::get_relations))
         .route("/api/edge", post(api::delete_edge))
         .route("/api/edge/confidence", post(api::patch_edge))
-        // ── Biennale ─────────────────────────────────────────────
-        .route("/biennale", get(api::biennale_index))
-        .route("/campo-vasto", get(api::biennale_index))
+        // ── Biennale (dati live per campovasto; pagine clone ritirate) ──
         .route("/dialogo", get(api::dialogo_index))
         .route("/curazione", get(api::curazione_index))
         .route("/cura-mobile", get(|| async { axum::response::Redirect::permanent("/cura-mobile/") }))
@@ -211,7 +203,7 @@ pub async fn run(port: u16) {
         .route("/api/saved_fields/save", post(api::post_save_field))
         .route("/api/saved_fields/load", post(api::post_load_field))
         .route("/api/saved_fields/delete", post(api::post_delete_field))
-        .route("/ui-r1", get(api::uir1_index))
+        .route("/comprensione", get(api::comprensione_index))
         // Nuova UI modulare (HTML/CSS/JS separati, letti da disco: modifiche → refresh, niente rebuild)
         // no-cache: il browser deve sempre revalidare via ETag (304 = fast)
         // prima di servire la copia locale. Lo sviluppo della UI iterativo
@@ -226,17 +218,18 @@ pub async fn run(port: u16) {
                     header::HeaderValue::from_static("no-cache, must-revalidate"),
                 ))
         )
-        // PoC parallelo Cytoscape (sostituirà campovasto se la valutazione va bene).
+        // Viste dedicate (hub /admin, /stato-interno, /frattali) + asset (vendor
+        // three.js). Top-level `viste/`, servita da disco; le route pulite sopra
+        // leggono i file qui via fs. no-cache per iterare la UI senza rebuild.
         .nest_service(
-            "/campovasto-cy",
-            axum::Router::new().fallback_service(ServeDir::new("campovasto-cy"))
+            "/viste",
+            axum::Router::new().fallback_service(ServeDir::new("viste"))
                 .layer(SetResponseHeaderLayer::overriding(
                     header::CACHE_CONTROL,
-                    header::HeaderValue::from_static("public, max-age=120, must-revalidate"),
+                    header::HeaderValue::from_static("no-cache, must-revalidate"),
                 ))
         )
-        .route("/diffrazione", get(api::diffrazione_index))
-        .route("/api/diffraction", get(api::get_diffraction))
+        // /api/diffraction (shell-out Python) ritirato — Tier 2
         // Phase 69 — osservazione del tempo proprio dell'entità
         .route("/api/admin/events/stats", get(api::get_events_stats))
         .route("/api/admin/events/pending", get(api::get_pending_digestion))
@@ -598,6 +591,13 @@ fn engine_loop(
                     .map(|p| crate::web::state::sentence_proposition_to_dto(p));
                 let kg_confrontation = engine.last_kg_confrontation.as_ref()
                     .map(|c| crate::web::state::kg_confrontation_to_dto(c));
+                // Phase 86+: il bisogno + le proposizioni multi-locus — ciò che
+                // Tsunami consuma per agire (strutturare un dump, la domanda che
+                // sblocca, calmare la UI), non per chattare.
+                let need = engine.last_need.as_ref()
+                    .map(crate::web::state::need_to_dto);
+                let propositions = crate::web::state::clause_props_to_dto(
+                    &engine.last_sentence_propositions);
                 let _ = reply.send(InputResponse {
                     generated_text: generated.text,
                     keywords: response.keywords,
@@ -613,6 +613,8 @@ fn engine_loop(
                     action_decision,
                     sentence_proposition,
                     kg_confrontation,
+                    need,
+                    propositions,
                 });
             }
             EngineCommand::GetState { reply } => {
@@ -696,6 +698,30 @@ fn engine_loop(
             EngineCommand::Clarity { topic, illumination, reply } => {
                 engine.receive_clarity(&topic, &illumination);
                 let _ = reply.send(true);
+            }
+            EngineCommand::ExploreWord { word, reply } => {
+                use crate::topology::comprehension_path::GroundKind;
+                let path = engine.explore_word(&word);
+                let g = &path.ground;
+                let reached = !matches!(g, GroundKind::Unreached);
+                let ground = match g {
+                    GroundKind::SelfNode => "sé",
+                    GroundKind::Attractor => "attrattore",
+                    GroundKind::PropositionNode => "nodo-frase",
+                    GroundKind::AlreadyGround => "già una categoria",
+                    GroundKind::Unreached => "non raggiunta",
+                }.to_string();
+                let steps = path.steps.iter().map(|s| crate::web::state::ExploreStepDto {
+                    relation: format!("{:?}", s.relation),
+                    forward: s.forward,
+                    via: s.via.clone(),
+                    to: s.to.clone(),
+                    confidence: s.confidence,
+                }).collect();
+                let dto = crate::web::state::ExploreDto {
+                    from: word.to_lowercase(), ground, reached, steps,
+                };
+                let _ = reply.send(dto);
             }
             EngineCommand::GetLastThoughtChain { reply } => {
                 use crate::topology::thought_chain::{ChainOutcome};
@@ -1022,9 +1048,41 @@ fn engine_loop(
             }
             EngineCommand::AddWordConnect { from, relation, to, via, confidence, reply } => {
                 let ok = add_word_connect(&mut engine, &from, &relation, &to, via, confidence);
-                if ok { biennale_cache = None; }
+                // Persisti su prometeo_kg.json (+.bin): senza, la relazione viveva
+                // solo nella sessione e spariva al riavvio. Stesso pattern di
+                // tutte le mutazioni /api/cura/*. È ciò che fa entrare DAVVERO
+                // nel KG le modifiche da stato-interno e da curazione.
+                if ok { biennale_cache = None; cura_save(&engine); }
                 let _ = reply.send(ok);
             }
+            EngineCommand::Correct { input, given, wanted, context, reply } => {
+                let result = engine.correct_response(
+                    &input, &given, &wanted, context.as_deref(),
+                );
+                // Persisti: il KG ha nuove triple o confidence aggiornate,
+                // lo SpeakerProfile ha un nuovo CorrectionFact.
+                cura_save(&engine);
+                biennale_cache = None;
+                let dto = crate::web::state::CorrectDto {
+                    accepted: true,
+                    positive_words: result.positive_words,
+                    negative_words: result.negative_words,
+                    categories_affected: result.categories_affected,
+                    new_words_created: result.new_words_created,
+                    triples_added: result.triples_added,
+                    confidences_changed: result.confidences_changed,
+                    message: result.message,
+                };
+                let _ = reply.send(dto);
+            }
+            // === IAm-gotchi (glass-box) — Step 5: correzione del modello-dell'Altro ===
+            EngineCommand::CorrectInterlocutor { intent, emotional_valence, reply } => {
+                let ok = engine.correct_interlocutor(&intent, emotional_valence);
+                // Persisti: l'InterlocutorSnapshot (EMA + intento) vive nel .bin.
+                if ok { cura_save(&engine); }
+                let _ = reply.send(ok);
+            }
+            // === fine IAm-gotchi ===
             EngineCommand::DeleteWordRelation { subject, relation, object, reply } => {
                 use crate::topology::relation::RelationType;
                 let ok = if let Some(rel) = RelationType::from_str(&relation) {
@@ -1108,6 +1166,27 @@ fn engine_loop(
             EngineCommand::GetConcept { word, reply } => {
                 let dto = build_concept(&engine, &word);
                 let _ = reply.send(dto);
+            }
+            EngineCommand::Comprehend { text, reply } => {
+                // P1: lettura PURA — &engine, nessuna mutazione di stato.
+                let dto = build_comprehension_stateless(&engine, &text);
+                let _ = reply.send(dto);
+            }
+            EngineCommand::GetSpeakerProfile { reply } => {
+                // P2: ritratto-utente persistito — read-only.
+                let dto = speaker_profile_to_dto(&engine.speaker_profile);
+                let _ = reply.send(dto);
+            }
+            EngineCommand::Persist { reply } => {
+                // P2: salva lo stato vissuto nel .bin (formato riletto al boot).
+                // Solo save_to_binary — NON riscrive il KG (cura_save lo fa per
+                // le mutazioni KG; qui persistiamo il vissuto: profilo+narrativa+…).
+                let state = PrometeoState::capture(&engine);
+                let ok = match state.save_to_binary(Path::new("prometeo_topology_state.bin")) {
+                    Ok(_) => { println!("[persist] stato vissuto salvato nel .bin"); true }
+                    Err(e) => { eprintln!("[persist] errore salvataggio .bin: {}", e); false }
+                };
+                let _ = reply.send(ok);
             }
             EngineCommand::GetSelf { reply } => {
                 let dto = build_self_dto(&engine);
@@ -1921,6 +2000,17 @@ fn speaker_profile_to_dto(
         trigger: g.trigger.clone(),
         gap_kind: g.gap_kind.clone(),
         turn: g.turn,
+        closed_by: g.closed_by.clone(),
+        closed_at_turn: g.closed_at_turn,
+    };
+    let to_corr = |c: &crate::topology::speaker_profile::CorrectionFact| CorrectionFactDto {
+        turn: c.turn,
+        input: c.input.clone(),
+        given: c.given.clone(),
+        wanted: c.wanted.clone(),
+        via_context: c.via_context.clone(),
+        positive_words: c.positive_words.clone(),
+        negative_words: c.negative_words.clone(),
     };
     let open_gaps: Vec<KnowledgeGapDto> = p.gaps.iter()
         .filter(|g| !g.closed).map(to_gap).collect();
@@ -1932,9 +2022,10 @@ fn speaker_profile_to_dto(
         self_facts: p.self_facts.iter().map(to_fact).collect(),
         entity_facts: p.entity_facts.iter().map(to_fact).collect(),
         open_questions: p.open_questions.iter().map(to_q).collect(),
-        top_mentioned: p.top_mentioned(10),
+        top_mentioned: p.top_mentioned(30),
         open_gaps,
         closed_gaps,
+        corrections: p.corrections.iter().map(to_corr).collect(),
     }
 }
 
@@ -2033,83 +2124,15 @@ fn kg_aware_lemma(
     token: &str,
     kg: &crate::topology::knowledge_graph::KnowledgeGraph,
 ) -> String {
-    use crate::topology::grammar;
-
-    let t = token.to_lowercase();
-    if t.len() < 2 { return t; }
-
-    // 0. Se il token stesso è nel KG, è già lemma — non lemmatizzare oltre.
-    //    Evita falsi positivi morfologici tipo "sale" (sostantivo) → "sala"
-    //    (camera): entrambi nel KG, ma la regola "-e fem.plur. → -a" è
-    //    speculativa e va applicata SOLO se il token originale non è
-    //    riconosciuto. Vale anche per altri lemmi-omografi.
-    if !kg.all_outgoing(&t).is_empty() || !kg.all_incoming(&t).is_empty() {
-        return t;
-    }
-
-    // 1. Lemma formale (verbi regolari/irregolari noti)
-    let verb_lemma = grammar::lemmatize(&t).map(|l| l.infinitive);
-
-    // 2. Candidati da provare in ordine di preferenza
-    let mut candidates: Vec<String> = Vec::new();
-    if let Some(ref v) = verb_lemma { candidates.push(v.clone()); }
-
-    // Plurali nomi/aggettivi
-    // -i → -o (libro), -e (cane), -a (poeta) – in quest'ordine
-    if t.ends_with('i') && t.len() > 2 {
-        let stem = &t[..t.len()-1];
-        candidates.push(format!("{}o", stem));
-        candidates.push(format!("{}e", stem));
-        candidates.push(format!("{}a", stem));
-    }
-    // -e femminile plurale → -a (case → casa)
-    if t.ends_with('e') && t.len() > 2 {
-        let stem = &t[..t.len()-1];
-        candidates.push(format!("{}a", stem));
-    }
-
-    // Presente indicativo regolare -are (niente grammar support nel codice)
-    // -ano (3pl), -ate (2pl), -iamo (1pl), -a (3sg), -i (2sg), -o (1sg)
-    // Siccome -i/-a/-o/-ano sono altamente ambigui coi nomi, mettiamo dopo
-    // i candidati nominali, così preferiamo nomi se presenti.
-    if t.ends_with("ano") && t.len() > 4 {
-        let stem = &t[..t.len()-3];
-        candidates.push(format!("{}are", stem));
-    }
-    if t.ends_with("ono") && t.len() > 4 {
-        let stem = &t[..t.len()-3];
-        candidates.push(format!("{}ere", stem));
-        candidates.push(format!("{}ire", stem));
-    }
-    if t.ends_with("iamo") && t.len() > 5 {
-        let stem = &t[..t.len()-4];
-        candidates.push(format!("{}are", stem));
-        candidates.push(format!("{}ere", stem));
-        candidates.push(format!("{}ire", stem));
-    }
-    if t.ends_with("ate") && t.len() > 4 {
-        let stem = &t[..t.len()-3];
-        candidates.push(format!("{}are", stem));
-    }
-    if t.ends_with("ete") && t.len() > 4 {
-        let stem = &t[..t.len()-3];
-        candidates.push(format!("{}ere", stem));
-    }
-    if t.ends_with("ite") && t.len() > 4 {
-        let stem = &t[..t.len()-3];
-        candidates.push(format!("{}ire", stem));
-    }
-
-    // 3. Il primo candidato presente nel KG vince
-    for c in &candidates {
-        if c == &t { continue; }
-        if !kg.all_outgoing(c).is_empty() || !kg.all_incoming(c).is_empty() {
-            return c.clone();
-        }
-    }
-
-    // 4. Nessuna alternativa nel KG → usa il lemma verbale se esiste, altrimenti token
-    verb_lemma.unwrap_or(t)
+    // Delega al normalizzatore validato condiviso (grammar::kg_validated_lemma):
+    // prova i candidati morfologici (verbo + nome/aggettivo via lemma_candidates)
+    // e tiene il primo confermato dal KG; se nessuno è confermato ritorna la
+    // forma di superficie — MAI un infinito inventato (fix del bug "possibili→
+    // possibilare", che mandava i nomi/aggettivi in `unknown`). "Confermato" =
+    // il nodo ha almeno un arco nel KG (concetto usabile).
+    crate::topology::grammar::kg_validated_lemma(token, |c| {
+        !kg.all_outgoing(c).is_empty() || !kg.all_incoming(c).is_empty()
+    })
 }
 
 /// Build SceneUnderstanding from a sentence without mutating the engine.
@@ -2142,6 +2165,271 @@ fn build_understanding_for_sentence(
     let lemma_refs: Vec<&str> = lemmas.iter().map(|s| s.as_str()).collect();
     let scene = SceneUnderstanding::assemble(&lemma_refs, sentence, &engine.kg);
     scene_to_dto(&scene, &engine.kg, &lemmas)
+}
+
+/// P1 (Tsunami): comprensione STATELESS di un testo isolato — vedi ComprehendDto.
+/// Compone SOLO funzioni pure di lettura del KG (detect_speaker_claim,
+/// extract_propositions, confront_with_kg, explore, sense_need, SceneUnderstanding):
+/// non tocca tick/NarrativeSelf/SpeakerProfile/PF1. Replica la tokenizzazione di
+/// engine.receive() su variabili locali, così N chiamate non si contaminano.
+fn build_comprehension_stateless(
+    engine: &PrometeoTopologyEngine,
+    text: &str,
+) -> ComprehendDto {
+    use crate::topology::lexicon::clean_token;
+    use crate::topology::understanding::SceneUnderstanding;
+    use crate::topology::sentence_proposition as sp;
+
+    // Tokenizzazione gemella di receive(): `raw_words` (len>1) per il claim,
+    // `tokens_full` (tiene "e"/"o"/"a"/"è") per l'analisi logica multi-clausola.
+    let raw_words: Vec<String> = text.split_whitespace()
+        .filter_map(clean_token)
+        .filter(|w| w.len() > 1)
+        .collect();
+    let tokens_full: Vec<String> = text.split_whitespace()
+        .filter_map(clean_token)
+        .filter(|w| !w.is_empty())
+        .collect();
+
+    // Lemmi normalizzati via KG (mai infiniti inventati) — pipeline di /api/understanding.
+    let mut lemmas: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for t in &tokens_full {
+        let lemma = kg_aware_lemma(t, &engine.kg);
+        if seen.insert(lemma.clone()) { lemmas.push(lemma); }
+    }
+
+    // Speaker claim (puro): serve a derive_gaps + alla disambiguazione PROP.
+    let claim = crate::topology::input_reading::detect_speaker_claim(
+        &raw_words, &engine.lexicon, Some(&engine.kg), Some(&engine.kg_procedural),
+    );
+
+    // Proposizioni multi-locus (pure) + primaria isolata + ancoraggio al kg_sem.
+    let clause_props = sp::extract_propositions(
+        &tokens_full, &engine.lexicon, Some(&engine.kg_procedural), Some(&engine.kg),
+    );
+    let primary_prop = sp::primary_index(&clause_props)
+        .and_then(|i| clause_props[i].prop.clone());
+    let kg_confrontation = primary_prop.as_ref()
+        .map(|p| sp::confront_with_kg(p, &engine.kg));
+
+    // Gap dialogici della primaria (slot non saturi: emozione senza oggetto…).
+    // Calcolati UNA volta: alimentano sia il bisogno sia gli `open_slots` del
+    // verdetto di saturazione (C2/C4).
+    let open_slots: Vec<String> = primary_prop.as_ref()
+        .map(|p| crate::topology::comprehension_report::derive_gaps(
+            claim.as_ref(), Some(p), Some(&engine.kg)))
+        .unwrap_or_default()
+        .iter().map(|g| g.missing.clone()).collect();
+
+    // Bisogno dai SOLI segnali staticamente derivabili (grounding/confronto/
+    // salienza-del-sé/gap-dialogico/multi-locus). I segnali multi-turno
+    // (closure, memoria, assenza, sovraccarico) sono 0 per definizione: un
+    // testo isolato non ha un "prima". Stesso `sense_need` di receive().
+    let need = primary_prop.as_ref().and_then(|p| {
+        use crate::topology::comprehension_path::{self, Confront};
+        use crate::topology::need::{sense_need, NeedSignals};
+        let graph = comprehension_path::explore(p, &engine.kg, &engine.kg_self);
+        let content_count = graph.groundings.len() + graph.ungrounded.len();
+        let world_confront = match graph.confront {
+            Confront::Contradict => 1.0,
+            Confront::Novelty => 0.6,
+            Confront::Confirm | Confront::NotApplicable => 0.0,
+        };
+        // Conferma del mondo (la triple esiste già nel kg_sem) → RICONOSCERE.
+        let world_confirm = if matches!(graph.confront, Confront::Confirm) { 1.0 } else { 0.0 };
+        let self_salience = comprehension_path::self_salience(&graph, &engine.kg_self);
+        let has_dialogic_gap = !open_slots.is_empty();
+        let signals = NeedSignals {
+            ungrounded_count: graph.ungrounded.len(),
+            content_count,
+            has_dialogic_gap,
+            closes_prior_gap: false,
+            world_confront,
+            world_confirm,
+            self_salience,
+            overload: 0.0,
+            memory_resurfaced: 0.0,
+            absence: 0.0,
+            locus_count: sp::independent_locus_count(&clause_props),
+        };
+        sense_need(&signals)
+    });
+
+    // Concetti per-parola dal KG (riusa la pipeline di /api/understanding).
+    let lemma_refs: Vec<&str> = lemmas.iter().map(|s| s.as_str()).collect();
+    let scene = SceneUnderstanding::assemble(&lemma_refs, text, &engine.kg);
+    let understanding = scene_to_dto(&scene, &engine.kg, &lemmas);
+
+    // Gate di Comprensione: copertura per-token (C1, nessun punto cieco) +
+    // verdetto di saturazione (C1–C4). Vedi gate_di_comprensione.md.
+    let (coverage, saturation) =
+        build_coverage(&tokens_full, &clause_props, &open_slots, engine);
+
+    ComprehendDto {
+        text: text.to_string(),
+        lemmas,
+        propositions: crate::web::state::clause_props_to_dto(&clause_props),
+        primary: primary_prop.as_ref().map(crate::web::state::sentence_proposition_to_dto),
+        kg_confrontation: kg_confrontation.as_ref().map(crate::web::state::kg_confrontation_to_dto),
+        need: need.as_ref().map(crate::web::state::need_to_dto),
+        understanding,
+        coverage,
+        saturation,
+    }
+}
+
+/// La classe grammaticale di una parola letta dal kg_proc (IsA classe), o `None`
+/// se è una parola-contenuto. Il "ruolo" che la rende funzionale.
+fn grammatical_class(word: &str, kg_proc: &crate::topology::knowledge_graph::KnowledgeGraph) -> Option<String> {
+    use crate::topology::input_reading::is_kg_proc_isa;
+    let w = word.to_lowercase();
+    for class in [
+        "pronome", "articolo", "preposizione", "congiunzione", "marcatore",
+        "copula", "ausiliare", "determinante", "avverbio", "interiezione",
+    ] {
+        if is_kg_proc_isa(kg_proc, &w, class) {
+            return Some(class.to_string());
+        }
+    }
+    // Avverbio di modo morfologico: aggettivo + "-mente" (chiaramente,
+    // velocemente). Regola produttiva, non una lista. Soglia di lunghezza per
+    // escludere parole brevi che finiscono per caso in "mente" ("mente" stessa,
+    // "demente" → richiediamo base ≥4: "veloce", "chiara").
+    if w.ends_with("mente") && w.len() >= 9 {
+        return Some("avverbio".to_string());
+    }
+    None
+}
+
+/// Costruisce la COPERTURA per-token e il VERDETTO di saturazione.
+/// Itera su OGNI token (C1 — nessun punto cieco) e assegna uno stato con un
+/// albero di decisione puramente STRUTTURALE (in classe grammaticale? legato
+/// alla proposizione? conosciuto nel KG/lessico?), senza alcuna soglia.
+/// I due assi: `known` (conoscenza generale) vs `bound` (comprensione qui).
+fn build_coverage(
+    tokens_full: &[String],
+    clause_props: &[crate::topology::sentence_proposition::ClauseProposition],
+    open_slots: &[String],
+    engine: &PrometeoTopologyEngine,
+) -> (Vec<crate::web::state::TokenCoverageDto>, crate::web::state::SaturationDto) {
+    use crate::topology::sentence_proposition::{SubjectRef, ObjectRef};
+    use crate::topology::input_reading::{is_kg_proc_function_word, lemma_of_verb};
+    use crate::web::state::{TokenCoverageDto, SaturationDto};
+
+    // Nomi-slot (lemmi) da TUTTE le clausole, non solo la primaria: così un
+    // oggetto in clausola coordinata ("chiamare il medico") si lega come
+    // predicato invece di cadere nel falso-positivo `lemma_of_verb`→verbo.
+    let mut subjects: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut objects: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut vias: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut has_prop = false;
+    for c in clause_props {
+        if let Some(p) = &c.prop {
+            has_prop = true;
+            if let SubjectRef::World(s) = &p.subject { subjects.insert(s.to_lowercase()); }
+            if let Some(ObjectRef::Word(o)) = &p.object { objects.insert(o.to_lowercase()); }
+            if let Some(v) = &p.via { vias.insert(v.to_lowercase()); }
+        }
+    }
+
+    // Una parola preceduta da articolo/determinante è testa di sintagma
+    // NOMINALE: mai un verbo (stesso principio del fix nome/verbo di
+    // input_reading). "la valvola" → valvola nominale, non `valvolare`.
+    let nominal_after_article = |i: usize| -> bool {
+        if i == 0 { return false; }
+        let prev = tokens_full[i - 1].to_lowercase();
+        crate::topology::input_reading::is_kg_proc_isa(&engine.kg_procedural, &prev, "articolo")
+            || crate::topology::input_reading::is_kg_proc_isa(&engine.kg_procedural, &prev, "determinante")
+    };
+
+    let mut out: Vec<TokenCoverageDto> = Vec::new();
+    let (mut n_ok, mut n_part, mut n_unk) = (0usize, 0usize, 0usize);
+
+    for (i, tok) in tokens_full.iter().enumerate() {
+        let lemma = kg_aware_lemma(tok, &engine.kg);
+        let ll = lemma.to_lowercase();
+        let arc_count = engine.kg.all_outgoing(&ll).len() + engine.kg.all_incoming(&ll).len();
+        let in_lex = engine.lexicon.get(&ll).map(|p| p.stability >= 0.20).unwrap_or(false);
+        let known = arc_count > 0 || in_lex;
+
+        // Classe grammaticale (sul token di superficie E sul lemma).
+        let class = grammatical_class(tok, &engine.kg_procedural)
+            .or_else(|| grammatical_class(&lemma, &engine.kg_procedural));
+        let is_func = class.is_some()
+            || is_kg_proc_function_word(tok, Some(&engine.kg_procedural));
+
+        // Ruolo: prima gli slot di QUALUNQUE clausola, poi il verbo — ma il
+        // verbo è bloccato se la parola segue un articolo (è un nome).
+        let prop_role: Option<&str> =
+            if subjects.contains(&ll) { Some("soggetto") }
+            else if objects.contains(&ll) { Some("predicato") }
+            else if vias.contains(&ll) { Some("specificazione") }
+            else if !nominal_after_article(i)
+                && lemma_of_verb(tok, Some(&engine.kg_procedural), Some(&engine.kg)).is_some() {
+                Some("verbo")
+            } else { None };
+
+        let (status, role, reason, bound): (&str, String, String, bool) =
+            if let Some(cls) = &class {
+                ("compreso", cls.clone(), format!("parola funzionale: ruolo {cls}"), true)
+            } else if is_func {
+                ("compreso", "funzionale".into(), "parola funzionale (ruolo strutturale)".into(), true)
+            } else if let Some(r) = prop_role {
+                if known {
+                    ("compreso", r.into(), "legata alla proposizione e ancorata al mondo".into(), true)
+                } else {
+                    ("parziale", r.into(), "legata alla proposizione ma non ancorata al KG (nota come parola)".into(), true)
+                }
+            } else if known {
+                ("parziale", "—".into(), "conosciuta ma non legata a questo enunciato".into(), false)
+            } else {
+                ("ignoto", "—".into(), "sconosciuta: nessun ancoraggio né ruolo".into(), false)
+            };
+
+        match status {
+            "compreso" => n_ok += 1,
+            "parziale" => n_part += 1,
+            _ => n_unk += 1,
+        }
+        out.push(TokenCoverageDto {
+            token: tok.clone(),
+            lemma,
+            status: status.to_string(),
+            role,
+            reason,
+            known,
+            arc_count,
+            bound,
+        });
+    }
+
+    // Verdetto (C1–C4): strutturale, nessuna soglia.
+    // - piena: TUTTO verde (zero gialli E zero rossi) E nessuno slot aperto. Un
+    //   token solo parzialmente legato (🟡) impedisce la pienezza — onestà C4.
+    // - non-comprensibile: nulla è atterrato (zero verdi E nessuna proposizione).
+    // - parziale: tutto il resto (qualcosa compreso, qualcosa no).
+    let verdict = if n_ok == 0 && !has_prop && n_part == 0 {
+        // non-comprensibile SOLO se nulla è atterrato: niente verde, niente
+        // proposizione E nemmeno una parola conosciuta-ma-slegata. Una parola
+        // nota in isolamento ("libertà") è PARZIALE (la conosco, non c'è nulla a
+        // cui legarla), non incomprensibile — onestà C4.
+        "non-comprensibile"
+    } else if n_part == 0 && n_unk == 0 && open_slots.is_empty() {
+        "piena"
+    } else {
+        "parziale"
+    };
+
+    let saturation = SaturationDto {
+        verdict: verdict.to_string(),
+        total: out.len(),
+        compreso: n_ok,
+        parziale: n_part,
+        ignoto: n_unk,
+        open_slots: open_slots.to_vec(),
+    };
+    (out, saturation)
 }
 
 /// Conferma un arco proposto aggiungendolo al KG. Persiste in
@@ -2743,6 +3031,7 @@ fn relation_label_it(rel: crate::topology::relation::RelationType) -> &'static s
         R::Equivalent   => "equivale",
         R::Excludes     => "esclude",
         R::Coexists     => "coesiste con",
+        R::DerivesFrom  => "deriva da",
     }
 }
 
@@ -2821,6 +3110,7 @@ fn build_snapshot(engine: &mut PrometeoTopologyEngine) -> StateSnapshot {
             total_perturbations: report.total_perturbations,
             vocabulary_size: report.vocabulary_size,
             emergent_dimensions: report.emergent_dimensions,
+            kg_edge_count: engine.kg.edge_count,
         },
         field_signature: field_sig,
     }
@@ -3242,28 +3532,11 @@ fn build_concept(engine: &PrometeoTopologyEngine, word: &str) -> ConceptDto {
 }
 
 fn build_self_dto(engine: &PrometeoTopologyEngine) -> SelfDto {
-    let beliefs: Vec<BeliefDto> = engine.self_model.beliefs.iter()
-        .filter(|b| b.confidence > 0.1 || b.innate)
-        .map(|b| BeliefDto {
-            claim: b.claim.clone(),
-            anchor_concepts: b.anchor_concepts.clone(),
-            confidence: b.confidence,
-            reinforcement_count: b.reinforcement_count,
-            innate: b.innate,
-        })
-        .collect();
-
-    let mut values: Vec<ValueDto> = engine.self_model.values.iter()
-        .map(|v| ValueDto {
-            name: v.name.clone(),
-            weight: v.weight,
-            associated_words: v.associated_words.clone(),
-            innate: v.innate,
-            activation_count: v.activation_count,
-        })
-        .collect();
-    values.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap_or(std::cmp::Ordering::Equal));
-
+    // Tier 2 (piano_ritiro_moduli.md §7): NON esporre più le convinzioni/valori
+    // INNATI di `self_model`. Il sé reale è `kg_self` (pendenze + opinioni
+    // guadagnate); le 22 innate furono dissolte il 2026-06-10 e non vanno
+    // mostrate. Resta onesto ciò che il sé DAVVERO è incerto: `uncertainties`
+    // (domande che UI-r1 si pone, topic + tensione) — il cuore di Stato interno.
     let uncertainties = engine.self_model.uncertainties.iter()
         .filter(|u| u.tension > 0.1)
         .map(|u| UncertaintyDto {
@@ -3273,51 +3546,13 @@ fn build_self_dto(engine: &PrometeoTopologyEngine) -> SelfDto {
         })
         .collect();
 
-    // Credenze attive: quelle i cui anchor_concepts si sovrappongono con le parole dell'ultimo input
-    let input_words: HashSet<&str> = engine.last_input_words.iter().map(|s| s.as_str()).collect();
-    let active_beliefs: Vec<ActiveBeliefDto> = engine.self_model.beliefs.iter()
-        .filter(|b| b.confidence > 0.3)
-        .filter_map(|b| {
-            let overlap: Vec<String> = b.anchor_concepts.iter()
-                .filter(|c| input_words.contains(c.as_str()))
-                .cloned()
-                .collect();
-            if overlap.is_empty() { return None; }
-            let influence = b.confidence * 0.05 * overlap.len() as f64;
-            Some(ActiveBeliefDto {
-                claim: b.claim.clone(),
-                confidence: b.confidence,
-                activated_words: overlap,
-                influence_strength: influence,
-            })
-        })
-        .collect();
-
-    // Traccia influenza
-    let mut influence_trace = Vec::new();
-    for ab in &active_beliefs {
-        influence_trace.push(format!(
-            "Credenza \"{:.40}\" (conf {:.0}%) attiva su [{}] → boost {:.3}",
-            ab.claim, ab.confidence * 100.0,
-            ab.activated_words.join(", "),
-            ab.influence_strength
-        ));
-    }
-    // Valori attivi
-    let boosts = engine.self_model.field_boosts(&engine.last_input_words);
-    for (word, strength) in boosts.iter().take(5) {
-        if *strength > 0.01 {
-            influence_trace.push(format!("Valore → \"{}\" boost {:.3}", word, strength));
-        }
-    }
-
     SelfDto {
-        beliefs,
-        values,
+        beliefs: Vec::new(),
+        values: Vec::new(),
         uncertainties,
         interaction_count: engine.self_model.interaction_count,
-        active_beliefs,
-        belief_influence_trace: influence_trace,
+        active_beliefs: Vec::new(),
+        belief_influence_trace: Vec::new(),
     }
 }
 

@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI-r1 · Stato interno</title>
+<link rel="stylesheet" href="/campovasto/fonts/jetbrains-mono.css">
+<style>
+  /* Colori e token: fonte unica = js/theme.js (CLAUDE.md §1).
+     Nessun hex letterale qui — solo var(--…) iniettate da applyThemeToCss()
+     + le var semantiche derivate da UI in boot(). */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  body { max-width: 1080px; margin: 0 auto; padding: var(--space-lg); }
+
+  header.page { margin-bottom: var(--space-lg); }
+  header.page h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  header.page .sub { color: var(--color-text-dim); margin-top: 4px; font-size: 13px; }
+
+  .context {
+    display: flex; flex-wrap: wrap; gap: var(--space-md);
+    margin-top: var(--space-md); padding: var(--space-sm) var(--space-md);
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: 8px; font-size: 12px; color: var(--color-text-dim);
+  }
+  .context b { color: var(--color-text); font-weight: 600; }
+  .context span[title] { cursor: help; border-bottom: 1px dotted var(--color-border); }
+  .context .ws { margin-left: auto; }
+  .context .ws.ok { color: var(--c-closed); }
+
+  .controls { display: flex; gap: var(--space-sm); margin-top: var(--space-md); }
+  .controls button {
+    font-family: inherit; font-size: 12px; cursor: pointer;
+    background: var(--color-surface); color: var(--color-text);
+    border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 6px 12px; transition: var(--transition-smooth);
+  }
+  .controls button:hover { border-color: var(--bordo-hover); }
+  .controls label { font-size: 12px; color: var(--color-text-dim); display: flex; align-items: center; gap: 6px; }
+
+  section.block { margin-top: var(--space-lg); }
+  section.block > h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--h3-color); font-weight: 600; margin-bottom: var(--space-sm);
+    display: flex; align-items: baseline; gap: var(--space-sm);
+  }
+  section.block > h2 .count {
+    font-size: 11px; color: var(--color-text-dim); letter-spacing: 0;
+    text-transform: none;
+  }
+  section.block.hero > h2 { color: var(--color-text); font-size: 15px; }
+
+  .empty { color: var(--testo-tenue); font-style: italic; font-size: 13px; padding: var(--space-sm) 0; }
+
+  .card {
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-left-width: 3px; border-radius: 8px;
+    padding: var(--space-md); margin-bottom: var(--space-sm);
+  }
+  .card.q     { border-left-color: var(--c-question); }
+  .card.open  { border-left-color: var(--c-open); }
+  .card.closed{ border-left-color: var(--c-closed); }
+  .card.think { border-left-color: var(--c-think); }
+  .card.unc   { border-left-color: var(--c-open); }
+
+  .card .lead { font-size: 15px; color: var(--color-text); }
+  .card .lead.dim { color: var(--color-text-dim); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .card .meta { margin-top: 6px; font-size: 11px; color: var(--color-text-dim); display: flex; flex-wrap: wrap; gap: 10px; }
+  .card .meta .tag {
+    background: var(--chip-attivo-sfondo); border-radius: 4px; padding: 1px 7px;
+    color: var(--color-text);
+  }
+  .card .raw { margin-top: 6px; font-size: 12px; color: var(--testo-tenue); font-style: italic; }
+  .card .resolution { margin-top: 8px; font-size: 12px; color: var(--c-closed); }
+  .card .resolution b { color: var(--color-text); }
+
+  /* barra tensione per le incertezze di fondo */
+  .tension { height: 4px; border-radius: 2px; background: var(--color-border); margin-top: 8px; overflow: hidden; }
+  .tension > span { display: block; height: 100%; background: var(--c-open); }
+
+  .think-row { display: flex; align-items: baseline; gap: 10px; }
+  .think-row .kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--c-think); }
+  .think-row .words { color: var(--color-text); }
+  .think-row .str { margin-left: auto; font-size: 11px; color: var(--color-text-dim); }
+</style>
+</head>
+<body>
+  <header class="page">
+    <h1>Cosa non ho ancora capito</h1>
+    <div class="sub">Lo stato interno di UI-r1: le domande aperte sui propri vuoti di comprensione, e ciò che si è chiuso. Mai inventato — solo ciò che gli organi producono.</div>
+    <div class="context" id="ctx">
+      <span title="Quanti scambi ha avuto l'entità in questa sessione.">turno <b id="ctx-turn">—</b></span>
+      <span title="La disposizione interna con cui affronta il turno: aperto, riflessivo, ritirato…">postura <b id="ctx-stance">—</b></span>
+      <span title="Il tono edonico della valenza: come si dispone affettivamente verso ciò che sta elaborando (radicato, teso, aperto…).">tono <b id="ctx-valence">—</b></span>
+      <span class="ws" id="ctx-ws">● offline</span>
+    </div>
+    <div class="controls">
+      <button id="refresh">↻ aggiorna</button>
+      <label><input type="checkbox" id="auto"> auto (ogni 4s)</label>
+    </div>
+  </header>
+
+  <section class="block hero">
+    <h2>Domande aperte <span class="count" id="c-questions"></span></h2>
+    <div id="questions"></div>
+  </section>
+
+  <section class="block hero">
+    <h2>Vuoti di comprensione <span class="count" id="c-open"></span></h2>
+    <div id="open-gaps"></div>
+  </section>
+
+  <section class="block">
+    <h2>Vuoti che si sono chiusi <span class="count" id="c-closed"></span></h2>
+    <div id="closed-gaps"></div>
+  </section>
+
+  <section class="block">
+    <h2>Pensieri vivi sul limite <span class="count" id="c-think"></span></h2>
+    <div id="thoughts"></div>
+  </section>
+
+  <section class="block">
+    <h2>Incertezze di fondo <span class="count" id="c-unc"></span></h2>
+    <div id="uncertainties"></div>
+  </section>
+
+<script type="module">
+import { UI, applyThemeToCss } from '/campovasto/js/theme.js';
+
+// Genera le CSS custom property dal theme, poi deriva le var semantiche di
+// questa pagina dai token UI (così resta zero-hex: i valori vengono da theme.js).
+applyThemeToCss();
+const root = document.documentElement;
+root.style.setProperty('--c-question', UI.radarStroke);   // azzurro: una domanda
+root.style.setProperty('--c-open',     UI.unknownBg);     // ambra: vuoto aperto
+root.style.setProperty('--c-closed',   UI.pathGlow);      // verde: vuoto colmato
+root.style.setProperty('--c-think',    UI.sentenceGlow);  // dorato: pensiero vivo
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const setCount = (id, n) => { $(id).textContent = n ? `(${n})` : ''; };
+const empty = msg => `<div class="empty">${msg}</div>`;
+
+async function getJSON(url){
+  try { const r = await fetch(url); if(!r.ok) throw 0; return await r.json(); }
+  catch { return null; }
+}
+
+function renderQuestions(qs){
+  const open = (qs || []).filter(q => !q.resolved);
+  setCount('c-questions', open.length);
+  if(!open.length){ $('questions').innerHTML = empty('Nessuna domanda aperta — non ho ricevuto interrogativi a cui non so rispondere.'); return; }
+  $('questions').innerHTML = open.map(q => {
+    const interr = q.interrogative ? `«${esc(q.interrogative)}»` : 'domanda';
+    const topic = (q.topic || []).length ? ` su <span class="tag">${q.topic.map(esc).join(', ')}</span>` : '';
+    return `<div class="card q">
+      <div class="lead">${interr}${topic}</div>
+      <div class="meta"><span>turno ${q.turn ?? '—'}</span></div>
+      ${q.raw_input ? `<div class="raw">“${esc(q.raw_input)}”</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderOpenGaps(gaps){
+  setCount('c-open', (gaps||[]).length);
+  if(!gaps || !gaps.length){ $('open-gaps').innerHTML = empty('Nessun vuoto aperto — ogni elemento che ho letto è legato o esplicitamente chiuso.'); return; }
+  $('open-gaps').innerHTML = gaps.map(g => `<div class="card open">
+    <div class="lead">${esc(g.question || g.trigger)}</div>
+    <div class="meta">
+      ${g.trigger ? `<span>innescato da <span class="tag">${esc(g.trigger)}</span></span>` : ''}
+      ${g.gap_kind ? `<span>manca: <span class="tag">${esc(g.gap_kind)}</span></span>` : ''}
+      <span>turno ${g.turn ?? '—'}</span>
+    </div>
+  </div>`).join('');
+}
+
+function renderClosedGaps(gaps){
+  setCount('c-closed', (gaps||[]).length);
+  if(!gaps || !gaps.length){ $('closed-gaps').innerHTML = empty('Ancora nessun vuoto colmato in questo dialogo.'); return; }
+  $('closed-gaps').innerHTML = gaps.map(g => `<div class="card closed">
+    <div class="lead dim">${esc(g.question || g.trigger)}</div>
+    <div class="meta">
+      ${g.trigger ? `<span>innescato da <span class="tag">${esc(g.trigger)}</span></span>` : ''}
+      <span>aperto al turno ${g.turn ?? '—'}</span>
+    </div>
+    ${g.closed_by ? `<div class="resolution">colmato da <b>«${esc(g.closed_by)}»</b>${g.closed_at_turn != null ? ` al turno ${g.closed_at_turn}` : ''}</div>` : ''}
+  </div>`).join('');
+}
+
+function renderThoughts(thoughts){
+  const KINDS = { gap: 'lacuna', missing_bridge: 'ponte mancante', need: 'bisogno' };
+  const items = (thoughts || []).filter(t => KINDS[t.kind]);
+  setCount('c-think', items.length);
+  if(!items.length){ $('thoughts').innerHTML = empty('Nessun pensiero attivo sul limite in questo momento.'); return; }
+  $('thoughts').innerHTML = items.map(t => `<div class="card think">
+    <div class="think-row">
+      <span class="kind">${KINDS[t.kind]}</span>
+      <span class="words">${(t.words || []).map(esc).join(' · ') || '—'}</span>
+      <span class="str">${Math.round((t.strength || 0) * 100)}%</span>
+    </div>
+    ${(t.fractal_names||[]).length ? `<div class="meta"><span class="tag">${t.fractal_names.map(esc).join('</span> <span class="tag">')}</span></div>` : ''}
+  </div>`).join('');
+}
+
+function renderUncertainties(uncs){
+  setCount('c-unc', (uncs||[]).length);
+  if(!uncs || !uncs.length){ $('uncertainties').innerHTML = empty('Nessuna incertezza di fondo registrata.'); return; }
+  $('uncertainties').innerHTML = uncs.map(u => `<div class="card unc">
+    <div class="lead">${esc(u.topic)}</div>
+    <div class="meta">
+      <span>emersa ${u.emergence_count ?? 0}× senza risposta</span>
+      <span>tensione ${Math.round((u.tension || 0) * 100)}%</span>
+    </div>
+    <div class="tension"><span style="width:${Math.round((u.tension || 0) * 100)}%"></span></div>
+  </div>`).join('');
+}
+
+function renderContext(nar){
+  $('ctx-ws').textContent = nar ? '● live' : '● offline';
+  $('ctx-ws').classList.toggle('ok', !!nar);
+  if(!nar) return;
+  $('ctx-turn').textContent = nar.turn_count ?? '—';
+  $('ctx-stance').textContent = nar.stance || '—';
+  $('ctx-valence').textContent = (nar.valence && nar.valence.label) || '—';
+}
+
+async function refresh(){
+  // Incertezze di fondo: da /api/self `uncertainties` (topic/tension/
+  // emergence_count) — NON da /api/open-questions (vuoto + dismesso in Tier 2).
+  const [speaker, thoughts, self, nar] = await Promise.all([
+    getJSON('/api/speaker'),
+    getJSON('/api/thoughts'),
+    getJSON('/api/self'),
+    getJSON('/api/narrative'),
+  ]);
+  renderContext(nar);
+  renderQuestions(speaker && speaker.open_questions);
+  renderOpenGaps(speaker && speaker.open_gaps);
+  renderClosedGaps(speaker && speaker.closed_gaps);
+  renderThoughts(thoughts);
+  renderUncertainties(self && self.uncertainties);
+}
+
+let timer = null;
+$('refresh').onclick = refresh;
+$('auto').onchange = e => {
+  if(timer){ clearInterval(timer); timer = null; }
+  if(e.target.checked) timer = setInterval(refresh, 4000);
+};
+refresh();
+</script>
+</body>
+</html>

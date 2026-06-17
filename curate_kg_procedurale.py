@@ -239,6 +239,15 @@ for det, sub in [
     ("poco", "quantificatore"), ("poca", "quantificatore"), ("pochi", "quantificatore"), ("poche", "quantificatore"),
     ("tanto", "quantificatore"), ("tanta", "quantificatore"), ("tanti", "quantificatore"), ("tante", "quantificatore"),
     ("troppo", "quantificatore"), ("troppa", "quantificatore"), ("troppi", "quantificatore"), ("troppe", "quantificatore"),
+    # Numerali cardinali (classe CHIUSA: i numeri determinano la quantità, come
+    # i quantificatori). Stanno qui come DATO, non in Rust. Insieme finito dei
+    # cardinali comuni. ESCLUSI gli omografi che servono altrove: "uno"
+    # (articolo), "sei" (2sg di essere — "chi sei?"). Gli ordinali derivano per
+    # morfologia altrove.
+    ("zero", "numerale"), ("due", "numerale"), ("tre", "numerale"),
+    ("quattro", "numerale"), ("cinque", "numerale"), ("sette", "numerale"),
+    ("otto", "numerale"), ("nove", "numerale"), ("dieci", "numerale"),
+    ("cento", "numerale"), ("mille", "numerale"),
 ]:
     add(det, "IsA", "determinante")
     add(det, "IsA", sub)
@@ -271,14 +280,27 @@ for prep, ruolo in prep_semplici:
     # Anche il qualificatore meta-tag, se non è già stato aggiunto altrove
     add(ruolo, "IsA", "qualificatore")
 
+# Classe CHIUSA: 6 basi (di/a/da/in/su) × 7 articoli (il/lo/la/l'/i/gli/le) +
+# con→col/coi. Insieme COMPLETO (prima era parziale: mancava dalle/dallo/dai/
+# dagli, alle/allo/agli, nei/negli/nelle, sui/sugli/sulle, le forme con l').
 prep_articolate = [
-    ("del", "di", "il"), ("della", "di", "la"), ("dei", "di", "i"),
-    ("degli", "di", "gli"), ("delle", "di", "le"),
-    ("al", "a", "il"), ("alla", "a", "la"), ("ai", "a", "i"),
-    ("agli", "a", "gli"), ("alle", "a", "le"),
-    ("dal", "da", "il"), ("dalla", "da", "la"),
-    ("nel", "in", "il"), ("nella", "in", "la"),
-    ("sul", "su", "il"), ("sulla", "su", "la"),
+    # di
+    ("del","di","il"), ("dello","di","lo"), ("della","di","la"), ("dell'","di","l'"),
+    ("dei","di","i"), ("degli","di","gli"), ("delle","di","le"),
+    # a
+    ("al","a","il"), ("allo","a","lo"), ("alla","a","la"), ("all'","a","l'"),
+    ("ai","a","i"), ("agli","a","gli"), ("alle","a","le"),
+    # da
+    ("dal","da","il"), ("dallo","da","lo"), ("dalla","da","la"), ("dall'","da","l'"),
+    ("dai","da","i"), ("dagli","da","gli"), ("dalle","da","le"),
+    # in
+    ("nel","in","il"), ("nello","in","lo"), ("nella","in","la"), ("nell'","in","l'"),
+    ("nei","in","i"), ("negli","in","gli"), ("nelle","in","le"),
+    # su
+    ("sul","su","il"), ("sullo","su","lo"), ("sulla","su","la"), ("sull'","su","l'"),
+    ("sui","su","i"), ("sugli","su","gli"), ("sulle","su","le"),
+    # con
+    ("col","con","il"), ("coi","con","i"),
 ]
 for art, base, articolo in prep_articolate:
     add(art, "IsA", "preposizione")
@@ -300,6 +322,14 @@ add("esclamativo", "Expresses", "intensità")
 add("dichiarativo", "IsA", "marcatore")
 add("dichiarativo", "Causes", "asserzione")
 
+# Phase 86: "non" è un marcatore di negazione, non un nodo-contenuto. Senza
+# questa classificazione l'estrattore di proposizione (is_function_word_simple)
+# lo prendeva come SOGGETTO ("l'incertezza non è X" → soggetto="non"). L'IsA
+# diretto a `marcatore` è ciò che il gate function-word controlla (1-hop). La
+# polarità della frase resta rilevata a parte (match letterale "non").
+add("non", "IsA", "marcatore")
+add("non", "Expresses", "negazione")
+
 # ══════════════════════════════════════════════════════════════════════════
 # § G — VERBI BASE (slot-filler dei pattern)
 # ══════════════════════════════════════════════════════════════════════════
@@ -314,6 +344,16 @@ add("avere", "IsA", "verbo")
 add("avere", "IsA", "copula")
 add("avere", "UsedFor", "predicare", via="possesso")
 add("avere", "UsedFor", "predicare", via="stato")
+
+# Ausiliari (Phase 84, 2c-C): avere/essere reggono i tempi composti
+# (ausiliare + participio passato). Classe chiusa di 2 verbi: vive come DATO
+# qui, non come lista hardcoded in Rust. Il meccanismo generico in
+# `input_reading::detect_speaker_claim` legge `IsA ausiliare` per riconoscere
+# "ho lavorato" come azione passata (verbo vero = participio), non come
+# copula+identità ("Speaker IsA lavorato").
+add("ausiliare", "IsA", "categoria")
+add("avere", "IsA", "ausiliare")
+add("essere", "IsA", "ausiliare")
 
 add("stare", "IsA", "verbo")
 add("stare", "IsA", "copula")
@@ -440,6 +480,16 @@ for dat_v, emozione in [
     add(dat_v, "IsA", "dativo")
     add(dat_v, "Expresses", emozione)
 
+# ── Verbi PRONOMINALI-riflessivi (frame `pronominale`) ──────────────────────
+# "mi sento solo" = sentirsi + stato: il clitico riflessivo (mi/ti/si, IsA
+# riflessivo) marca una predicazione di STATO → FeelsAs, anche quando l'aggettivo
+# non è un inner-state curato. È la COSTRUZIONE a dirlo (grammatica come dato),
+# non una lista di parole-emozione. Distingue "mi sento solo" (riflessivo →
+# FeelsAs) da "sento la voce" (nessun clitico → percezione esterna, non un claim).
+# La relazione FeelsAs viene dalla categoria percettiva del verbo (mappa esistente).
+add("pronominale", "IsA", "qualificatore")
+add("sentire", "IsA", "pronominale")
+
 # ══════════════════════════════════════════════════════════════════════════
 # § H — AVVERBI MODALI (per esitazione)
 # ══════════════════════════════════════════════════════════════════════════
@@ -462,16 +512,59 @@ add("certamente", "UsedFor", "marcare", via="affermazione")
 add("forse", "OppositeOf", "certamente")
 
 # ══════════════════════════════════════════════════════════════════════════
+# § H.ter — AVVERBI COMUNI (tempo / grado / modo) → circostanza
+# ══════════════════════════════════════════════════════════════════════════
+# Classe semi-chiusa, enumerabile (≠ nomi/aggettivi aperti). Servono la funzione
+# `circostanza` (l'analisi logica li toglie dal residuo e li attacca al verbo).
+# Esclusi i token AMBIGUI che raddoppiano nome/aggettivo/determinante: ora/ancora
+# (=nomi), solo (=aggettivo), molto/poco/tanto/troppo (=determinante, §D.bis).
+avverbi = [
+    # tempo
+    ("sempre", "tempo"), ("mai", "tempo"), ("spesso", "tempo"), ("già", "tempo"),
+    ("poi", "tempo"), ("adesso", "tempo"), ("oggi", "tempo"), ("ieri", "tempo"),
+    ("domani", "tempo"), ("stamattina", "tempo"), ("stasera", "tempo"),
+    ("stanotte", "tempo"), ("presto", "tempo"), ("tardi", "tempo"),
+    ("ormai", "tempo"), ("allora", "tempo"),
+    # grado
+    ("più", "grado"), ("meno", "grado"), ("quasi", "grado"),
+    ("davvero", "grado"), ("perfino", "grado"), ("addirittura", "grado"),
+    # modo
+    ("insieme", "modo"), ("così", "modo"),
+]
+for avv, tipo in avverbi:
+    add(avv, "IsA", "avverbio")
+    add(avv, "UsedFor", "circostanza", via=tipo)
+
+# ══════════════════════════════════════════════════════════════════════════
 # § H.bis — CONGIUNZIONI (parole di legame, function-word per natura)
 # ══════════════════════════════════════════════════════════════════════════
 
 congiunzioni = [
+    # coordinanti
     ("e",  "additiva"),
     ("o",  "disgiuntiva"),
     ("ma", "avversativa"),
+    ("però", "avversativa"),
+    ("anzi", "avversativa"),
+    ("quindi", "conclusiva"),
+    ("dunque", "conclusiva"),
+    # subordinanti — classe chiusa, va COMPLETATA (non è fittare un esempio: è la
+    # grammatica italiana). Un subordinante apre una nuova clausola → il chunker
+    # clausa-aware lo usa come confine ("…da quando me ne sono andato…").
     ("se", "ipotetica"),
-    ("perché", "causale"),  # già pronome interrogativo, anche congiunzione
-    ("che", "subordinante"),  # già pronome, anche congiunzione subordinante
+    ("perché", "causale"),     # già pronome interrogativo, anche congiunzione
+    ("che", "subordinante"),   # già pronome, anche congiunzione subordinante
+    ("quando", "temporale"),   # anche interrogativo; come subordinante apre clausola
+    ("mentre", "temporale"),
+    ("finché", "temporale"),
+    ("poiché", "causale"),
+    ("siccome", "causale"),
+    ("giacché", "causale"),
+    ("benché", "concessiva"),
+    ("sebbene", "concessiva"),
+    ("nonostante", "concessiva"),
+    ("affinché", "finale"),
+    ("purché", "condizionale"),
 ]
 for cong, ruolo in congiunzioni:
     add(cong, "IsA", "congiunzione")
@@ -639,6 +732,69 @@ add("vicinanza", "IsA", "percetto")
 add("vicinanza", "Causes", "domandare",  strength=0.85)
 add("vicinanza", "Causes", "curiosità",  strength=0.7)
 
+# ── dissonanza (Phase 85, kg_self): la PROP confligge con una convinzione ──
+# Seminato da `seed_from_self_confrontation` con intensità = max_conflitto()
+# (= confidenza dell'edge colpito, continua — mai soglia). Causa i target del
+# `posizionamento` (rispondere + prospettiva): toccata in una convinzione,
+# l'entità RIFRANGE — articola la propria posizione invece di elaborare la
+# cornice dell'input. `prospettiva` è la via ESCLUSIVA di `posizionamento`:
+# seminarla è ciò che lo fa vincere per risonanza. Crossover emergente, non
+# tabellato — a conflitto forte posizionamento supera asserzione/esplorazione.
+add("dissonanza", "IsA", "percetto")
+add("dissonanza", "Causes", "rispondere",  strength=0.7)
+add("dissonanza", "Causes", "prospettiva", strength=0.85)
+
+# ── conferma (Phase 85, kg_self): la PROP allinea una convinzione del sé ──
+# Seminato con intensità = max_risonanza(). Anche la conferma è una posizione
+# (il mondo conferma ciò che il sé tiene) → posizionamento; il render legge la
+# polarità concorde del SelfHit e articola in accordo, non in opposizione.
+add("conferma", "IsA", "percetto")
+add("conferma", "Causes", "rispondere",  strength=0.6)
+add("conferma", "Causes", "prospettiva", strength=0.7)
+
+# ══════════════════════════════════════════════════════════════════════════
+# § J — FUNZIONI SINTATTICHE (analisi logica: ogni classe, A COSA SERVE)
+# ══════════════════════════════════════════════════════════════════════════
+# La grammatica non è solo "che cos'è una parola" (le classi, §A-§H) ma "a cosa
+# serve nella frase" (la funzione sintattica). Qui la mappa classe→funzione come
+# DATO; un chunker generico in Rust la applica, assegnando a OGNI token un ruolo
+# (o lasciandolo nel residuo, misurabile). Le funzioni sono nodi-metalinguaggio:
+# poche, finite → frasi infinite. Le classi APERTE (aggettivo/nome: content, non
+# enumerabili) sono riconosciute per morfologia + kg_sem; qui dichiarate solo
+# come categorie per appenderci la funzione.
+# Vedi docs/raw/architettura/analisi_logica_grammatica_kg_proc.md.
+
+add("aggettivo", "IsA", "categoria")
+add("nome", "IsA", "categoria")
+
+for funzione in ["attributo", "argomento", "complemento", "circostanza",
+                 "determinazione", "subordinata", "connessione"]:
+    add(funzione, "IsA", "funzione")
+
+# classe → A COSA SERVE (la funzione sintattica che può ricoprire).
+add("aggettivo",    "UsedFor", "attributo")     # un aggettivo qualifica un nome
+add("nome",         "UsedFor", "argomento")     # soggetto/oggetto (ruolo da posizione)
+add("articolo",     "UsedFor", "determinazione")
+add("determinante", "UsedFor", "determinazione")
+add("preposizione", "UsedFor", "complemento")
+add("avverbio",     "UsedFor", "circostanza")
+add("congiunzione", "UsedFor", "connessione")
+
+# funzione → A COSA SI ATTACCA (la testa; l'attacco è generico, per adiacenza).
+add("attributo",      "Requires", "nome")
+add("determinazione", "Requires", "nome")
+add("complemento",    "Requires", "verbo")
+
+# Pronomi INDEFINITI (classe chiusa): stanno per un argomento non specificato.
+for ind in ["qualcosa", "qualcuno", "niente", "nulla", "nessuno", "ognuno", "chiunque"]:
+    add(ind, "IsA", "pronome")
+    add(ind, "IsA", "indefinito")
+add("indefinito", "IsA", "qualificatore")
+
+# INTERIEZIONI (classe chiusa): atto espressivo a sé, non argomento.
+for inter in ["boh", "mah", "beh", "ehm", "uffa", "ahi"]:
+    add(inter, "IsA", "interiezione")
+
 # ══════════════════════════════════════════════════════════════════════════
 # § K — META: ancore concettuali
 # ══════════════════════════════════════════════════════════════════════════
@@ -647,7 +803,37 @@ add("pattern", "IsA", "struttura")
 add("atto", "IsA", "azione")
 add("categoria", "IsA", "classe")
 add("qualificatore", "IsA", "classe")
+add("funzione", "IsA", "classe")
 add("percetto", "IsA", "stato")
+
+# ══════════════════════════════════════════════════════════════════════════
+# § L — TRASFORMAZIONE: comprensione → posizione → output
+# ══════════════════════════════════════════════════════════════════════════
+# La grammatica GENERALE dell'atto, NON frasi per-intento. Due regole sole:
+#   (1) bisogno → atto, sul PUNTO (locus): "quando il bisogno è X, l'atto è Y,
+#       e punta sul locus Z".
+#   (2) punto (locus) → interrogativo: "per chiedere del locus Z, usa la parola W".
+# Il collasso (Rust) legge queste regole e costruisce l'output. Aggiungere un
+# intento nuovo = UNA riga qui, mai una frase. Legenda: kg_proc_legenda.md.
+#   bisogni  = i nomi di need.rs (capire/posizionarsi/riconoscere/strutturare)
+#   atti     = chiedere/esplorare/confermare/elencare
+#   locus    = oggetto (lo slot mancante) / causa (il perché) / affermazione / cose
+#   interrog = le parole interrogative reali (cosa/perché/come)
+
+# (1) bisogno → atto via=locus
+add("capire",       "UsedFor", "chiedere",   via="oggetto")
+add("posizionarsi", "UsedFor", "esplorare",  via="causa")
+add("riconoscere",  "UsedFor", "confermare", via="affermazione")
+add("strutturare",  "UsedFor", "elencare",   via="cose")
+
+# (2) locus → interrogativo via=parola
+add("oggetto", "UsedFor", "chiedere", via="cosa")
+add("causa",   "UsedFor", "chiedere", via="perché")
+add("modo",    "UsedFor", "chiedere", via="come")
+
+# atti come azioni (leggibilità + legenda)
+for _atto in ["chiedere", "esplorare", "confermare", "elencare"]:
+    add(_atto, "IsA", "atto")
 
 # ══════════════════════════════════════════════════════════════════════════
 # Salvataggio
