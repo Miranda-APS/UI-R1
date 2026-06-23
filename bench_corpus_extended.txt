@@ -1,0 +1,66 @@
+# Corpus esteso (2026-06-10) — comprensione su input VARI, classe ricca + concreto.
+# Una frase per riga. Usato da bench_determinism.py (via probe_extract) e come
+# base per estendere dialogue_bench. Commenti con #.
+
+# ── Confidenze emotive (Speaker, FeelsAs) ──
+ho paura del futuro
+sono triste
+mi sento solo da quando mi sono trasferito
+mi sento sopraffatto
+non ho più voglia di uscire
+ho nostalgia della mia città
+mi manca mia madre
+provo una gioia che non riesco a contenere
+sono arrabbiato con mio fratello
+ho paura di deludere tutti
+mi sento in colpa per ieri
+non riesco a smettere di pensare al lavoro
+
+# ── Azioni e modali (Speaker, Does) ──
+devo finire il progetto
+voglio cambiare vita
+non riesco a dormire
+ho lavorato tutto il giorno
+sono andato al mare
+cerco di capire
+devo consegnare la tesi entro venerdì
+ho litigato con mia sorella
+
+# ── Dump multi-locus (strutturare) ──
+devo finire il progetto e comprare il latte e non ho risposto alle mail
+oggi devo chiamare il medico e finire la relazione e mi sento in colpa
+mi sento sopraffatto, devo finire il progetto e comprare il latte
+
+# ── Claim sul mondo (World) ──
+la paura è un'emozione
+il silenzio ha un significato
+il tradimento richiede fiducia
+l'amore è una prigione
+l'incertezza è un fallimento
+il dialogo è uno scopo
+la rabbia nasce dalla paura
+il mare è profondo
+il sole è caldo
+il tempo guarisce le ferite
+
+# ── Negazioni ──
+non ho paura
+l'incertezza non è un fallimento
+non sono arrabbiato
+
+# ── Domande ──
+chi sei?
+come stai?
+cosa pensi della solitudine?
+perché esisti?
+
+# ── Fatico / fuori dominio ──
+ciao
+grazie
+che ore sono?
+
+# ── Ambigui / nome-verbo (regressione disambiguazione contestuale) ──
+il silenzio ha significato
+ho un significato da cercare
+io silenzio i critici
+ho sempre lavorato

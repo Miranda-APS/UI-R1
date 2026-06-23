@@ -94,6 +94,10 @@ pub struct Complement {
     /// Relazione disambiguata contro il KG (None se la preposizione non ha
     /// ipotesi-contenuto, es. "a" dativo).
     pub relation: Option<RelationType>,
+    /// Ruolo logico del complemento (paragone/termine/specificazione/fine/…),
+    /// dalla preposizione + categoria del verbo. È il "secondo argomento"
+    /// dell'analisi logica (Stadio 2): "preferisco X **a Y**" → Y = paragone.
+    pub role: Option<String>,
 }
 
 /// La proposizione che una frase porta.
@@ -320,7 +324,15 @@ pub fn extract_propositions(
     let analisi = crate::topology::analisi_logica::analizza(raw_words, kp, k);
     let mut out = Vec::with_capacity(analisi.clausole.len());
     for c in &analisi.clausole {
-        let slice = &raw_words[c.range.clone()];
+        let mut slice = &raw_words[c.range.clone()];
+        // "che" completivo/relativo che APRE una subordinata è un complementatore
+        // trasparente, non un interrogativo: "ha spiegato CHE il lancio dipende…"
+        // → estrai sul contenuto ("il lancio dipende…" → lancio Requires
+        // completamento), non su un "?che" fantasma. Vale solo per le subordinate
+        // (al top-level "Che fai?" il "che" resta interrogativo, Phase 83).
+        if c.subordinate && slice.first().map_or(false, |w| w.eq_ignore_ascii_case("che")) {
+            slice = &slice[1..];
+        }
         if slice.is_empty() { continue; }
         let claim = crate::topology::input_reading::detect_speaker_claim(
             slice, lexicon, kg, kg_proc,
@@ -398,11 +410,18 @@ fn extract_complements(
     });
     let Some(head) = head else { return vec![] };
 
+    // Categoria del verbo reggente (per il ruolo: "a" dopo un valutativo =
+    // paragone). Letta dalla stessa lemmatizzazione che categorizza il verbo.
+    let vcat = prop.verb_lemma.as_deref()
+        .and_then(|v| crate::topology::input_reading::verb_category(v, kg_proc));
+
     let mut out: Vec<Complement> = Vec::new();
     for (i, w) in raw_words.iter().enumerate() {
         let prep = w.to_lowercase();
-        // È una preposizione con ipotesi-contenuto? (di/da/per/con/su/in/contro/…)
-        if crate::topology::prepositions::hypotheses(&prep).is_empty() {
+        // È una preposizione? (di/da/per/con/su/in/contro/…/a) — "a" inclusa
+        // (Stadio 2): introduce il secondo argomento anche senza relazione-
+        // contenuto pulita ("preferisco X **a** Y", "giocare **a** calcio").
+        if !crate::topology::prepositions::is_preposition(&prep) {
             continue;
         }
         // Prima parola-contenuto dopo la preposizione.
@@ -413,9 +432,13 @@ fn extract_complements(
         if noun == head || noun == prep { continue; }
         // Evita duplicati sullo stesso nome.
         if out.iter().any(|c| c.noun == noun) { continue; }
+        // Relazione disambiguata dal KG (None per "a" e per le prep senza
+        // ipotesi-contenuto); ruolo logico dalla preposizione + categoria verbo.
         let relation = crate::topology::prepositions::disambiguate(&head, &prep, &noun, kg)
             .map(|r| r.relation);
-        out.push(Complement { preposition: prep, noun, relation });
+        let role = crate::topology::prepositions::complement_role(&prep, vcat)
+            .map(|s| s.to_string());
+        out.push(Complement { preposition: prep, noun, relation, role });
     }
     out
 }
@@ -423,22 +446,33 @@ fn extract_complements(
 /// Cerca un pronome interrogativo nei token. Il pronome è interrogativo se
 /// `IsA interrogativo` nel kg_proc; in alternativa per i casi base usiamo
 /// la lista canonica (chi/cosa/che/dove/quando/perché/come/quale/quanto).
-fn find_interrogative(raw_words: &[String]) -> Option<String> {
+pub(crate) fn find_interrogative(raw_words: &[String]) -> Option<String> {
     // Interrogativi "forti": interrogativi quando presenti — MA non quando
     // introdotti da una preposizione, che li rende subordinatori (temporali/
     // modali): "da quando", "di come", "per quanto". Phase 86 (A2, bench
     // 2026-06-08): senza, "mi sento solo da quando me ne sono andato" veniva
     // letto come domanda fantasma su "quando", perdendo `Speaker FeelsAs solo`.
     const STRONG: &[&str] = &[
-        "chi", "cosa", "dove", "quando", "perché", "perche", "come", "quale", "quanto",
+        "chi", "cosa", "dove", "quando", "perché", "perche", "come", "quale", "qual", "quanto",
     ];
     const SUBORDINATING_PREP: &[&str] = &["da", "di", "per", "in", "con", "su", "a", "fin", "fino"];
+    // Un interrogativo preceduto da articolo/determinante è in realtà la TESTA
+    // di un sintagma nominale ("una cosa", "la cosa", "quella cosa") — un nome,
+    // non una domanda. Stesso chiuso-classe di SUBORDINATING_PREP: cattura anche
+    // "la quale" (pronome relativo, non interrogativo). Senza, "mi aiuti a
+    // ragionare su una cosa?" veniva letto come domanda fantasma "che è UI-r1".
+    const ARTICLE_DET: &[&str] = &[
+        "il", "lo", "la", "i", "gli", "le", "un", "uno", "una",
+        "questo", "questa", "questi", "queste", "quello", "quella", "quei", "quegli", "quelle",
+        "codesto", "ogni", "alcun", "alcuna", "qualche", "nessun", "nessuna",
+    ];
     if let Some((_, w)) = raw_words.iter().enumerate()
         .filter(|(_, w)| STRONG.contains(&w.to_lowercase().as_str()))
         .find(|(i, _)| {
-            *i == 0 || !SUBORDINATING_PREP.contains(
-                &raw_words[i - 1].to_lowercase().trim_end_matches('\'')
-            )
+            if *i == 0 { return true; }
+            let prev = raw_words[i - 1].to_lowercase();
+            let prev = prev.trim_end_matches('\'');
+            !SUBORDINATING_PREP.contains(&prev) && !ARTICLE_DET.contains(&prev)
         })
     {
         return Some(w.clone());
@@ -528,27 +562,131 @@ fn extract_world_proposition(
     // avere sono grammaticali → verb_lemma None; un verbo d'azione porta il suo
     // lemma di superficie ("uccidere", "iniziare") così non si perde *quale*
     // azione è. Generale: lo stesso `inf` che sceglie la relazione.
-    let (verb_pos, relation, verb_lemma) = raw_words.iter().enumerate().find_map(|(i, w)| {
+    // Pivot = (subject_end, obj_anchor, relation, verb_lemma). `subject_end` è il
+    // confine sinistro della ricerca soggetto (il VERBO, o l'AUSILIARE nei composti);
+    // `obj_anchor` è la testa verbale dopo cui cercare l'oggetto (il VERBO, o il
+    // PARTICIPIO nei composti). Coincidono nei tempi semplici, divergono nei composti.
+    let (verb_pos, obj_anchor, relation, verb_lemma) = raw_words.iter().enumerate().find_map(|(i, w)| {
         let lw = w.to_lowercase();
         let lemma = lemmatize(&lw).map(|r| r.infinitive).unwrap_or_else(|| lw.clone());
+        // Tempo COMPOSTO sul Mondo (ausiliare + participio): "Marco ha aperto la
+        // riunione" → World(marco) Does aprire (ogg=riunione), NON "marco Has
+        // aperto". Speculare al path Speaker (`find_past_participle`). Il PARTICIPIO
+        // decide: se manca — avere+nome ("ha un significato"), essere+aggettivo
+        // ("è profondo") — restiamo su Has/IsA come prima. Il soggetto si cerca PRIMA
+        // dell'ausiliare (subject_end=i), l'oggetto DOPO il participio (obj_anchor=pp).
+        let composite = || crate::topology::input_reading::find_past_participle(raw_words, i + 1, kg_proc)
+            .map(|(pp, inf)| {
+                let rel = world_relation_for_verb(&inf, kg_proc);
+                (i, pp, rel, Some(inf))
+            });
         if lemma == "avere" || lw == "ha" || lw == "hanno" {
-            return Some((i, RelationType::Has, None::<String>));
+            return composite().or(Some((i, i, RelationType::Has, None::<String>)));
         }
-        if is_copula(w) { return Some((i, RelationType::IsA, None::<String>)); }
+        if is_copula(w) {
+            return composite().or(Some((i, i, RelationType::IsA, None::<String>)));
+        }
         None
     }).or_else(|| {
+        // Un candidato-verbo preceduto da ARTICOLO è testa NOMINALE, non il verbo:
+        // "il risultato" = nome (non "risultare"), "il mondo" ≠ "mondare". SOLO
+        // l'articolo è introduttore-nominale non ambiguo: un quantificatore/
+        // dimostrativo ("tutto", "questo") può essere pronome-soggetto ("tutto
+        // dipende") oltre che determinante ("tutto il mondo") — quelli NO.
+        // Il contesto disambigua l'omografo nome/participio: pondera, non indovina.
+        let nominal_intro = |word: &str| {
+            matches!(word, "il"|"lo"|"la"|"i"|"gli"|"le"|"un"|"uno"|"una"|"l'"|"un'")
+            || kg_proc.map_or(false, |kp| kp.query_objects(word, RelationType::IsA)
+                .iter().any(|p| p.eq_ignore_ascii_case("articolo")))
+        };
         raw_words.iter().enumerate().find_map(|(i, w)| {
+            // Testa nominale dopo articolo/determinante, o NOME retto da
+            // PREPOSIZIONE → non è il verbo: "del prodotto" → prodotto è nome, non
+            // produrre (in italiano la preposizione regge nome/infinito, mai un
+            // verbo finito). Stesso principio del path Speaker.
+            if i > 0 {
+                let prev = raw_words[i-1].to_lowercase();
+                if nominal_intro(&prev) || crate::topology::prepositions::is_preposition(&prev) {
+                    return None;
+                }
+            }
             let (inf, person) = crate::topology::input_reading::lemma_of_verb(w, kg_proc, kg)?;
+            // Nome-proprio/verbo (strutturale): un candidato DEBOLMENTE attestato
+            // (non curato nel kg_proc) seguito da un verbo CURATO è il soggetto,
+            // non il verbo ("Marco preferisce" → marco soggetto, preferire verbo).
+            if crate::topology::input_reading::verb_category(&inf, kg_proc).is_none() {
+                if let Some(next) = raw_words.get(i + 1) {
+                    if let Some((ni, _)) = crate::topology::input_reading::lemma_of_verb(next, kg_proc, kg) {
+                        if crate::topology::input_reading::verb_category(&ni, kg_proc).is_some() {
+                            return None;
+                        }
+                    }
+                }
+            }
             // Solo 3a persona: 1a/2a sono claim Speaker/Entity, già gestiti a monte.
             if !matches!(person, Person::Third | Person::ThirdPlural) { return None; }
+            // Modale + infinito sul Mondo: "Giulia deve preparare la documentazione"
+            // → il CONTENUTO è l'infinito (preparare), non il modale. Speculare al
+            // frame modale del path Speaker. Soggetto resta prima del modale (i),
+            // oggetto dopo l'infinito (obj_anchor = ip).
+            if kg_proc.map_or(false, |kp|
+                crate::topology::input_reading::is_kg_proc_isa(kp, &inf, "modale"))
+            {
+                if let Some((ip, inf2)) = crate::topology::input_reading::infinitive_after(raw_words, i + 1, kg_proc, kg) {
+                    let rel = world_relation_for_verb(&inf2, kg_proc);
+                    return Some((i, ip, rel, Some(inf2)));
+                }
+            }
             let rel = world_relation_for_verb(&inf, kg_proc);
-            Some((i, rel, Some(inf)))
+            Some((i, i, rel, Some(inf)))
         })
     })?;
 
-    let subject = raw_words[..verb_pos].iter().rev()
-        .find(|w| !is_function_word_simple(&w.to_lowercase(), kg_proc))?
-        .to_lowercase();
+    let pre = &raw_words[..verb_pos];
+    let subject = pre.iter().enumerate().rev()
+        // Testa del sintagma soggetto: l'ultimo NOME non retto da preposizione.
+        // In "la qualità del prodotto", "prodotto" è retto da "del"
+        // (specificazione che modifica "qualità") → la testa è "qualità". A
+        // ritroso, salta i modificatori preceduti da preposizione.
+        .find(|(j, w)| {
+            !is_function_word_simple(&w.to_lowercase(), kg_proc)
+                && (*j == 0 || !crate::topology::prepositions::is_preposition(&pre[j - 1].to_lowercase()))
+        })
+        .map(|(_, w)| w.to_lowercase())
+        .or_else(|| {
+            // Quantificatore / pronome indefinito SENZA un nome che determina
+            // ("tutto dipende dal caso", "niente cambia") → uso PRONOMINALE, è il
+            // soggetto. Se determinasse un nome ("tutto il mondo è bello") il nome
+            // sarebbe già stato trovato sopra: questo è solo il fallback. La
+            // struttura decide articolo-determinante vs pronome, non una lista.
+            pre.iter().rev().find(|w| {
+                kg_proc.map_or(false, |kp| {
+                    kp.query_objects(&w.to_lowercase(), RelationType::IsA)
+                        .iter().any(|p| matches!(p.to_lowercase().as_str(),
+                            "quantificatore" | "indefinito"))
+                })
+            }).map(|w| w.to_lowercase())
+        })
+        .or_else(|| {
+            // Soggetto ANAFORICO (Strato 3): nessun soggetto nominale esplicito, ma
+            // il verbo è di 3a persona → l'agente vive altrove nel discorso. Marcato
+            // qui, RISOLTO nello strato discorsivo (`build_analysis`), non indovinato:
+            //  - pronome personale di 3a in posizione soggetto ("Lei teme…") →
+            //    World(pronome): porta il pronome per il match al referente saliente;
+            //  - pro-drop (solo parole-funzione prima del verbo, tipicamente vuoto —
+            //    "Ha spiegato…") → World(""): elisione, riempita col soggetto saliente.
+            // I pronomi di 3a sono classe CHIUSA (come io/tu altrove), non una lista
+            // di nomi. Senza referente (frase isolata) il soggetto resta vuoto: onesto.
+            const PRON3: &[&str] = &["lui","lei","loro","egli","ella","esso","essa","essi","esse"];
+            if let Some(p) = pre.iter().rev().map(|w| w.to_lowercase())
+                .find(|w| PRON3.contains(&w.as_str())) {
+                return Some(p);
+            }
+            if pre.iter().all(|w| is_function_word_simple(&w.to_lowercase(), kg_proc)) {
+                return Some(String::new()); // pro-drop
+            }
+            None
+        })?;
 
     // Oggetto DIRETTO vs COMPLEMENTO. L'oggetto diretto si raggiunge dal verbo
     // SOLO attraverso articoli/determinanti. Una parola-contenuto introdotta da
@@ -556,16 +694,63 @@ fn extract_world_proposition(
     // l'oggetto: "il giorno inizia DAL mattino" → verbo intransitivo, mattino è
     // complemento — NON "giorno compie mattino". Direct objects in italiano non
     // prendono preposizione: la disambiguazione è strutturale.
-    let is_prep = |w: &str| crate::topology::input_reading::is_kg_proc_isa(kp, w, "preposizione");
+    // `prepositions::is_preposition` normalizza anche le forme ARTICOLATE
+    // (dall'/dal/della/nel/sul/…) che il check kg_proc `IsA preposizione` mancava
+    // — perché il kg_proc elenca solo le forme semplici. Senza questo, "dall'" non
+    // era riconosciuto e "ignoto" diventava un falso oggetto diretto. Fallback al
+    // kg_proc per eventuali preposizioni fuori dal canon chiuso.
+    let is_prep = |w: &str| crate::topology::prepositions::is_preposition(w)
+        || crate::topology::input_reading::is_kg_proc_isa(kp, w, "preposizione");
     let mut direct: Option<String> = None;
     let mut complement: Option<String> = None;
     let mut saw_prep = false;
-    for w in raw_words.iter().skip(verb_pos + 1) {
+    for w in raw_words.iter().skip(obj_anchor + 1) {
         let lw = w.to_lowercase();
         if is_prep(&lw) { saw_prep = true; continue; }
         if is_function_word_simple(&lw, kg_proc) { continue; }
         if saw_prep { complement = Some(lw); } else { direct = Some(lw); }
         break;
+    }
+
+    // Frame di GENESI / DIPENDENZA (kg_proc, dato): quando l'unico argomento è un
+    // complemento di preposizione, la relazione della proposizione viene dalla
+    // PREPOSIZIONE (famiglia-ipotesi) raffinata dalla CLASSE del verbo, non dal
+    // `Does` di default. "da" propone la famiglia causale; il frame sceglie:
+    //   genesi     → Causes, soggetto = la FONTE ("la paura nasce dall'ignoto" →
+    //                World(ignoto) Causes paura);
+    //   dipendenza → Requires, soggetto invariato ("tutto dipende dal caso" →
+    //                World(tutto) Requires caso).
+    // Gated dal frame: un verbo senza frame lascia "da" come circostanza (via),
+    // niente over-generalizzazione su "da" non-causali ("inizia dal mattino").
+    if direct.is_none() {
+        if let (Some(comp), Some(inf)) = (complement.as_ref(), verb_lemma.as_deref()) {
+            let frames = kp.query_objects(inf, RelationType::IsA);
+            let has = |f: &str| frames.iter().any(|p| p.eq_ignore_ascii_case(f));
+            if has("genesi") {
+                return Some(SentenceProposition {
+                    subject: SubjectRef::World(comp.clone()),
+                    relation: RelationType::Causes,
+                    object: Some(ObjectRef::Word(subject.clone())),
+                    via: None,
+                    verb_lemma,
+                    polarity,
+                    complements: vec![],
+                    subject_surface: None,
+                });
+            }
+            if has("dipendenza") {
+                return Some(SentenceProposition {
+                    subject: SubjectRef::World(subject.clone()),
+                    relation: RelationType::Requires,
+                    object: Some(ObjectRef::Word(comp.clone())),
+                    via: None,
+                    verb_lemma,
+                    polarity,
+                    complements: vec![],
+                    subject_surface: None,
+                });
+            }
+        }
     }
 
     // Via: la specificazione dopo l'oggetto ("...uccide la fiducia PER
@@ -798,7 +983,13 @@ fn relation_from_verb_category(claim: &SpeakerClaim) -> RelationType {
         (Some("copula"), _) if claim.verb_lemma.as_deref() == Some("avere")
                                               => RelationType::Has,
         (Some("copula"), _)                   => RelationType::IsA,
-        // "penso/credo/voglio X" — espressione cognitiva.
+        // "amo/preferisco/desidero X" — attitudine valutativa verso l'oggetto:
+        // un posizionamento affettivo, non un'espressione. FeelsAs, NON Expresses
+        // (che era la discarica dei verbi mentali). La relazione vive nel verbo
+        // (frame `valutativo` nel kg_proc), non in un bucket grammaticale grezzo.
+        (Some("valutativo"), _)   => RelationType::FeelsAs,
+        // "penso/credo X" — espressione cognitiva (credenza). Qui Expresses è
+        // appropriato: è davvero un'asserzione di pensiero.
         (Some("cognitivo"), _)    => RelationType::Expresses,
         // "dico/chiedo/parlo X" — espressione comunicativa.
         (Some("comunicativo"), _) => RelationType::Expresses,

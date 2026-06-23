@@ -122,6 +122,7 @@ pub async fn run(port: u16) {
         .route("/api/state", get(api::get_state))
         .route("/api/input", post(api::post_input))
         .route("/api/comprehend", post(api::post_comprehend))
+        .route("/api/analyze", post(api::post_analyze))
         .route("/api/dream", post(api::post_dream))
         .route("/api/grow", post(api::post_grow))
         // Sonde dismesse (Phase 67 / introspezione vecchia) ritirate — Tier 2 piano_ritiro_moduli.md
@@ -192,6 +193,7 @@ pub async fn run(port: u16) {
         .route("/api/cura/pulizia-verbi", post(api::post_pulizia_verbi))
         .route("/api/cura/normalizza-accenti", post(api::post_normalizza_accenti))
         .route("/api/biennale/field", get(api::get_biennale_field))
+        .route("/api/biennale/field_all", get(api::get_biennale_field_all))
         .route("/api/biennale/word", get(api::get_biennale_word))
         .route("/api/biennale/journey", get(api::get_biennale_journey))
         .route("/api/biennale/circuit", get(api::get_biennale_circuit))
@@ -561,6 +563,8 @@ fn engine_loop(
     // Cache biennale: calcolata una volta all'avvio, invalidata solo su richiesta esplicita
     let mut biennale_cache: Option<BiennaleFieldDto> = Some(build_biennale_field(&engine));
     println!("[biennale] cache calcolata: {} nodi, {} archi", biennale_cache.as_ref().unwrap().words.len(), biennale_cache.as_ref().unwrap().edges.len());
+    // Cache separata per il campo "tutto il lessico" (lazy: costruita alla prima richiesta).
+    let mut biennale_all_cache: Option<BiennaleFieldDto> = None;
 
     // Loop sincrono: ricevi comandi dal canale mpsc
     while let Some(cmd) = cmd_rx.blocking_recv() {
@@ -1052,7 +1056,7 @@ fn engine_loop(
                 // solo nella sessione e spariva al riavvio. Stesso pattern di
                 // tutte le mutazioni /api/cura/*. È ciò che fa entrare DAVVERO
                 // nel KG le modifiche da stato-interno e da curazione.
-                if ok { biennale_cache = None; cura_save(&engine); }
+                if ok { biennale_cache = None; biennale_all_cache = None; cura_save(&engine); }
                 let _ = reply.send(ok);
             }
             EngineCommand::Correct { input, given, wanted, context, reply } => {
@@ -1062,7 +1066,7 @@ fn engine_loop(
                 // Persisti: il KG ha nuove triple o confidence aggiornate,
                 // lo SpeakerProfile ha un nuovo CorrectionFact.
                 cura_save(&engine);
-                biennale_cache = None;
+                biennale_cache = None; biennale_all_cache = None;
                 let dto = crate::web::state::CorrectDto {
                     accepted: true,
                     positive_words: result.positive_words,
@@ -1090,14 +1094,14 @@ fn engine_loop(
                     engine.word_topology.remove_edge_between(&subject, &object);
                     true
                 } else { false };
-                if ok { cura_save(&engine); biennale_cache = None; }
+                if ok { cura_save(&engine); biennale_cache = None; biennale_all_cache = None; }
                 let _ = reply.send(ok);
             }
             EngineCommand::DeleteWord { word, reply } => {
                 engine.kg.remove_word(&word);
                 engine.lexicon.remove_word(&word);
                 cura_save(&engine);
-                biennale_cache = None;
+                biennale_cache = None; biennale_all_cache = None;
                 let _ = reply.send(true);
             }
             EngineCommand::RinominaWord { from, to, reply } => {
@@ -1170,6 +1174,12 @@ fn engine_loop(
             EngineCommand::Comprehend { text, reply } => {
                 // P1: lettura PURA — &engine, nessuna mutazione di stato.
                 let dto = build_comprehension_stateless(&engine, &text);
+                let _ = reply.send(dto);
+            }
+            EngineCommand::Analyze { text, reply } => {
+                // Modalità osservatore: N frasi → N analisi compatte + aggregato.
+                // Lettura PURA (riusa build_comprehension_stateless per frase).
+                let dto = build_analysis(&engine, &text);
                 let _ = reply.send(dto);
             }
             EngineCommand::GetSpeakerProfile { reply } => {
@@ -1301,7 +1311,7 @@ fn engine_loop(
                 let _ = broadcast_tx.send(broadcast_msg.to_string());
 
                 cura_save(&engine);
-                biennale_cache = None;
+                biennale_cache = None; biennale_all_cache = None;
 
                 let _ = reply.send(dto);
             }
@@ -1343,7 +1353,7 @@ fn engine_loop(
                 let _ = broadcast_tx.send(broadcast_msg.to_string());
 
                 cura_save(&engine);
-                biennale_cache = None;
+                biennale_cache = None; biennale_all_cache = None;
 
                 let _ = reply.send(true);
             }
@@ -1422,7 +1432,7 @@ fn engine_loop(
                     engine.build_semantic_simplices_from_kg();
                 }
                 cura_save(&engine);
-                biennale_cache = None;
+                biennale_cache = None; biennale_all_cache = None;
 
                 let elapsed_ms = t0.elapsed().as_millis() as u64;
                 println!("[transmit-batch] {} parole + {} archi in {}ms (errori: {} parole, {} archi)",
@@ -1718,6 +1728,12 @@ fn engine_loop(
                     biennale_cache = Some(build_biennale_field(&engine));
                 }
                 let _ = reply.send(biennale_cache.clone().unwrap());
+            }
+            EngineCommand::GetBiennaleFieldAll { reply } => {
+                if biennale_all_cache.is_none() {
+                    biennale_all_cache = Some(build_biennale_field_all(&engine));
+                }
+                let _ = reply.send(biennale_all_cache.clone().unwrap());
             }
             EngineCommand::GetBiennaleWord { word, reply } => {
                 let dto = build_biennale_word(&engine, &word);
@@ -2032,7 +2048,7 @@ fn speaker_profile_to_dto(
 fn build_scene_understanding(engine: &PrometeoTopologyEngine) -> Option<SceneUnderstandingDto> {
     let scene = engine.last_scene.as_ref()?;
     let lemmas: Vec<String> = scene.per_word.iter().map(|u| u.word.clone()).collect();
-    let mut dto = scene_to_dto(scene, &engine.kg, &lemmas);
+    let mut dto = scene_to_dto(scene, &engine.kg, &lemmas, &engine.lexicon, &engine.registry);
     dto.graph = engine.last_comprehension_graph.as_ref()
         .map(|g| comprehension_graph_to_dto(g, engine));
     Some(dto)
@@ -2049,7 +2065,7 @@ fn build_medio_data_for_sentence(
 
     // Tokenize + lemmatize (come in build_understanding_for_sentence)
     let tokens: Vec<String> = sentence.split_whitespace()
-        .filter_map(|w| clean_token(w))
+        .flat_map(|w| crate::topology::input_reading::expand_elision(w, Some(&engine.kg_procedural), Some(&engine.kg)))
         .filter(|w| w.len() > 1)
         .collect();
 
@@ -2147,7 +2163,7 @@ fn build_understanding_for_sentence(
 
     // Tokenize + lemmatize senza mutare lo stato del lessico.
     let tokens: Vec<String> = sentence.split_whitespace()
-        .filter_map(|w| clean_token(w))
+        .flat_map(|w| crate::topology::input_reading::expand_elision(w, Some(&engine.kg_procedural), Some(&engine.kg)))
         .filter(|w| w.len() > 1)
         .collect();
 
@@ -2164,7 +2180,7 @@ fn build_understanding_for_sentence(
 
     let lemma_refs: Vec<&str> = lemmas.iter().map(|s| s.as_str()).collect();
     let scene = SceneUnderstanding::assemble(&lemma_refs, sentence, &engine.kg);
-    scene_to_dto(&scene, &engine.kg, &lemmas)
+    scene_to_dto(&scene, &engine.kg, &lemmas, &engine.lexicon, &engine.registry)
 }
 
 /// P1 (Tsunami): comprensione STATELESS di un testo isolato — vedi ComprehendDto.
@@ -2183,11 +2199,11 @@ fn build_comprehension_stateless(
     // Tokenizzazione gemella di receive(): `raw_words` (len>1) per il claim,
     // `tokens_full` (tiene "e"/"o"/"a"/"è") per l'analisi logica multi-clausola.
     let raw_words: Vec<String> = text.split_whitespace()
-        .filter_map(clean_token)
+        .flat_map(|w| crate::topology::input_reading::expand_elision(w, Some(&engine.kg_procedural), Some(&engine.kg)))
         .filter(|w| w.len() > 1)
         .collect();
     let tokens_full: Vec<String> = text.split_whitespace()
-        .filter_map(clean_token)
+        .flat_map(|w| crate::topology::input_reading::expand_elision(w, Some(&engine.kg_procedural), Some(&engine.kg)))
         .filter(|w| !w.is_empty())
         .collect();
 
@@ -2209,7 +2225,13 @@ fn build_comprehension_stateless(
         &tokens_full, &engine.lexicon, Some(&engine.kg_procedural), Some(&engine.kg),
     );
     let primary_prop = sp::primary_index(&clause_props)
-        .and_then(|i| clause_props[i].prop.clone());
+        .and_then(|i| clause_props[i].prop.clone())
+        // Fallback: se la clausola primaria non porta proposizione (es. "Ha
+        // spiegato [che…]" — verbo a complemento frasale, nessun oggetto diretto),
+        // usa la prima clausola che UNA proposizione ce l'ha — tipicamente la
+        // completiva ("il lancio dipende dal completamento"). Meglio il contenuto
+        // riferito che un frammento muto.
+        .or_else(|| clause_props.iter().find_map(|c| c.prop.clone()));
     let kg_confrontation = primary_prop.as_ref()
         .map(|p| sp::confront_with_kg(p, &engine.kg));
 
@@ -2226,10 +2248,16 @@ fn build_comprehension_stateless(
     // salienza-del-sé/gap-dialogico/multi-locus). I segnali multi-turno
     // (closure, memoria, assenza, sovraccarico) sono 0 per definizione: un
     // testo isolato non ha un "prima". Stesso `sense_need` di receive().
-    let need = primary_prop.as_ref().and_then(|p| {
+    // Il grafo di comprensione (Phase 86): i cammini tipati SELEZIONATI che
+    // connettono i nodi della frase al terreno fondato. Calcolato UNA volta —
+    // alimenta sia il bisogno sia il "ragionamento" esposto (prima veniva
+    // calcolato e buttato via tenendo solo l'etichetta del bisogno).
+    let comp_graph = primary_prop.as_ref()
+        .map(|p| crate::topology::comprehension_path::explore(p, &engine.kg, &engine.kg_self));
+
+    let need = comp_graph.as_ref().and_then(|graph| {
         use crate::topology::comprehension_path::{self, Confront};
         use crate::topology::need::{sense_need, NeedSignals};
-        let graph = comprehension_path::explore(p, &engine.kg, &engine.kg_self);
         let content_count = graph.groundings.len() + graph.ungrounded.len();
         let world_confront = match graph.confront {
             Confront::Contradict => 1.0,
@@ -2238,7 +2266,7 @@ fn build_comprehension_stateless(
         };
         // Conferma del mondo (la triple esiste già nel kg_sem) → RICONOSCERE.
         let world_confirm = if matches!(graph.confront, Confront::Confirm) { 1.0 } else { 0.0 };
-        let self_salience = comprehension_path::self_salience(&graph, &engine.kg_self);
+        let self_salience = comprehension_path::self_salience(graph, &engine.kg_self);
         let has_dialogic_gap = !open_slots.is_empty();
         let signals = NeedSignals {
             ungrounded_count: graph.ungrounded.len(),
@@ -2259,12 +2287,46 @@ fn build_comprehension_stateless(
     // Concetti per-parola dal KG (riusa la pipeline di /api/understanding).
     let lemma_refs: Vec<&str> = lemmas.iter().map(|s| s.as_str()).collect();
     let scene = SceneUnderstanding::assemble(&lemma_refs, text, &engine.kg);
-    let understanding = scene_to_dto(&scene, &engine.kg, &lemmas);
+    let understanding = scene_to_dto(&scene, &engine.kg, &lemmas, &engine.lexicon, &engine.registry);
+
+    // ── Strato SENTIRE: come le firme colorano la lettura della frase, e
+    // l'indice di ricchezza aggregato (entrambi salgono visibilmente dopo la
+    // cura delle firme/relazioni). Letti dal solo `understanding` già costruito.
+    let tonality = build_tonality(&understanding, engine);
+    let richness = {
+        let mut degree = 0usize;
+        let mut fams: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut types: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for w in &understanding.words {
+            degree += w.richness.degree;
+            for f in &w.richness.family_ids { fams.insert(f.clone()); }
+        }
+        for g in understanding.words.iter().flat_map(|w| w.outgoing.iter().chain(w.incoming.iter())) {
+            types.insert(g.relation.clone());
+        }
+        // famiglie ordinate canonicamente
+        let fam_order: Vec<String> = ["strutturale", "causale", "semantica", "fenomenologica", "logica"]
+            .into_iter().filter(|f| fams.contains(*f)).map(|s| s.to_string()).collect();
+        if understanding.words.is_empty() { None }
+        else { Some(build_richness(degree, types.len(), fam_order, understanding.inferential_chains.len())) }
+    };
 
     // Gate di Comprensione: copertura per-token (C1, nessun punto cieco) +
     // verdetto di saturazione (C1–C4). Vedi gate_di_comprensione.md.
     let (coverage, saturation) =
         build_coverage(&tokens_full, &clause_props, &open_slots, engine);
+
+    // Atto linguistico: cosa l'input È oltre la proposizione. Dà al Gate una
+    // posizione anche su input NON-proposizionali (saluti, frammenti, domande
+    // pure), che prima cadevano nel vuoto. Strutturale, no liste hardcoded.
+    let speech_act = classify_input(text, &tokens_full, primary_prop.as_ref(), &coverage, engine);
+
+    // Il RAGIONAMENTO esposto: il grafo di comprensione → DTO (i cammini scelti).
+    let reasoning = comp_graph.as_ref().map(|g| comprehension_graph_to_path_dto(g));
+
+    // Letture qualificate (capacità olografica): gli aggettivi-attributo della
+    // frase mettono a fuoco l'oggetto. «futuro» ≠ «futuro bello».
+    let qualified = build_qualified_readings(primary_prop.as_ref(), &coverage, engine);
 
     ComprehendDto {
         text: text.to_string(),
@@ -2276,6 +2338,486 @@ fn build_comprehension_stateless(
         understanding,
         coverage,
         saturation,
+        speech_act,
+        tonality,
+        richness,
+        reasoning,
+        qualified,
+    }
+}
+
+/// Converte il `ComprehensionGraph` (Phase 86) nel DTO del ragionamento esposto.
+/// Mostra i cammini SCELTI (claim + grounding) — non tutti i possibili.
+fn comprehension_graph_to_path_dto(
+    g: &crate::topology::comprehension_path::ComprehensionGraph,
+) -> crate::web::state::ComprehensionPathDto {
+    use crate::topology::comprehension_path::{Confront, GroundKind, TypedPath};
+    use crate::web::state::{ComprehensionPathDto, GroundingDto, PathStepDto};
+
+    let step_dto = |s: &crate::topology::comprehension_path::PathStep| PathStepDto {
+        relation: s.relation.as_str().to_string(),
+        label: relation_label_it(s.relation).to_string(),
+        forward: s.forward,
+        via: s.via.clone(),
+        to: s.to.clone(),
+        confidence: s.confidence,
+    };
+    let ground_label = |k: &GroundKind| match k {
+        GroundKind::Attractor => "categoria",
+        GroundKind::SelfNode => "me stesso",
+        GroundKind::PropositionNode => "un'altra parola della frase",
+        GroundKind::AlreadyGround => "già fondato",
+        GroundKind::Unreached => "nessuna ancora",
+    }.to_string();
+    let grounding_dto = |p: &TypedPath| GroundingDto {
+        from: p.from.clone(),
+        steps: p.steps.iter().map(step_dto).collect(),
+        ground: ground_label(&p.ground),
+        endpoint: p.endpoint().to_string(),
+    };
+
+    ComprehensionPathDto {
+        confront: match g.confront {
+            Confront::Confirm => "conferma",
+            Confront::Contradict => "contraddizione",
+            Confront::Novelty => "novità",
+            Confront::NotApplicable => "non applicabile",
+        }.to_string(),
+        claim_path: g.claim_path.as_ref().map(|p| p.steps.iter().map(step_dto).collect()).unwrap_or_default(),
+        groundings: g.groundings.iter().map(grounding_dto).collect(),
+        ungrounded: g.ungrounded.clone(),
+    }
+}
+
+/// La valenza (armonia, dim 7 della firma) di una parola, se nel lessico.
+fn word_valence(engine: &PrometeoTopologyEngine, word: &str) -> Option<f64> {
+    engine.lexicon.get(word).map(|p| p.signature.values()[7])
+}
+
+/// Capacità olografica: come gli ATTRIBUTI (aggettivi) della frase mettono a
+/// fuoco l'oggetto. Per ogni attributo, la sua valenza (dalla firma) illumina i
+/// rami del vicinato dell'oggetto che le sono coerenti e lascia in ombra quelli
+/// in tensione. «futuro» produce {attesa, angoscia, speranza}; «bello» (valenza
+/// positiva) mette a fuoco speranza e lascia in ombra angoscia. Lo stesso nodo,
+/// più nitido — niente di inventato: valenza dalle firme, rami dal KG.
+fn build_qualified_readings(
+    prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
+    coverage: &[crate::web::state::TokenCoverageDto],
+    engine: &PrometeoTopologyEngine,
+) -> Vec<crate::web::state::QualifiedReadingDto> {
+    use crate::topology::relation::RelationType;
+    use crate::topology::sentence_proposition::{ObjectRef, SubjectRef};
+    use crate::web::state::QualifiedReadingDto;
+
+    let Some(p) = prop else { return Vec::new() };
+    // La testa qualificata: l'oggetto se c'è, altrimenti il soggetto-Mondo.
+    let head = match &p.object {
+        Some(ObjectRef::Word(w)) => Some(w.to_lowercase()),
+        _ => match &p.subject { SubjectRef::World(w) => Some(w.to_lowercase()), _ => None },
+    };
+    let Some(head) = head else { return Vec::new() };
+
+    // Attributi = token con ruolo "attributo" non già parte della tripla.
+    let subj_name = match &p.subject { SubjectRef::World(w) => Some(w.clone()), _ => None };
+    let obj_name = match &p.object { Some(ObjectRef::Word(w)) => Some(w.clone()), _ => None };
+    let prop_words: std::collections::HashSet<String> =
+        [subj_name, obj_name, p.via.clone(), p.verb_lemma.clone()]
+            .into_iter().flatten().map(|s| s.to_lowercase()).collect();
+    let attributes: Vec<String> = coverage.iter()
+        .filter(|c| c.role == "attributo")
+        .map(|c| if c.lemma.is_empty() { c.token.clone() } else { c.lemma.clone() })
+        .filter(|w| !prop_words.contains(&w.to_lowercase()))
+        .collect();
+    if attributes.is_empty() { return Vec::new(); }
+
+    // I rami affettivi/consequenziali dell'oggetto (ciò che porta con sé).
+    let mut branches: Vec<(String, f64)> = Vec::new();
+    for rel in [RelationType::Causes, RelationType::FeelsAs, RelationType::Has,
+                RelationType::RemembersAs, RelationType::Enables] {
+        for (tgt, _conf) in engine.kg.query_objects_weighted(&head, rel) {
+            if let Some(v) = word_valence(engine, tgt) {
+                if !branches.iter().any(|(w, _)| w == tgt) {
+                    branches.push((tgt.to_string(), v));
+                }
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    for attr in attributes {
+        let av = match word_valence(engine, &attr) { Some(v) => v, None => continue };
+        let (sign, sign_label) = if av > 0.55 { (1i8, "positiva") }
+            else if av < 0.45 { (-1, "negativa") } else { (0, "neutra") };
+        let tone: Vec<String> = engine.lexicon.get(&attr)
+            .map(|p| connotation_from_sig(p.signature.values()))
+            .unwrap_or_default()
+            .into_iter().take(2).map(|c| c.reading).collect();
+
+        // Coerente = stesso segno di valenza dell'attributo; in tensione = opposto.
+        // Soglia STRETTA (|v-0.5| > 0.22): solo i rami nettamente valenzati — la
+        // valenza derivata dal KG è rumorosa nella fascia media (0.4–0.6), e un
+        // ramo neutro non va né illuminato né spento. I rami che restano sono
+        // quelli giusti (speranza/angoscia); un artefatto residuo (es. valenza
+        // sballata di una parola) è esso stesso materia da curare nell'evento.
+        let mut illuminated: Vec<String> = Vec::new();
+        let mut dimmed: Vec<String> = Vec::new();
+        if sign != 0 {
+            for (w, v) in &branches {
+                let bs = if *v > 0.72 { 1i8 } else if *v < 0.28 { -1 } else { 0 };
+                if bs == sign { illuminated.push(w.clone()); }
+                else if bs == -sign { dimmed.push(w.clone()); }
+            }
+        }
+        illuminated.truncate(4);
+        dimmed.truncate(4);
+
+        let summary = if illuminated.is_empty() && dimmed.is_empty() {
+            format!("«{attr}» qualifica «{head}»: lo stesso concetto, ma con la tinta dell'attributo. (Mi mancano i rami affettivi di «{head}» per metterlo più a fuoco: materia da curare.)")
+        } else {
+            let mut s = format!("«{head}» con «{attr}» non è «{head}» e basta: ");
+            if !illuminated.is_empty() {
+                s += &format!("metto a fuoco {}", join_it(&illuminated));
+            }
+            if !dimmed.is_empty() {
+                if !illuminated.is_empty() { s += ", "; }
+                s += &format!("lascio in ombra {}", join_it(&dimmed));
+            }
+            s += ". Lo stesso nodo, immagine più nitida.";
+            s
+        };
+
+        out.push(QualifiedReadingDto {
+            head: head.clone(),
+            attribute: attr,
+            attribute_tone: tone,
+            attribute_valence: sign_label.to_string(),
+            illuminated,
+            dimmed,
+            summary,
+        });
+    }
+    out
+}
+
+/// È una parola FATICA / d'apertura-canale? Letta STRUTTURALMENTE dal kg_sem:
+/// `IsA saluto` (ciao, salve, grazie, buongiorno) o `IsA interiezione`, oppure
+/// `SimilarTo` di una parola che lo è (buongiorno → salve → saluto). Nessuna
+/// lista hardcoded — la rete del mondo dice cos'è un saluto.
+fn is_phatic(word: &str, kg: &crate::topology::knowledge_graph::KnowledgeGraph) -> bool {
+    use crate::topology::relation::RelationType;
+    let w = word.to_lowercase();
+    let is_class = |word: &str| {
+        kg.query_objects(word, RelationType::IsA)
+            .iter()
+            .any(|t| matches!(*t, "saluto" | "interiezione" | "esclamazione"))
+    };
+    if is_class(&w) {
+        return true;
+    }
+    // 1-hop SimilarTo verso un saluto (cattura "buongiorno"/"buonasera"…).
+    kg.query_objects(&w, RelationType::SimilarTo)
+        .iter()
+        .any(|t| is_class(t))
+}
+
+/// Classifica l'ATTO LINGUISTICO dell'enunciato in modo STATELESS e strutturale.
+/// Distingue: proposizione (asserzione/interrogazione), atto-fatico (saluto),
+/// frammento (parole-contenuto note senza affermazione), non-comprensibile.
+/// È ciò che permette al Gate di posizionarsi su OGNI input, non solo i claim
+/// soggetto-verbo-oggetto brevi.
+fn classify_input(
+    text: &str,
+    tokens_full: &[String],
+    primary_prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
+    coverage: &[crate::web::state::TokenCoverageDto],
+    engine: &PrometeoTopologyEngine,
+) -> crate::web::state::SpeechActSummaryDto {
+    use crate::topology::sentence_proposition::{self as sp, ObjectRef, SubjectRef};
+    use crate::web::state::SpeechActSummaryDto;
+
+    // Interrogazione: un marcatore "?" letterale o un pronome interrogativo
+    // (la stessa rilevazione della pipeline reale, non una lista duplicata).
+    let is_question = text.contains('?')
+        || sp::find_interrogative(tokens_full).is_some()
+        || primary_prop.map(|p| matches!(p.subject, SubjectRef::Variable(_))
+            || matches!(p.object, Some(ObjectRef::Variable(_)))).unwrap_or(false);
+
+    // Parole-contenuto NOTE ma non legate a una proposizione: la materia dei
+    // frammenti ("libertà", "il mare la sera"). Letta dalla copertura già
+    // calcolata (status compreso/parziale, ruolo non-funzionale, conosciuta).
+    let content_lemmas: Vec<String> = coverage.iter()
+        .filter(|c| c.known && !c.bound && c.status != "ignoto")
+        .filter(|c| !is_phatic(&c.token, &engine.kg))
+        .map(|c| c.lemma.clone())
+        .collect();
+
+    let kind = if primary_prop.is_some() {
+        if is_question { "interrogazione" } else { "asserzione" }
+    } else if is_question {
+        "interrogazione"
+    } else if tokens_full.iter().any(|t| is_phatic(t, &engine.kg)) {
+        "atto-fatico"
+    } else if coverage.iter().any(|c| c.status != "ignoto") {
+        // Qualcosa è atterrato (conosciuto o funzionale) ma nessuna proposizione.
+        "frammento"
+    } else {
+        "non-comprensibile"
+    };
+
+    SpeechActSummaryDto {
+        kind: kind.to_string(),
+        is_question,
+        content_lemmas,
+    }
+}
+
+/// Segmenta un testo in frasi (deterministico): spezza su `.`/`!`/`?`/`;`/`:` e
+/// sui ritorni a capo, scarta i frammenti senza lettere. Non gestisce le
+/// abbreviazioni (es. "ecc.") — sovra-segmenta in modo onesto e prevedibile.
+fn split_sentences(text: &str) -> Vec<String> {
+    text.split(|c: char| matches!(c, '.' | '!' | '?' | ';' | ':' | '\n' | '\r'))
+        .map(|s| s.trim())
+        .filter(|s| s.chars().any(|c| c.is_alphabetic()))
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// MODALITÀ ANALISI (osservatore): segmenta `text` in frasi, comprende ciascuna
+/// in modo STATELESS via `build_comprehension_stateless`, proietta una forma
+/// COMPATTA per l'estrazione (chi-dice-cosa + concetti-ancora + inferenze +
+/// contraddizioni) e aggrega (concetti ricorrenti, distribuzione degli atti).
+/// Strato 3: integrazione TRA frasi. Le proposizioni delle singole frasi si
+/// agganciano su concetti condivisi → il testo dice più della somma delle frasi.
+/// Puro e deterministico. Tre forme:
+///  - CATENE: X→Y in una frase, Y→Z in un'altra ⇒ X→…→Z (lettura emergente);
+///  - FILI tematici: un concetto che attraversa ≥2 frasi;
+///  - CONFLITTI inter-frase: stesso soggetto con oggetti opposti / polarità opposta.
+fn build_cross_sentence(
+    sentences: &[crate::web::state::SentenceAnalysisDto],
+    kg: &crate::topology::knowledge_graph::KnowledgeGraph,
+) -> crate::web::state::CrossSentenceDto {
+    use crate::web::state::{CrossSentenceDto, ChainDto, ThreadDto, ConflictDto};
+    use crate::topology::relation::RelationType;
+    use std::collections::HashMap;
+
+    struct E { a: String, rel: String, b: String, sent: usize }
+    let mut edges: Vec<E> = Vec::new();
+    let mut presence: HashMap<String, Vec<usize>> = HashMap::new();
+    let note = |presence: &mut HashMap<String, Vec<usize>>, c: &str, i: usize| {
+        let k = c.trim().to_lowercase();
+        if k.is_empty() { return; }
+        let v = presence.entry(k).or_default();
+        if !v.contains(&i) { v.push(i); }
+    };
+
+    for (i, s) in sentences.iter().enumerate() {
+        let Some(c) = &s.claim else { continue };
+        let subj = if c.subject_kind == "World" && !c.subject_name.is_empty() {
+            Some(c.subject_name.to_lowercase())
+        } else { None };
+        let obj = if c.object_kind == "Word" && !c.object_name.is_empty() {
+            Some(c.object_name.to_lowercase())
+        } else { None };
+        if let Some(x) = &subj { note(&mut presence, x, i); }
+        if let Some(x) = &obj { note(&mut presence, x, i); }
+        if let Some(v) = &c.via { note(&mut presence, v.as_str(), i); }
+        if let (Some(a), Some(b)) = (&subj, &obj) {
+            edges.push(E { a: a.clone(), rel: c.relation.clone(), b: b.clone(), sent: i });
+        }
+    }
+
+    let rel_verb = |r: &str| match r {
+        "Causes" => "porta a", "Requires" => "richiede", "IsA" => "è",
+        "Has" => "ha", "Does" => "agisce su", "FeelsAs" => "sente",
+        _ => "si lega a",
+    };
+
+    // CATENE: a -r1-> b (frase i) + b -r2-> c (frase j≠i).
+    let mut chains: Vec<ChainDto> = Vec::new();
+    let mut seen_chain: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for e1 in &edges {
+        for e2 in &edges {
+            if e1.sent == e2.sent { continue; }
+            if e1.b == e2.a && e1.a != e2.b {
+                if !seen_chain.insert(format!("{}|{}|{}", e1.a, e1.b, e2.b)) { continue; }
+                let reading = format!("{} {} {}; {} {} {}  ⇒  {} → {} (via {})",
+                    e1.a, rel_verb(&e1.rel), e1.b,
+                    e2.a, rel_verb(&e2.rel), e2.b,
+                    e1.a, e2.b, e1.b);
+                chains.push(ChainDto {
+                    nodes: vec![e1.a.clone(), e1.b.clone(), e2.b.clone()],
+                    relations: vec![e1.rel.clone(), e2.rel.clone()],
+                    sentences: vec![e1.sent, e2.sent],
+                    reading,
+                });
+            }
+        }
+    }
+    chains.truncate(30);
+
+    // FILI: concetti presenti in ≥2 frasi.
+    let mut threads: Vec<ThreadDto> = presence.into_iter()
+        .filter(|(_, ss)| ss.len() >= 2)
+        .map(|(concept, mut ss)| { ss.sort(); ThreadDto { concept, sentences: ss } })
+        .collect();
+    threads.sort_by(|a, b| b.sentences.len().cmp(&a.sentences.len()).then(a.concept.cmp(&b.concept)));
+    threads.truncate(30);
+
+    // CONFLITTI inter-frase: stesso soggetto, oggetti opposti (kg_sem) o polarità opposta.
+    let mut conflicts: Vec<ConflictDto> = Vec::new();
+    for i in 0..sentences.len() {
+        let Some(c1) = &sentences[i].claim else { continue };
+        if c1.subject_name.is_empty() { continue; }
+        for j in (i + 1)..sentences.len() {
+            let Some(c2) = &sentences[j].claim else { continue };
+            if !c1.subject_name.eq_ignore_ascii_case(&c2.subject_name) { continue; }
+            if c1.relation == "IsA" && c2.relation == "IsA"
+                && !c1.object_name.is_empty() && !c2.object_name.is_empty()
+                && !c1.object_name.eq_ignore_ascii_case(&c2.object_name)
+            {
+                let opp = kg.query_objects(&c1.object_name.to_lowercase(), RelationType::OppositeOf)
+                    .iter().any(|o| o.eq_ignore_ascii_case(&c2.object_name));
+                if opp {
+                    conflicts.push(ConflictDto {
+                        subject: c1.subject_name.to_lowercase(),
+                        a: c1.object_name.to_lowercase(), a_sentence: i,
+                        b: c2.object_name.to_lowercase(), b_sentence: j,
+                        kind: "opposti".into(),
+                    });
+                }
+            }
+            if c1.relation == c2.relation && !c1.object_name.is_empty()
+                && c1.object_name.eq_ignore_ascii_case(&c2.object_name)
+                && c1.polarity != c2.polarity
+            {
+                conflicts.push(ConflictDto {
+                    subject: c1.subject_name.to_lowercase(),
+                    a: format!("{}{}", if c1.polarity { "" } else { "non " }, c1.object_name.to_lowercase()),
+                    a_sentence: i,
+                    b: format!("{}{}", if c2.polarity { "" } else { "non " }, c2.object_name.to_lowercase()),
+                    b_sentence: j,
+                    kind: "polarità".into(),
+                });
+            }
+        }
+    }
+
+    CrossSentenceDto { chains, threads, conflicts }
+}
+
+/// Lettura PURA: zero mutazione, nessuna cornice "io sono il destinatario".
+fn build_analysis(
+    engine: &PrometeoTopologyEngine,
+    text: &str,
+) -> crate::web::state::AnalyzeDto {
+    use crate::web::state::{AnalyzeDto, SentenceAnalysisDto, AnchorConceptDto, AnalysisAggregateDto};
+    use std::collections::HashMap;
+
+    let sentences_raw = split_sentences(text);
+    let mut sentences: Vec<SentenceAnalysisDto> = Vec::new();
+    let mut act_counts: HashMap<String, usize> = HashMap::new();
+    let mut concept_counts: HashMap<String, usize> = HashMap::new();
+    let mut all_contradictions: Vec<(String, String)> = Vec::new();
+
+    for s in &sentences_raw {
+        let c = build_comprehension_stateless(engine, s);
+
+        // Atto (distribuzione aggregata).
+        *act_counts.entry(c.speech_act.kind.clone()).or_insert(0) += 1;
+
+        // Concetti-ancora: il vicinato KG di ogni parola compresa (cap compatto).
+        // Conta una volta per frase per non gonfiare la frequenza aggregata.
+        let mut anchor_concepts: Vec<AnchorConceptDto> = Vec::new();
+        let mut seen_in_sentence: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for w in c.understanding.words.iter().take(8) {
+            let isa: Vec<String> = w.outgoing.iter()
+                .find(|g| g.relation == "IS_A")
+                .map(|g| g.targets.iter().take(4).map(|t| t.word.clone()).collect())
+                .unwrap_or_default();
+            let relations: Vec<String> = w.outgoing.iter()
+                .filter(|g| g.relation != "IS_A")
+                .take(3)
+                .map(|g| {
+                    let tgts: Vec<String> = g.targets.iter().take(3).map(|t| t.word.clone()).collect();
+                    format!("{}: {}", g.label, tgts.join(", "))
+                })
+                .collect();
+            if isa.is_empty() && relations.is_empty() { continue; }
+            if seen_in_sentence.insert(w.word.to_lowercase()) {
+                *concept_counts.entry(w.word.to_lowercase()).or_insert(0) += 1;
+            }
+            anchor_concepts.push(AnchorConceptDto { word: w.word.clone(), isa, relations });
+        }
+
+        // Inferenze 2-hop, rese compatte.
+        let inferences: Vec<String> = c.understanding.inferential_chains.iter()
+            .take(5)
+            .map(|ch| format!("{} → {} {} → {} {}",
+                ch.origin, ch.first_label, ch.first_target, ch.second_label, ch.second_target))
+            .collect();
+
+        // Contraddizioni dal confronto col grafo.
+        let contradictions: Vec<(String, String)> = c.kg_confrontation.as_ref()
+            .map(|kc| kc.contradictions.clone())
+            .unwrap_or_default();
+        all_contradictions.extend(contradictions.iter().cloned());
+
+        sentences.push(SentenceAnalysisDto {
+            text: s.clone(),
+            speech_act: c.speech_act,
+            claim: c.primary,
+            anchor_concepts,
+            inferences,
+            contradictions,
+        });
+    }
+
+    // Aggregato: atti ordinati per frequenza, concetti ricorrenti (≥1) top-30.
+    let mut speech_acts: Vec<(String, usize)> = act_counts.into_iter().collect();
+    speech_acts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let mut concepts: Vec<(String, usize)> = concept_counts.into_iter().collect();
+    concepts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    concepts.truncate(30);
+    // Dedup contraddizioni.
+    all_contradictions.sort();
+    all_contradictions.dedup();
+
+    // Strato 3 — COREFERENZA: risolve il soggetto anaforico (pronome personale di
+    // 3a o pro-drop, marcati dall'estrattore come World(pronome)/World("")) al
+    // referente saliente più recente. È la baseline di RECENCY della coreferenza
+    // (non un trucco: la salienza-per-recenza è il modello base), e vive nello
+    // strato discorsivo — non nell'estrattore per-frase. Deterministico. La forma
+    // di superficie originale resta in `subject_surface` per trasparenza.
+    {
+        const ANAPHORS: &[&str] = &["lui","lei","loro","egli","ella","esso","essa","essi","esse"];
+        let mut last_subject: Option<String> = None;
+        for s in sentences.iter_mut() {
+            let Some(c) = s.claim.as_mut() else { continue };
+            if c.subject_kind != "World" { continue; }
+            let sn = c.subject_name.to_lowercase();
+            let is_anaphor = sn.is_empty() || ANAPHORS.contains(&sn.as_str());
+            if is_anaphor {
+                if let Some(ant) = &last_subject {
+                    c.subject_surface = Some(if sn.is_empty() { "(sottinteso)".to_string() } else { sn.clone() });
+                    c.subject_name = ant.clone();
+                }
+            }
+            // Referente saliente aggiornato da un soggetto CONCRETO (anche appena
+            // risolto): diventa l'antecedente per le frasi seguenti.
+            let now = c.subject_name.to_lowercase();
+            if !now.is_empty() && !ANAPHORS.contains(&now.as_str()) {
+                last_subject = Some(now);
+            }
+        }
+    }
+
+    let cross = build_cross_sentence(&sentences, &engine.kg);
+
+    AnalyzeDto {
+        sentence_count: sentences.len(),
+        sentences,
+        aggregate: AnalysisAggregateDto { speech_acts, concepts, contradictions: all_contradictions },
+        cross,
     }
 }
 
@@ -2315,6 +2857,7 @@ fn build_coverage(
 ) -> (Vec<crate::web::state::TokenCoverageDto>, crate::web::state::SaturationDto) {
     use crate::topology::sentence_proposition::{SubjectRef, ObjectRef};
     use crate::topology::input_reading::{is_kg_proc_function_word, lemma_of_verb};
+    use crate::topology::relation::RelationType;
     use crate::web::state::{TokenCoverageDto, SaturationDto};
 
     // Nomi-slot (lemmi) da TUTTE le clausole, non solo la primaria: così un
@@ -2323,6 +2866,10 @@ fn build_coverage(
     let mut subjects: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut objects: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut vias: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // Nomi dei complementi (secondo argomento, Stadio 2) → ruolo logico, da TUTTE
+    // le clausole: così "preferisco X alla Y" lega anche Y, "giocare a calcio"
+    // anche calcio — niente più parole-complemento scartate.
+    let mut complements: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut has_prop = false;
     for c in clause_props {
         if let Some(p) = &c.prop {
@@ -2330,6 +2877,10 @@ fn build_coverage(
             if let SubjectRef::World(s) = &p.subject { subjects.insert(s.to_lowercase()); }
             if let Some(ObjectRef::Word(o)) = &p.object { objects.insert(o.to_lowercase()); }
             if let Some(v) = &p.via { vias.insert(v.to_lowercase()); }
+            for comp in &p.complements {
+                complements.entry(comp.noun.to_lowercase())
+                    .or_insert_with(|| comp.role.clone().unwrap_or_else(|| "complemento".into()));
+            }
         }
     }
 
@@ -2365,10 +2916,27 @@ fn build_coverage(
             if subjects.contains(&ll) { Some("soggetto") }
             else if objects.contains(&ll) { Some("predicato") }
             else if vias.contains(&ll) { Some("specificazione") }
+            // Il verbo è l'ULTIMA risorsa: un nome già identificato come
+            // complemento ("a calcio", "a Marco") non va riclassificato verbo da
+            // `lemma_of_verb` (euristica morfologica con falsi positivi su nomi:
+            // calcio→calciare, marco→marcare). Il segnale strutturale vince.
             else if !nominal_after_article(i)
+                && !complements.contains_key(&ll)
                 && lemma_of_verb(tok, Some(&engine.kg_procedural), Some(&engine.kg)).is_some() {
                 Some("verbo")
             } else { None };
+
+        // Parola fatica/d'apertura (ciao, salve, grazie): un atto comunicativo
+        // completo in sé — compreso come GESTO, non come pezzo di proposizione.
+        let phatic = is_phatic(tok, &engine.kg) || is_phatic(&lemma, &engine.kg);
+
+        // Aggettivo/attributo: `IsA qualità|attributo|caratteristica` nel kg_sem
+        // (bello/grande/rosso). Qualifica un nome della frase — un ruolo reale,
+        // non una parola "saltata". (Quando è il predicato di una copula, il
+        // ramo `prop_role` l'ha già preso come "predicato": qui solo i residui.)
+        let is_attribute = engine.kg.query_objects(&ll, RelationType::IsA)
+            .iter()
+            .any(|t| matches!(*t, "qualità" | "qualita" | "attributo" | "caratteristica"));
 
         let (status, role, reason, bound): (&str, String, String, bool) =
             if let Some(cls) = &class {
@@ -2381,10 +2949,21 @@ fn build_coverage(
                 } else {
                     ("parziale", r.into(), "legata alla proposizione ma non ancorata al KG (nota come parola)".into(), true)
                 }
+            } else if let Some(crole) = complements.get(&ll) {
+                // Secondo argomento (complemento): legato alla frase via preposizione.
+                if known {
+                    ("compreso", crole.clone(), "complemento legato alla frase e ancorato al mondo".into(), true)
+                } else {
+                    ("parziale", crole.clone(), "complemento legato alla frase ma non ancorato al KG".into(), true)
+                }
+            } else if is_attribute {
+                ("compreso", "attributo".into(), "qualità/attributo: qualifica un elemento della frase".into(), true)
+            } else if phatic {
+                ("compreso", "esclamazione".into(), "atto comunicativo d'apertura (saluto/esclamazione): compreso come gesto".into(), true)
             } else if known {
-                ("parziale", "—".into(), "conosciuta ma non legata a questo enunciato".into(), false)
+                ("parziale", "·".into(), "conosciuta ma non legata a questo enunciato".into(), false)
             } else {
-                ("ignoto", "—".into(), "sconosciuta: nessun ancoraggio né ruolo".into(), false)
+                ("ignoto", "·".into(), "sconosciuta: nessun ancoraggio né ruolo".into(), false)
             };
 
         match status {
@@ -2675,6 +3254,8 @@ fn scene_to_dto(
     scene: &crate::topology::understanding::SceneUnderstanding,
     kg: &crate::topology::knowledge_graph::KnowledgeGraph,
     lemmas: &[String],
+    lexicon: &crate::topology::lexicon::Lexicon,
+    registry: &crate::topology::fractal::FractalRegistry,
 ) -> SceneUnderstandingDto {
     use crate::topology::understanding::SyntacticRole;
 
@@ -2693,12 +3274,6 @@ fn scene_to_dto(
             dominant_invocation: h.dominant_invocation.map(|r| r.as_str().to_string()),
             invoked_by: h.invoked_by.clone(),
         })
-        .collect();
-
-    // ── Per-parola: raggruppa archi uscenti ed entranti per relazione ─────
-    // Niente cap per relazione. Il gruppo di curazione deve vedere tutto.
-    let words: Vec<WordUnderstandingDto> = scene.per_word.iter()
-        .map(|u| word_understanding_to_dto(&u.word, kg))
         .collect();
 
     // ── Cammini inferenziali 2-hop dalle parole input ─────────────────────
@@ -2768,6 +3343,21 @@ fn scene_to_dto(
         b.combined_confidence.partial_cmp(&a.combined_confidence)
             .unwrap_or(std::cmp::Ordering::Equal));
     inferential_chains.truncate(12);
+
+    // ── Per-parola: archi per relazione + firma + ricchezza ───────────────
+    // Niente cap per relazione (il gruppo di cura deve vedere tutto). La
+    // ricchezza include il reach multi-hop, quindi le parole si costruiscono
+    // DOPO i cammini, contando quanti partono da ciascuna.
+    let mut multihop_by_origin: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for ch in &inferential_chains {
+        *multihop_by_origin.entry(ch.origin.to_lowercase()).or_insert(0) += 1;
+    }
+    let words: Vec<WordUnderstandingDto> = scene.per_word.iter()
+        .map(|u| {
+            let mh = multihop_by_origin.get(&u.word.to_lowercase()).copied().unwrap_or(0);
+            word_understanding_to_dto(&u.word, kg, lexicon, registry, mh)
+        })
+        .collect();
 
     let summary = generate_sentence_summary(lemmas, kg);
     let proposed_edges = propose_edges_for_scene(lemmas, kg);
@@ -2962,6 +3552,9 @@ fn syntactic_edge_to_dto(
 fn word_understanding_to_dto(
     word: &str,
     kg: &crate::topology::knowledge_graph::KnowledgeGraph,
+    lexicon: &crate::topology::lexicon::Lexicon,
+    registry: &crate::topology::fractal::FractalRegistry,
+    multihop: usize,
 ) -> WordUnderstandingDto {
     use crate::topology::relation::RelationType;
     use std::collections::HashMap;
@@ -2978,6 +3571,28 @@ fn word_understanding_to_dto(
 
     let outgoing_count: usize = out_by_rel.values().map(|v| v.len()).sum();
     let incoming_count: usize = in_by_rel.values().map(|v| v.len()).sum();
+
+    // ── Diversità di relazioni (tipi + famiglie) per l'indice di ricchezza ────
+    let mut rel_set: std::collections::HashSet<RelationType> = std::collections::HashSet::new();
+    rel_set.extend(out_by_rel.keys().copied());
+    rel_set.extend(in_by_rel.keys().copied());
+    let relation_types = rel_set.len();
+    let fam_present: Vec<String> = ["strutturale", "causale", "semantica", "fenomenologica", "logica"]
+        .into_iter()
+        .filter(|f| rel_set.iter().any(|r| relation_family(*r) == *f))
+        .map(|s| s.to_string())
+        .collect();
+    let richness = build_richness(
+        outgoing_count + incoming_count, relation_types, fam_present, multihop,
+    );
+
+    // ── Strato SENTIRE: firma 8D → regione + connotazione ─────────────────────
+    let signature = lexicon.get(word).map(|p| *p.signature.values());
+    let region = signature.and_then(|s| {
+        let pc = crate::topology::primitive::PrimitiveCore::new(s);
+        registry.nearest(&pc).and_then(|id| registry.get(id).map(|f| f.name.clone()))
+    });
+    let connotation = signature.map(|s| connotation_from_sig(&s)).unwrap_or_default();
 
     let mk_groups = |map: HashMap<RelationType, Vec<(String, f32)>>| -> Vec<WordRelationGroupDto> {
         let mut v: Vec<WordRelationGroupDto> = map.into_iter()
@@ -3003,6 +3618,10 @@ fn word_understanding_to_dto(
         incoming_count,
         outgoing: mk_groups(out_by_rel),
         incoming: mk_groups(in_by_rel),
+        signature,
+        region,
+        connotation,
+        richness,
     }
 }
 
@@ -3033,6 +3652,124 @@ fn relation_label_it(rel: crate::topology::relation::RelationType) -> &'static s
         R::Coexists     => "coesiste con",
         R::DerivesFrom  => "deriva da",
     }
+}
+
+// ── Strato SENTIRE: firma → connotazione, e ricchezza della cura ──────────────
+// Nomi canonici delle 8 dimensioni (ordine I Ching) e letture ai due poli.
+// Coerenti VERBATIM con campovasto constants.js (DIM_NAMES + DIM_DESC): la
+// gente cura le firme là, e qui ne legge l'effetto sulla comprensione.
+const DIM_NAMES_IT: [&str; 8] =
+    ["potere", "materia", "ardore", "divenire", "spazio", "intreccio", "verità", "armonia"];
+/// (polo alto, polo basso) per dimensione — da DIM_DESC di campovasto.
+const DIM_POLES_IT: [(&str, &str); 8] = [
+    ("agisce", "subisce"),          // potere   — agisce o subisce
+    ("permanenza", "evanescenza"),  // materia  — permanenza o evanescenza
+    ("movimento", "inerzia"),       // ardore   — movimento o inerzia
+    ("futuro", "passato"),          // divenire — futuro o passato
+    ("grande", "piccolo"),          // spazio   — grande o piccolo
+    ("complesso", "semplice"),      // intreccio— complesso o semplice
+    ("definito", "vago"),           // verità   — definito o vago
+    ("attrae", "respinge"),         // armonia  — attrae o respinge (valenza)
+];
+
+/// Letture connotative SALIENTI di una firma 8D: solo le dimensioni nettamente
+/// fuori-centro (la firma neutra 0.5 non dice nulla). È la "tonalità" che le
+/// firme imprimono — derivata, non un dato a parte: è la firma che parla.
+fn connotation_from_sig(sig: &[f64; 8]) -> Vec<crate::web::state::ConnotationDto> {
+    use crate::web::state::ConnotationDto;
+    let mut out: Vec<ConnotationDto> = Vec::new();
+    for i in 0..8 {
+        let v = sig[i];
+        if (v - 0.5).abs() < 0.18 { continue; } // sotto-soglia → non caratterizzante
+        let high = v >= 0.5;
+        let (hi, lo) = DIM_POLES_IT[i];
+        out.push(ConnotationDto {
+            dimension: DIM_NAMES_IT[i].to_string(),
+            value: v,
+            pole: if high { "alto" } else { "basso" }.to_string(),
+            reading: if high { hi } else { lo }.to_string(),
+        });
+    }
+    out.sort_by(|a, b| (b.value - 0.5).abs()
+        .partial_cmp(&(a.value - 0.5).abs())
+        .unwrap_or(std::cmp::Ordering::Equal));
+    out
+}
+
+/// Famiglia di relazione (5 famiglie, allineate a campovasto REL_GROUP): lo
+/// strumento per rendere visibile la DIVERSITÀ di relazioni che la cura aggiunge.
+fn relation_family(rel: crate::topology::relation::RelationType) -> &'static str {
+    use crate::topology::relation::RelationType as R;
+    match rel {
+        R::IsA | R::PartOf | R::DerivesFrom => "strutturale",
+        R::Causes | R::Enables | R::Requires | R::TransformsInto => "causale",
+        R::SimilarTo | R::OppositeOf | R::Symbolizes | R::ContextOf => "semantica",
+        R::Has | R::Does | R::FeelsAs | R::WondersAbout | R::RemembersAs => "fenomenologica",
+        R::UsedFor | R::Expresses | R::Implies | R::Equivalent | R::Excludes | R::Coexists => "logica",
+    }
+}
+
+/// Indice di ricchezza: blend TRASPARENTE (i componenti grezzi viaggiano nel DTO)
+/// di grado, diversità di famiglie, reach multi-hop. È display, non comportamento.
+fn build_richness(
+    degree: usize,
+    relation_types: usize,
+    families: Vec<String>,
+    multihop: usize,
+) -> crate::web::state::RichnessDto {
+    let fam = families.len();
+    let deg_norm = ((1.0 + degree as f64).ln() / (1.0 + 25.0_f64).ln()).min(1.0);
+    let fam_norm = (fam as f64 / 5.0).min(1.0);
+    let hop_norm = (multihop as f64 / 4.0).min(1.0);
+    let score = 0.35 * fam_norm + 0.35 * deg_norm + 0.30 * hop_norm;
+    let label = if score >= 0.6 { "ricca" } else if score >= 0.3 { "articolata" } else { "essenziale" };
+    crate::web::state::RichnessDto {
+        degree, relation_types, families: fam, family_ids: families, multihop,
+        score, label: label.to_string(),
+    }
+}
+
+/// Come le firme colorano la comprensione dell'INTERA frase: media delle firme
+/// delle parole-contenuto → regione + tonalità + prosa. None se nessuna parola
+/// ha una firma. Mostra lo strato "sentire" che la cura modella.
+fn build_tonality(
+    understanding: &SceneUnderstandingDto,
+    engine: &PrometeoTopologyEngine,
+) -> Option<crate::web::state::TonalityDto> {
+    use crate::web::state::TonalityDto;
+    // Parole-contenuto = quelle con firma E almeno un arco (escludono "un", ecc.).
+    let mut contributors: Vec<String> = Vec::new();
+    let mut acc = [0.0f64; 8];
+    let mut n = 0.0f64;
+    for w in &understanding.words {
+        if let Some(sig) = w.signature {
+            if w.outgoing_count + w.incoming_count == 0 { continue; }
+            for i in 0..8 { acc[i] += sig[i]; }
+            n += 1.0;
+            contributors.push(w.word.clone());
+        }
+    }
+    if n < 1.0 { return None; }
+    let mut agg = [0.0f64; 8];
+    for i in 0..8 { agg[i] = acc[i] / n; }
+
+    let pc = crate::topology::primitive::PrimitiveCore::new(agg);
+    let region = engine.registry.nearest(&pc)
+        .and_then(|id| engine.registry.get(id).map(|f| f.name.clone()))
+        .unwrap_or_default();
+    let readings = connotation_from_sig(&agg);
+
+    let summary = if readings.is_empty() {
+        "neutra: dalle firme non emerge una tonalità marcata (le parole stanno vicino al centro). Curando le firme, la frase prenderebbe un tono.".to_string()
+    } else {
+        let top: Vec<String> = readings.iter().take(3).map(|r| r.reading.clone()).collect();
+        format!(
+            "dalle firme delle sue parole, la frase suona {}. Il grafo dice COSA sono le parole; le firme dicono COME le sento, e questa tonalità cambia se curi le firme.",
+            join_it(&top)
+        )
+    };
+
+    Some(TonalityDto { signature: agg, region, readings, summary, contributors })
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3798,6 +4535,78 @@ fn biennale_pos(sig: &[f64; 8]) -> (f32, f32) {
     let x = ((sig[7] + (sig[4] - 0.5) * 0.2) as f32).clamp(0.0, 1.0);
     let y = ((sig[0] + (sig[2] - 0.5) * 0.2) as f32).clamp(0.0, 1.0);
     (x, y)
+}
+
+// Variante "tutto il lessico" per campovastotest: stessa forma di
+// build_biennale_field ma SENZA i filtri Phase70 / stabilità / max_aff / grado-cap.
+// Tiene solo le parole con relazioni nel KG (degree >= 1), così restano esplorabili.
+// Le x,y sono indicative — il client (campovastotest) ricalcola il layout radiale
+// dalla firma. Nessun MAX_NODES: il lessico nel KG è ~25k.
+fn build_biennale_field_all(engine: &PrometeoTopologyEngine) -> BiennaleFieldDto {
+    use std::collections::HashSet;
+
+    let candidates: Vec<(String, u32, u8)> = engine.lexicon.patterns_iter()
+        .filter_map(|(_, pattern)| {
+            if !engine.kg.contains(&pattern.word) { return None; }
+            let degree = engine.kg.out_degree(&pattern.word) + engine.kg.in_degree(&pattern.word);
+            if degree < 1 { return None; }
+            let (dominant_fid, _) = pattern.fractal_affinities.iter()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(&k, &v)| (k, v))
+                .unwrap_or((0, 0.0));
+            Some((pattern.word.clone(), dominant_fid, (pattern.stability.min(1.0) * 100.0) as u8))
+        })
+        .collect();
+
+    let word_set: HashSet<&str> = candidates.iter().map(|(w, _, _)| w.as_str()).collect();
+
+    let words: Vec<BiennaleWordPos> = candidates.iter().map(|(w, fid, s)| {
+        let pattern = engine.lexicon.get(w);
+        let sig_vals = pattern.map(|p| *p.signature.values()).unwrap_or([0.5; 8]);
+        let (x, y) = biennale_pos(&sig_vals);
+        let sig: Vec<f32> = sig_vals.iter()
+            .map(|v| ((v.clamp(0.0, 1.0) * 100.0 * 100.0).round() / 100.0) as f32)
+            .collect();
+        let deg = (engine.kg.out_degree(w) + engine.kg.in_degree(w)) as u16;
+        BiennaleWordPos { w: w.clone(), x, y, f: *fid, s: *s, sig, deg }
+    }).collect();
+
+    eprintln!("[biennale-all] {} parole (tutto il lessico nel KG)", words.len());
+
+    let mut edges: Vec<BiennaleEdge> = Vec::new();
+    let mut edge_set: HashSet<(String, String)> = HashSet::new();
+    for word in &word_set {
+        for (rel, target, conf) in engine.kg.all_outgoing(word) {
+            if rel == crate::topology::relation::RelationType::SimilarTo { continue; }
+            if word_set.contains(target) {
+                let key = (word.to_string(), target.to_string());
+                if edge_set.insert(key) {
+                    edges.push(BiennaleEdge {
+                        from: word.to_string(),
+                        to: target.to_string(),
+                        rel: rel.as_str().to_string(),
+                        conf: (conf.clamp(0.0, 1.0) * 100.0) as u8,
+                    });
+                }
+            }
+        }
+    }
+
+    let fractal_names: Vec<(u32, String)> = engine.registry.iter()
+        .map(|(&id, fractal)| (id, fractal.name.clone()))
+        .collect();
+
+    BiennaleFieldDto {
+        words,
+        edges,
+        fractal_names,
+        axis_labels: [
+            "negativo".to_string(),
+            "positivo".to_string(),
+            "passivo".to_string(),
+            "attivo".to_string(),
+        ],
+    }
 }
 
 fn build_biennale_field(engine: &PrometeoTopologyEngine) -> BiennaleFieldDto {

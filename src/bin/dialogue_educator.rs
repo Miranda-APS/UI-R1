@@ -372,6 +372,62 @@ fn show_introspect(engine: &mut PrometeoTopologyEngine) {
     println!("{}", "═".repeat(60));
 }
 
+/// Phase 86 (Stadio 1): mostra il grafo di comprensione — i cammini tipati che
+/// la frase inscrive nel mondo, col confronto polarità-vincolato e il grounding.
+fn show_comprehension_graph(g: &prometeo::topology::comprehension_path::ComprehensionGraph) {
+    use prometeo::topology::comprehension_path::{GroundKind, TypedPath};
+
+    fn render_path(p: &TypedPath) -> String {
+        let mut s = p.from.clone();
+        for step in &p.steps {
+            let via = step.via.as_deref().map(|v| format!("·via={}", v)).unwrap_or_default();
+            if step.forward {
+                s.push_str(&format!(" —{:?}{}→ {}", step.relation, via, step.to));
+            } else {
+                s.push_str(&format!(" ←{:?}{}— {}", step.relation, via, step.to));
+            }
+        }
+        s
+    }
+    fn ground_label(k: &GroundKind) -> &'static str {
+        match k {
+            GroundKind::PropositionNode => "→ nodo-frase",
+            GroundKind::SelfNode => "→ SÉ",
+            GroundKind::Attractor => "→ attrattore",
+            GroundKind::AlreadyGround => "(già terra)",
+            GroundKind::Unreached => "✗ non fondato",
+        }
+    }
+
+    println!("\n  — Grafo di comprensione (Phase 86 Stadio 1) —");
+    let root = g.root.as_deref().unwrap_or("(Sé/parlante)");
+    let target = g.target.as_deref().unwrap_or("—");
+    let via = g.via.as_deref().map(|v| format!(" via={}", v)).unwrap_or_default();
+    let pol = if g.polarity { "+" } else { "−" };
+    println!("  proposizione : {} —{:?}→ {}{}  [pol {}]", root, g.relation, target, via, pol);
+    println!("  confronto    : {:?}", g.confront);
+    match &g.claim_path {
+        Some(p) => println!("  cammino sogg→ogg: {}", render_path(p)),
+        None => println!("  cammino sogg→ogg: (nessuno — soggetto non-Mondo o non connesso)"),
+    }
+    if g.groundings.is_empty() {
+        println!("  grounding    : (nessuno)");
+    } else {
+        println!("  grounding    :");
+        for p in &g.groundings {
+            println!("    {}   {}", render_path(p), ground_label(&p.ground));
+        }
+    }
+    if !g.ungrounded.is_empty() {
+        println!("  gap onesti   : {:?}  (non so cosa siano / come si leghino)", g.ungrounded);
+    }
+    // Phase 86 Stadio 3: il collasso del cammino saliente in frase articolata.
+    match prometeo::topology::path_collapse::collapse(g) {
+        Some(s) => println!("  collasso (S3): «{}»", s),
+        None => println!("  collasso (S3): (nulla di dicibile — gap onesto)"),
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut state_path = Path::new("prometeo_topology_state.bin").to_path_buf();
@@ -422,6 +478,10 @@ fn main() {
     println!("  :stats           — statistiche sistema");
     println!();
     println!("{}", "─".repeat(70));
+
+    // Ultimi candidati-epifania mostrati da `:self_audit`, numerati: `:crystallize N`
+    // valida (Nome-del-Padre) l'N-esimo e lo cristallizza come opinione del sé.
+    let mut last_epiphanies: Vec<prometeo::topology::self_audit::CandidateEpiphany> = vec![];
 
     loop {
         print!("\n[Tu] > ");
@@ -541,8 +601,84 @@ fn main() {
                 ":understanding" | ":u" | ":scene" => {
                     show_scene_understanding(&engine);
                 }
+                ":self_audit" | ":sa" => {
+                    // Phase 86+ (riconcezione): l'entità confronta il sé col
+                    // mondo (kg_sem) — risonanze/tensioni sulle OPINIONI,
+                    // epifanie candidate dai nodi-PENDENZA (opinioni potenziali,
+                    // da validare prima di cristallizzare).
+                    let report = prometeo::topology::self_audit::self_audit(
+                        &engine.kg_self, &engine.kg);
+                    println!("\n  — Auto-audit del sé ({} pendenze, {} opinioni × kg_sem) —",
+                        engine.kg_self.pendenze.len(), engine.kg_self.len());
+                    println!("  RISONANZE ({}) — il mondo conferma:", report.resonances.len());
+                    for r in report.resonances.iter().take(12) {
+                        println!("    {} {:?} {} @{:.2}", r.subject, r.relation, r.object, r.confidence);
+                    }
+                    println!("  TENSIONI ({}) — il mondo attrita:", report.tensions.len());
+                    for t in report.tensions.iter().take(12) {
+                        let pol = if t.self_polarity { "" } else { "NON " };
+                        println!("    sé: {} {:?} {}{}  |  mondo: {:?}",
+                            t.subject, t.relation, pol, t.object, t.world_link);
+                    }
+                    println!("  EPIFANIE CANDIDATE ({}) — opinioni potenziali (`:crystallize N` per validare):",
+                        report.epiphanies.len());
+                    last_epiphanies = report.epiphanies.clone();
+                    for (i, e) in last_epiphanies.iter().enumerate() {
+                        let via = e.via.as_deref().map(|v| format!(" via={}", v)).unwrap_or_default();
+                        let warn = e.touches_non.as_deref()
+                            .map(|n| format!("  ⚠ tocca un NON: {}", n)).unwrap_or_default();
+                        println!("    [{:>2}] {} {:?} {}{}{}", i, e.from, e.relation, e.to, via, warn);
+                    }
+                }
+                ":crystallize" | ":cry" => {
+                    // Nome-del-Padre: la validazione umana di un candidato di
+                    // `:self_audit`. L'opinione entra nel sé (kg_self vivo) e si
+                    // persiste nel JSON — l'unico modo in cui un'opinione nasce.
+                    match arg.trim().parse::<usize>() {
+                        Ok(n) if n < last_epiphanies.len() => {
+                            let e = &last_epiphanies[n];
+                            // Confidenza derivata < innata: l'opinione si guadagna,
+                            // si rafforza nel dialogo, mai per decreto.
+                            let edge = prometeo::topology::kg_self::SelfEdge {
+                                subject: e.from.clone(), relation: e.relation, object: e.to.clone(),
+                                confidence: 0.5, polarity: true, innate: false, via: e.via.clone(),
+                            };
+                            match engine.crystallize_opinion(edge) {
+                                Ok(true) => println!("  ✓ cristallizzata: {} {:?} {} (conf 0.50). Il sé ora ha {} opinioni.",
+                                    e.from, e.relation, e.to, engine.kg_self.len()),
+                                Ok(false) => println!("  · già presente (i due nodi erano già legati) — niente doppioni."),
+                                Err(err) => println!("  ✗ {}", err),
+                            }
+                        }
+                        Ok(n) => println!("  Indice {} fuori range (0..{}). Esegui prima :self_audit.", n, last_epiphanies.len()),
+                        Err(_) => println!("  Uso: :crystallize N  (N = numero del candidato da :self_audit)"),
+                    }
+                }
+                ":explore" | ":ex" => {
+                    // Phase 86 (Stadio 1): il grafo di comprensione (pathfinding
+                    // tipato) della proposizione. Con argomento esegue prima la
+                    // frase come turno reale, poi mostra il grafo; senza, usa
+                    // l'ultimo turno.
+                    if !arg.is_empty() {
+                        let _ = engine.receive(arg);
+                    }
+                    match engine.comprehension_graph() {
+                        Some(g) => show_comprehension_graph(&g),
+                        None => println!("  Nessuna proposizione: l'ultimo input non ha prodotto una SentenceProposition (prova una frase con soggetto/verbo)."),
+                    }
+                    // Phase 86 Stadio 2: analisi logica — i complementi disambiguati.
+                    if let Some(p) = engine.last_sentence_proposition.as_ref() {
+                        if !p.complements.is_empty() {
+                            println!("  complementi  :");
+                            for c in &p.complements {
+                                let rel = c.relation.map(|r| format!("{:?}", r)).unwrap_or_else(|| "?".into());
+                                println!("    {} {}  →  {}", c.preposition, c.noun, rel);
+                            }
+                        }
+                    }
+                }
                 _ => {
-                    println!("Comando sconosciuto. Usa :quit, :field, :feelings, :narrative, :needs, :recall, :recurring, :introspect, :kg, :stats, :understanding, :save");
+                    println!("Comando sconosciuto. Usa :quit, :field, :feelings, :narrative, :needs, :recall, :recurring, :introspect, :kg, :stats, :understanding, :explore, :self_audit, :crystallize, :save");
                 }
             }
             continue;
@@ -616,6 +752,18 @@ fn main() {
                 .unwrap_or_default();
             println!("  ╰ PROP: {} {:?} {}{} ({}){}",
                 subj, p.relation, obj, via, pol, conf);
+        }
+
+        // Phase 85: confronto col sé (rifrazione) + continuità tematica (Stage 3).
+        if let Some(sc) = engine.last_self_confrontation.as_ref() {
+            if !sc.is_empty() {
+                println!("  ╰ SÉ: conflitti={} risonanze={} (maxC={:.2} maxR={:.2})",
+                    sc.conflitti.len(), sc.risonanze.len(),
+                    sc.max_conflitto(), sc.max_risonanza());
+            }
+        }
+        if engine.self_continuity > 0.0 {
+            println!("  ╰ continuità-sé: {:.2}", engine.self_continuity);
         }
 
         // Hint interno: stance + drives dominanti (formato compatto)

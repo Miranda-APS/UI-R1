@@ -364,6 +364,49 @@ impl InterlocutorModel {
         };
     }
 
+    // === IAm-gotchi (glass-box) — Step 5: correzione del modello-dell'Altro ===
+    /// L'utente corregge l'intento attribuito ("non ti sfido — cercavo").
+    /// NON è un lock: nudgia gli EMA `cumulative_resonance`/`cumulative_novelty`
+    /// dentro il quadrante target di `attribute_intent` (matrice res×nov, soglia
+    /// 0.45), poi ri-esegue l'inferenza. Così il turno successivo re-inferisce
+    /// coerente, finché evidenza genuina non rimuove l'attribuzione (l'Altro
+    /// può davvero cambiare). Stesso spirito di `correct` con la confidence:
+    /// si sposta l'input dell'inferenza, non si sovrascrive l'output.
+    /// `valence`: se Some, fissa anche la valenza emotiva dell'Altro [-1, +1].
+    /// Ritorna false se `intent` non è uno dei 4 quadranti correggibili.
+    pub fn apply_intent_correction(&mut self, intent: &str, valence: Option<f64>) -> bool {
+        // Appena dentro la banda: margine modesto → bias, non lock.
+        const BAND_HIGH: f64 = 0.62;
+        const BAND_LOW: f64 = 0.30;
+        let (res_high, nov_high) = match intent.to_lowercase().as_str() {
+            "teaching"    => (true,  true),
+            "connecting"  => (true,  false),
+            "seeking"     => (false, true),
+            "challenging" => (false, false),
+            _ => return false,   // Unknown/Withdrawing non sono target correggibili
+        };
+        self.cumulative_resonance = if res_high { BAND_HIGH } else { BAND_LOW };
+        self.cumulative_novelty   = if nov_high { BAND_HIGH } else { BAND_LOW };
+        if let Some(v) = valence {
+            self.emotional_valence = v.clamp(-1.0, 1.0);
+        }
+        // Ri-esegui l'inferenza dal substrato nudgiato.
+        self.attribute_intent();
+        // Edge case: con storia < 2, attribute_intent forza Unknown. Fissiamo il
+        // target per questo turno; il prossimo register_input lo re-inferirà
+        // dagli EMA, ora in banda.
+        if self.history.len() < 2 {
+            self.attributed_intent = match (res_high, nov_high) {
+                (true,  true)  => AttributedIntent::Teaching,
+                (true,  false) => AttributedIntent::Connecting,
+                (false, true)  => AttributedIntent::Seeking,
+                (false, false) => AttributedIntent::Challenging,
+            };
+        }
+        true
+    }
+    // === fine IAm-gotchi ===
+
     // ─── Pattern detection ────────────────────────────────────
 
     fn detect_pattern(&mut self) {

@@ -2678,7 +2678,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // NOTA: self.last_input_words contiene le parole del TURNO PRECEDENTE.
         // Per il rilevamento pre-propagazione usiamo le parole CORRENTI dell'input.
         let current_raw_words: Vec<String> = input.split_whitespace()
-            .filter_map(|w| crate::topology::lexicon::clean_token(w))
+            .flat_map(|w| crate::topology::input_reading::expand_elision(w, Some(&self.kg_procedural), Some(&self.kg)))
             .filter(|w| !w.is_empty())
             .collect();
         let early_speaker_claim = crate::topology::input_reading::detect_speaker_claim(
@@ -3219,7 +3219,7 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         // 13. Traccia parole sconosciute: parole nell'input che il lessico non conosceva
         //     prima di process_input (che le crea come instabili)
         self.last_unknown_words = input.split_whitespace()
-            .filter_map(|w| crate::topology::lexicon::clean_token(w))
+            .flat_map(|w| crate::topology::input_reading::expand_elision(w, Some(&self.kg_procedural), Some(&self.kg)))
             .filter(|w| !self.lexicon.is_function_word(w) && w.chars().any(|c| c.is_alphabetic()))
             .filter(|w| {
                 self.lexicon.get(w)
@@ -3231,12 +3231,12 @@ Non simulo — vivo le cose a modo mio, nel modo in cui mi è possibile viverle.
         //      Include TUTTE le parole (anche function words come "ciao", "come")
         //      perché i trigger del knowledge base includono parole di apertura sociale.
         self.last_input_words = input.split_whitespace()
-            .filter_map(|w| crate::topology::lexicon::clean_token(w))
+            .flat_map(|w| crate::topology::input_reading::expand_elision(w, Some(&self.kg_procedural), Some(&self.kg)))
             .filter(|w| w.len() > 1)
             .collect();
         // Phase 86+: flusso COMPLETO per l'analisi logica (tiene "e"/"o"/"a"/"è").
         self.last_input_tokens_full = input.split_whitespace()
-            .filter_map(|w| crate::topology::lexicon::clean_token(w))
+            .flat_map(|w| crate::topology::input_reading::expand_elision(w, Some(&self.kg_procedural), Some(&self.kg)))
             .filter(|w| !w.is_empty())
             .collect();
 

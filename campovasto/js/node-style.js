@@ -7,9 +7,17 @@ import { DIM_NAMES, REL_GROUP, GROUP_DASH } from './constants.js';
 
 // ---- Helper interni ------------------------------------------------------
 
-// Colore di una word basato sulla firma. Ignora qualunque cache/memo.
+// Colore di una word basato sulla firma. Memoizzato per riferimento di firma
+// (WeakMap): la dimensione dominante non cambia finché la firma è la stessa
+// array, e ricostruire lo spec di molti nodi non deve ricalcolare il colore
+// ogni volta. Se la firma viene sostituita (editing), entra una nuova chiave.
+const _colorBySig = new WeakMap();
 function colorFor(word){
-  return colorForSig(word.sig);
+  const sig = word.sig;
+  if(!sig) return colorForSig(sig);
+  let c = _colorBySig.get(sig);
+  if(c === undefined){ c = colorForSig(sig); _colorBySig.set(sig, c); }
+  return c;
 }
 
 // Dimensione base di un nodo in base al Field e ai flag.
@@ -122,7 +130,12 @@ export function buildNodeSpec(word, variant, opts = {}){
   const isRect = fieldId === 'nuovo' && layoutMode === 'rectangular';
   const isSentence_ = !!word.flags?.fromSentence;
   const SCALE      = isRect ? (isSentence_ ? 1.5 : 0.45) : 1.0;
-  const FONT_SCALE = isRect ? (isSentence_ ? 1.3 : 1.0)  : 1.0;
+  // Nel nuovo dimensionale le label a riposo risultavano più piccole rispetto
+  // allo stato 'active' visto durante l'animazione di creazione (font.activeLabel
+  // 30 vs labeled 16 / sentenceLabel 22): boost di leggibilità, solo nuovo (il
+  // vasto a 9k nodi resta invariato).
+  const FONT_SCALE = isRect ? (isSentence_ ? 1.3 : 1.0)
+                   : (fieldId === 'nuovo' ? 1.25 : 1.0);
   const flags = word.flags || {};
   const color = colorFor(word);
   const size  = sizeFor(word, fieldId);
@@ -318,7 +331,11 @@ export function buildNodeSpec(word, variant, opts = {}){
     label: labelVisible ? (word.displayName || word.w) : '',
     size: Math.round(baseSize * SCALE),
     color: colorBlock(color, borderCol),
-    borderWidth: isSentence ? tokens.border.fromSentence : tokens.border.normal,
+    // Perf vasto: per i dot a riposo il bordo è già === fill (invisibile) →
+    // borderWidth 0 elimina lo stroke per-nodo (9k stroke()/frame in meno) a
+    // parità di resa. Le parole-frase tengono il loro bordo glow.
+    borderWidth: isSentence ? tokens.border.fromSentence
+               : (fieldId === 'vasto' ? tokens.border.vastoDot : tokens.border.normal),
     opacity: tokens.opacity.normal,
     font: scaledFont,
   };

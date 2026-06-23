@@ -52,6 +52,7 @@ fn relation_weight(rel: RelationType) -> f64 {
         RelationType::FeelsAs => 1.2,        // Intima risonanza
         RelationType::WondersAbout => 1.1,   // Tensione esplorativa
         RelationType::RemembersAs => 1.1,    // Memoria emotiva
+        RelationType::DerivesFrom => 0.5,    // Parentela morfologica: poco informativa come proposizione
     }
 }
 
@@ -132,6 +133,9 @@ impl PropRelation {
             RelationType::FeelsAs => Self::FeelsAs,
             RelationType::WondersAbout => Self::WondersAbout,
             RelationType::RemembersAs => Self::RemembersAs,
+            // Parentela morfologica: nello strato proposizionale (legacy 1/2-hop)
+            // si comporta come vicinanza lessicale.
+            RelationType::DerivesFrom => Self::SimilarTo,
         }
     }
 

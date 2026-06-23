@@ -295,6 +295,10 @@ export function applyInterpretation(F, interp, {
       for(const e of (wd.outgoing || [])){
         const isIncoming = e.direction === 'in';
         if(isIncoming && !includeIncoming) continue;  // solo outgoing
+        // Niente SIMILAR_TO alla creazione: sono molti (i saluti di "ciao"
+        // erano 6) e si ammassano nella stessa regione 8D rompendo il layout.
+        // L'utente può sempre aggiungerli on-demand con "estrai relazioni".
+        if(e.relation === 'SIMILAR_TO') continue;
         addWord(e.target, e.target_signature, false);
         F.addEdge({
           from: isIncoming ? e.target : wd.word,

@@ -275,7 +275,7 @@ pub fn build_report(
     let gaps = if closes_prior_gap.is_some() {
         Vec::new()
     } else {
-        derive_gaps(speaker_claim, prop)
+        derive_gaps(speaker_claim, prop, Some(kg))
     };
     let inferences = derive_inferences(syllogisms);
     let self_relevance = match &closes_prior_gap {
@@ -473,9 +473,10 @@ fn derive_symbolic_positions(
 // SENZA il suo oggetto. "sono felice" (via assente) → soglia aperta;
 // "ho paura del futuro" / "mi manca mia madre" (via satura) → niente vuoto,
 // l'oggetto è già articolato. La PROP è l'occhio; qui finalmente la mano legge.
-fn derive_gaps(
+pub(crate) fn derive_gaps(
     claim: Option<&SpeakerClaim>,
     prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
+    kg: Option<&KnowledgeGraph>,
 ) -> Vec<SignifierGap> {
     use crate::topology::sentence_proposition::ObjectRef;
     let feeling = claim.map(|c| matches!(c.kind, ClaimKind::Feeling)).unwrap_or(false);
@@ -494,6 +495,25 @@ fn derive_gaps(
             _ => None,
         })
         .or_else(|| claim.map(|c| c.predicate.clone()));
+    // Phase 86+ (Move 2, esteso 2026-06-10 a EREDITARIETÀ strutturale): la
+    // soglia dell'oggetto si apre SOLO per le emozioni DIRETTE A un oggetto —
+    // quelle la cui VALENZA il kg_sem marca `<em> Requires oggetto` ("si ha
+    // paura DI qualcosa": conoscenza lessicale legittima, per-emozione). Le
+    // emozioni-stato complete (tristezza/gioia/solitudine) NON sono marcate →
+    // nessun gap, nessun assurdo "Di cosa sei solo?". Vincolo critico:
+    // `Requires oggetto` letterale, MAI `Requires` generico (nel kg_sem marca
+    // anche precondizioni: tristezza Requires perdita).
+    // L'EREDITARIETÀ (Gärdenfors: le categorie sono regioni, non liste) toglie
+    // la cura per enumerazione: la valenza si legge sulla parola, sulla sua
+    // base derivazionale (pauroso→paura) o su un antenato IsA (angoscia IsA
+    // paura → eredita la direzione) — una nuova emozione ben tassonomizzata
+    // funziona senza curation dedicata.
+    // Senza kg (path di test) si resta permissivi (comportamento storico).
+    if let (Some(k), Some(em)) = (kg, emotion.as_ref()) {
+        if !requires_object_inherited(k, &em.to_lowercase()) {
+            return Vec::new();
+        }
+    }
     match emotion {
         Some(em) => vec![SignifierGap {
             missing: "oggetto".to_string(),
@@ -507,6 +527,47 @@ fn derive_gaps(
         }],
         None => Vec::new(),
     }
+}
+
+/// La valenza "diretta a un oggetto" di un'emozione, con EREDITARIETÀ
+/// strutturale: `Requires oggetto` sulla parola stessa, sulla sua base
+/// derivazionale (`DerivesFrom`, 1 hop: pauroso→paura) o su un antenato
+/// `IsA` (≤2 hop: angoscia IsA paura). Nessuna enumerazione: la regione
+/// tassonomica porta la valenza, l'eccezione è semplicemente non-marcata.
+fn requires_object_inherited(kg: &KnowledgeGraph, word: &str) -> bool {
+    let direct = |w: &str| {
+        kg.query_objects(w, RelationType::Requires)
+            .iter()
+            .any(|o| o.eq_ignore_ascii_case("oggetto"))
+    };
+    if direct(word) {
+        return true;
+    }
+    // Base derivazionale: la forma derivata eredita la valenza della base.
+    for base in kg.query_objects(word, RelationType::DerivesFrom) {
+        let b = base.to_lowercase();
+        if direct(&b) {
+            return true;
+        }
+        for anc in kg.query_objects(&b, RelationType::IsA) {
+            if direct(&anc.to_lowercase()) {
+                return true;
+            }
+        }
+    }
+    // Antenati tassonomici (1-2 hop).
+    for p1 in kg.query_objects(word, RelationType::IsA) {
+        let p1 = p1.to_lowercase();
+        if direct(&p1) {
+            return true;
+        }
+        for p2 in kg.query_objects(&p1, RelationType::IsA) {
+            if direct(&p2.to_lowercase()) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn derive_inferences(
@@ -558,6 +619,7 @@ fn relation_label(r: RelationType) -> &'static str {
         RelationType::Equivalent => "equivale",
         RelationType::Excludes => "esclude",
         RelationType::Coexists => "coesiste con",
+        RelationType::DerivesFrom => "deriva da",
     }
 }
 
@@ -686,6 +748,8 @@ mod tests {
             predicate: "paura".to_string(),
             verb_category: Some("copula".to_string()),
             complement: None,
+            verb_lemma: None,
+            subject_surface: None,
         };
         let sa = derive_speech_act(&f, Some(&sc), None, &[]);
         assert_eq!(sa.kind, "posizionamento");
@@ -721,7 +785,7 @@ mod tests {
     fn no_requires_fanout_gap() {
         // Phase 83 (#5): il fan-out Requires è uscito dal dialogo (è materia
         // del canale-pensiero). Senza un claim emotivo non c'è vuoto dialogico.
-        let gaps = derive_gaps(None, None);
+        let gaps = derive_gaps(None, None, None);
         assert!(gaps.is_empty());
     }
 
@@ -736,15 +800,20 @@ mod tests {
             predicate: "paura".to_string(),
             verb_category: Some("copula".to_string()),
             complement: None,
+            verb_lemma: None,
+            subject_surface: None,
         };
         let prop = SentenceProposition {
             subject: SubjectRef::Speaker,
             relation: RelationType::FeelsAs,
             object: Some(ObjectRef::Word("paura".to_string())),
             via: None,
+            verb_lemma: None,
             polarity: true,
+            complements: vec![],
+            subject_surface: None,
         };
-        let gaps = derive_gaps(Some(&sc), Some(&prop));
+        let gaps = derive_gaps(Some(&sc), Some(&prop), None);
         assert!(gaps.iter().any(|g|
             g.missing == "oggetto"
             && g.context.as_deref() == Some("emozione")
@@ -762,15 +831,20 @@ mod tests {
             predicate: "paura".to_string(),
             verb_category: Some("copula".to_string()),
             complement: None,
+            verb_lemma: None,
+            subject_surface: None,
         };
         let prop = SentenceProposition {
             subject: SubjectRef::Speaker,
             relation: RelationType::FeelsAs,
             object: Some(ObjectRef::Word("paura".to_string())),
             via: Some("futuro".to_string()),
+            verb_lemma: None,
             polarity: true,
+            complements: vec![],
+            subject_surface: None,
         };
-        let gaps = derive_gaps(Some(&sc), Some(&prop));
+        let gaps = derive_gaps(Some(&sc), Some(&prop), None);
         assert!(gaps.is_empty(), "via satura → nessun vuoto dialogico");
     }
 
@@ -780,6 +854,9 @@ mod tests {
         kg.add("paura", RelationType::IsA, "emozione");
         kg.add("paura", RelationType::OppositeOf, "audacia");
         kg.add("paura", RelationType::Causes, "tremore");
+        // Move 2: paura è un'emozione DIRETTA a un oggetto → marcata `Requires
+        // oggetto` (come nel kg_sem reale); senza, il gate non aprirebbe il vuoto.
+        kg.add("paura", RelationType::Requires, "oggetto");
         let mut f = empty_facts();
         f.roots = vec!["paura".to_string()];
         f.emotional_proximity = 0.9;
@@ -789,6 +866,8 @@ mod tests {
             predicate: "paura".to_string(),
             verb_category: Some("copula".to_string()),
             complement: None,
+            verb_lemma: None,
+            subject_surface: None,
         };
         let report = build_report("ho paura", &f, Some(&sc), None, &[], &kg, None, &[]);
         let text = report.compose_text();

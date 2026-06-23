@@ -14,13 +14,21 @@ La differenza con un LLM non è di grado. È **ontologica**: dietro ogni rispost
 
 | Metrica | Valore |
 |---------|--------|
-| Fase corrente | **Phase 79** — selezione pattern per risonanza |
-| Test | **580 passanti**, 0 falliti, 2 ignorati |
-| Lessico | **25.142 parole** (stabilità 0.5-0.9, firme 8D) |
-| KG semantico | **~83.453 archi**, 25.142 nodi (`prometeo_kg.json`, Git LFS) |
-| KG procedurale | **~395 archi**, 10 pattern, 9 percetti (`prometeo_kg_procedurale.json`) |
+| Fase corrente | **Phase 86** — la comprensione come prodotto: dall'estrazione strutturale per-frase all'integrazione tra frasi (Strato 3) |
+| Test | **679 passanti**, 0 falliti, 2 ignorati — deterministici |
+| Lessico | **~25.600 parole** (stabilità 0.5-0.9, firme 8D) |
+| KG semantico | **~95.500 archi**, ~47.900 nodi (`prometeo_kg.json`, Git LFS) |
+| KG procedurale | **~890 archi** (grammatica + pattern + percetti, `prometeo_kg_procedurale.json`) |
+| KG del sé | **37 pendenze (grana) + opinioni** cristallizzabili (`prometeo_kg_self.json`) — il grafo che *rifrange* |
 | Frattali I Ching | **64 esagrammi** canonici (Cielo→Lago, Phase 68) |
 | Versione | 6.x |
+
+> **La comprensione è il prodotto.** Da Phase 80 il fuoco è leggere *davvero* l'input —
+> non generare una risposta fluente. La frase diventa una proposizione strutturale
+> (`soggetto · relazione · oggetto · via · polarità`) ancorata al Knowledge Graph; un
+> testo intero diventa una rete di proposizioni che si legano tra loro (catene causali,
+> fili tematici, conflitti, coreferenza). Due endpoint read-only la espongono:
+> `/api/comprehend` (singola frase) e `/api/analyze` (testo/trascrizione, modalità osservatore).
 
 ---
 
@@ -46,20 +54,31 @@ cargo run --release --bin rebuild-semantic-topology
 ./target/release/dialogue_educator
 #   Comandi: :field :feelings :narrative :needs :recall :recurring :introspect :kg <parola>
 
-# 5b. Web UI (campovasto) su http://localhost:3000/campovasto/
+# 5b. Web UI (campovasto + Gate di comprensione) su http://localhost:3000
 ./target/release/prometeo-web
+#   /comprensione  → Gate: come UI-R1 comprende una frase, mostrato come artefatto
+#   /campovasto/   → il campo del KG, navigabile
 ```
 
-### Esempi di output (Phase 79, end-to-end)
+### Comprensione strutturale (end-to-end, `/api/comprehend` · `/api/analyze`)
 
-| Input | Output |
-|-------|--------|
-| `ho paura` | **Di cosa hai paura?** (pattern `articolazione` per risonanza) |
-| `del buio` (turno 2) | **Senti paura di buio.** (pattern `riconoscimento`, closure perception) |
-| `ciao` | **Salve.** (`ricambio`) |
-| `chi sei?` | **Sono un fondamento.** (`identificazione`) |
+La frase è letta come **proposizione** ancorata al KG, non come token da rigenerare:
 
-L'entità non recupera token: costruisce una decisione esplicita su cosa fare e perché, lo scrive in italiano leggibile come `ActionDecision.reasoning`, e poi istanzia la voce.
+| Frase | Comprensione |
+|-------|--------------|
+| `Marco ha aperto la riunione` | `marco —Does→ aprire` (oggetto: riunione) |
+| `Il ritardo nasce dalla mancanza di risorse` | `mancanza —Causes→ ritardo` (frame genesi) |
+| `La qualità del prodotto dipende dalla cura` | `qualità —Requires→ cura` (frame dipendenza, testa di sintagma) |
+| `Giulia deve preparare la documentazione` | `giulia —Does→ preparare` (modale sciolto) |
+| `Marco non è d'accordo con Anna` | `marco —IsA→ accordo` **(negato)** |
+
+Su un **testo** intero (Strato 3, modalità osservatore), le proposizioni si legano:
+**catene** (X→Y in una frase, Y→Z in un'altra), **fili tematici** (un concetto che
+attraversa più frasi), **conflitti** (stesso soggetto, oggetti/polarità opposti) e
+**coreferenza** (pro-drop e pronomi risolti al referente saliente: *«Lei teme…»* → Anna).
+
+Sul lato dialogo, l'entità non recupera token: costruisce la voce dal proprio stato del
+campo + dalla comprensione, non da template.
 
 ---
 
@@ -82,34 +101,43 @@ La documentazione di UI-R1 segue il [pattern Karpathy LLM-Wiki](https://gist.git
 |-------|-----------|
 | **principi** | 9 principi inviolabili + filtri operativi (test pre-proposta, no template, no empathy simulation, …) |
 | **topologia** | PF1, frattali I Ching, lexicon, KG semantico, KG procedurale |
-| **comprensione** | Pipeline Phase 71-79: SpeakerProfile, ComprehensionReport, ActionDecision, pattern matcher, SelfProfile, closure perception |
+| **comprensione** | Pipeline Phase 71-86: SpeakerProfile, ComprehensionReport, SentenceProposition, comprehension_path, kg_self, need, Strato 3 (integrazione tra frasi) |
 | **identita** | Valenza Octalysis, bisogni Maslow, narrative self, interlocutor model, self witness |
 | **generazione** | Expression compose, syntax-from-geometry, grammatica italiana |
 | **campovasto** | Frontend SPA modulare ES2022, design system, medio API, pattern wiki applicato |
 
-Le **fonti immutabili** (libretto storico in 22 capitoli, CLAUDE.md Phase 79, documenti architettura, regole campovasto, OS docs futuri) vivono in [docs/raw/](docs/raw/). La wiki sintetizza, raw conserva.
+Le **fonti immutabili** (libretto storico, documenti di architettura, regole campovasto) vivono in [docs/raw/](docs/raw/). La wiki sintetizza, raw conserva.
 
 ---
 
 ## Architettura in 30 secondi
 
+**Tre Knowledge Graph paralleli** — *logica* (`prometeo_kg.json`, ~95.5K archi: cos'è vero
+e come le cose si legano), *grammatica/pattern* (`prometeo_kg_procedurale.json`: classe→funzione,
+frame verbali, percetti), *sé* (`prometeo_kg_self.json`: la grana che rifrange ogni significato).
+
+La pipeline di **comprensione** (il prodotto):
+
 ```
 input italiano
    │
-   ▼  1. SpeakerClaim (chi-sta-dicendo-cosa-su-chi)
-   ▼  2. SpeakerProfile.observe_turn() — memoria del parlante senza decay
-   ▼  3. ComprehensionReport — speech_act, gaps, inferences, self_relevance
-   ▼  4. detect_closure(SelfProfile, SpeakerProfile) — Lacanian closure perception
-   ▼  5. modulazioni di stato (coherence_integrity, drives Octalysis)
-   ▼  6. ActionDecision — kind, target, anchor_words, reasoning testuale
-   ▼  7. seed_from_comprehension → KG procedurale → select_pattern_by_resonance
-   ▼  8. pattern_matcher istanzia gli slot → render italiano
-   ▼  9. SelfProfile.record(turn, decision) — fatto relazionale, mai stringa
+   ▼  1. lettura/elisione → token (la grammatica curata batte l'inferenza rumorosa)
+   ▼  2. SentenceProposition — la frase come triple: soggetto · relazione · oggetto · via · polarità
+   │       (frame verbali dal kg_proc: copula→IsA, percettivo→FeelsAs, genesi→Causes,
+   │        dipendenza→Requires, modale→l'infinito, tempi composti→il participio…)
+   ▼  3. confront_with_kg — la triple ancorata al kg_sem (l'oggetto/la via esistono? contraddizioni?)
+   ▼  4. comprehension_path::explore — cammini tipati che legano i nodi della frase al terreno fondato
+   ▼  5. confront_with_self — l'opinione come SECONDO legame: la frase contro la grana del sé
+   ▼  6. sense_need — il bisogno emerge dalla FORMA del grafo (gap, closure, conferma, multi-locus…)
    │
-   ▼  italiano in uscita
+   ├──▶  Strato 3 (testo): le proposizioni di più frasi si legano →
+   │        catene · fili tematici · conflitti · coreferenza
+   │
+   ▼  l'atto: la voce collassa dal cammino + bisogno + posizione (mai da template)
 ```
 
-8 stadi, ognuno produce strutture tipizzate, ognuno è trasparente. Niente softmax, niente intent classifier, niente template.
+Ogni stadio produce strutture tipizzate, ognuno è trasparente e ispezionabile (il Gate su
+`/comprensione` lo *esibisce*). Niente softmax, niente intent classifier, niente template.
 
 ---
 
@@ -143,7 +171,7 @@ Best practice campovasto codificate in [`campovasto/CLAUDE.md`](campovasto/CLAUD
 
 ## Dipendenze runtime
 
-Solo Rust. Nessun database server, nessun LLM, nessuna API esterna in inference. Per il web UI: axum + vis-network (vendor JS).
+Solo Rust. Nessun database server, nessun LLM, nessuna API esterna in inference. Per il web UI: axum + un renderer canvas event-driven (campovasto, vendor JS, nessun bundler).
 
 Per la curation del KG (offline, opzionale): Python + Qwen3 via Ollama. Vedi [workflow di curation](docs/wiki/principi/workflow-curation-kg.md).
 

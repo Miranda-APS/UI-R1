@@ -28,6 +28,24 @@ export const CD_COLORS = [
   '#E89A3A',  // realizzazione
 ];
 
+// ---- Colori dei trigrammi (indicizzati per id binario, NON per DIM_NAMES) --
+// Usati dalla lente 3D (frattali.html): un FractalId = lower×8 + upper, e il
+// colore viene dal trigramma `lower`. Distinti da DIM_COLORS, che è indicizzato
+// per dimensione-firma (permutazione diversa — vedi Phase 68). Non confonderli.
+// Ordine binario: 0 Cielo, 1 Terra, 2 Tuono, 3 Acqua, 4 Montagna, 5 Vento,
+// 6 Fuoco, 7 Lago. Sono anche la palette delle relazioni KG (isa=Vento/verde,
+// ha=Terra/blu, fa=Tuono/giallo, causa=Fuoco/arancio, simile=Acqua/ciano…).
+export const TRIG_COLORS = [
+  '#ff6b6b',  // 0 Cielo    ☰
+  '#5aadff',  // 1 Terra    ☷
+  '#ffd04a',  // 2 Tuono    ☳
+  '#4affda',  // 3 Acqua    ☵
+  '#a06eff',  // 4 Montagna ☶
+  '#70d060',  // 5 Vento    ☴
+  '#ff9a5a',  // 6 Fuoco    ☲
+  '#ff6eb0',  // 7 Lago     ☱
+];
+
 // ---- Colori di interfaccia (nomi semantici, mai usare hex diretti) ----
 export const UI = {
   // Sfondi e superfici
@@ -133,6 +151,7 @@ export const tokens = {
   },
   border: {
     normal:           1.5,
+    vastoDot:         0,      // dot a riposo nel vasto: bordo===fill (invisibile) → 0 evita 9k stroke()/frame
     fromSentence:     4,
     fromSentenceRosa: 3,
     unknown:          2.5,

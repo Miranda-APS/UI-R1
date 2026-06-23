@@ -340,6 +340,30 @@ impl PrometeoMcp {
         Self::ok(Self::compact_input_response(value))
     }
 
+    /// **Modalità OSSERVATORE** — analizza un testo di TERZI (trascrizione,
+    /// verbale, paragrafo), NON un turno di dialogo rivolto a UI-r1. Segmenta in
+    /// frasi e comprende ciascuna in modo STATELESS e COMPATTO: nessuna cornice
+    /// "io sono il destinatario" (niente addressee/self_relevance), nessuna
+    /// mutazione di stato (tick/NarrativeSelf/SpeakerProfile/PF1 intatti).
+    ///
+    /// Per ogni frase: `speech_act`, `claim` (soggetto-relazione-oggetto-via-
+    /// complementi = chi-dice-cosa-su-cosa), `anchor_concepts` (vicinato KG per
+    /// il tagging tematico), `inferences` (catene 2-hop), `contradictions`.
+    /// Più un `aggregate`: concetti ricorrenti, distribuzione degli atti,
+    /// contraddizioni. USARE QUESTO (non `comprehend`) per analizzare riunioni/
+    /// conversazioni altrui o testi lunghi.
+    #[tool(
+        description = "OBSERVER MODE — analyze a third-party text/transcript (read-only, stateless, compact). Splits text into sentences and comprehends each WITHOUT treating UI-r1 as the addressee (no addressee/self_relevance, no state mutation). Per sentence: speech_act, claim (subject-relation-object-via-complements = who-says-what-about-what), anchor_concepts (KG neighborhood for thematic tagging), inferences (2-hop chains), contradictions. Plus an aggregate (recurring concepts, speech-act distribution). Use THIS, not comprehend, for meetings/conversations of others or long texts."
+    )]
+    async fn analyze(
+        &self,
+        Parameters(req): Parameters<ComprehendRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let body = serde_json::json!({ "text": req.input });
+        let value = self.post_json("/api/analyze", body).await?;
+        Self::ok(value)
+    }
+
     /// Stato vivo del **campo PF1**: parole attualmente attive con
     /// le loro attivazioni, decay rate, neighborhood. È la
     /// fotografia del "pensiero" presente di UI-r1 — quello che è

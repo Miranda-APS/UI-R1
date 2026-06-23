@@ -19,40 +19,39 @@ use super::state::*;
 // GET / — Serve la dashboard HTML
 // ═══════════════════════════════════════════════════════════════
 
-static INDEX_HTML: &str = include_str!("index.html");
 static COMMUNITY_HTML: &str = include_str!("community/index.html");
-static UNIVERSO_HTML: &str = include_str!("universo/index.html");
-static BIENNALE_HTML: &str = include_str!("biennale/index.html");
 static BIENNALE_HOME_HTML: &str = include_str!("biennale/home.html");
 static DIALOGO_HTML: &str = include_str!("biennale/dialogo.html");
 static CURAZIONE_HTML: &str = include_str!("biennale/curazione.html");
 static CURA_MOBILE_HTML: &str = include_str!("biennale/cura_mobile.html");
-static UI_R1_HTML: &str = include_str!("biennale/uir1.html");
-static DIFFRAZIONE_HTML: &str = include_str!("biennale/diffrazione.html");
+static COMPRENSIONE_HTML: &str = include_str!("comprensione.html");
 
-pub async fn uir1_index() -> Html<&'static str> {
-    Html(UI_R1_HTML)
-}
-
-pub async fn diffrazione_index() -> Html<&'static str> {
-    Html(DIFFRAZIONE_HTML)
+/// Gate di Comprensione — pagina dedicata, leggera, ISOLATA da campovasto.
+/// Vedi docs/raw/architettura/gate_di_comprensione.md.
+pub async fn comprensione_index() -> Html<&'static str> {
+    Html(COMPRENSIONE_HTML)
 }
 
 pub async fn index() -> Html<&'static str> {
     Html(BIENNALE_HOME_HTML)
 }
 
-pub async fn admin_index() -> Html<&'static str> {
-    Html(INDEX_HTML)
+/// Viste dedicate (hub/stato-interno/frattali) servite DA DISCO a runtime:
+/// URL pulito + editabili senza ricompilare. Cartella top-level `viste/` (come
+/// `campovasto/`), isolate dall'esploratore ma con design-system condiviso
+/// (importano theme.js/font da /campovasto via path assoluto).
+/// Vedi docs/raw/architettura/piano_ritiro_moduli.md.
+async fn serve_vista(file: &str) -> Response {
+    let path = std::path::Path::new("viste").join(file);
+    match std::fs::read_to_string(&path) {
+        Ok(s) => Html(s).into_response(),
+        Err(e) => (StatusCode::NOT_FOUND, format!("vista non trovata: {}", e)).into_response(),
+    }
 }
 
-pub async fn universo_index() -> Html<&'static str> {
-    Html(UNIVERSO_HTML)
-}
-
-pub async fn biennale_index() -> Html<&'static str> {
-    Html(BIENNALE_HTML)
-}
+pub async fn admin_index() -> Response { serve_vista("hub.html").await }
+pub async fn stato_interno_index() -> Response { serve_vista("stato-interno.html").await }
+pub async fn frattali_index() -> Response { serve_vista("frattali.html").await }
 
 pub async fn dialogo_index() -> Html<&'static str> {
     Html(DIALOGO_HTML)
@@ -278,7 +277,54 @@ pub async fn post_input(
             action_decision: None,
             sentence_proposition: None,
             kg_confrontation: None,
+            need: None,
+            propositions: Vec::new(),
         }),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/comprehend — P1 (Tsunami): comprensione STATELESS
+// Ritorna lemmi + proposizioni multi-locus + concetti (+ need) SENZA
+// mutare lo stato dell'engine. Per analizzare titoli-task isolati e ogni
+// analisi puntuale senza che N chiamate si contaminino (al contrario di
+// /api/input, stateful). Non fa broadcast WS (non cambia nulla).
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn post_comprehend(
+    State(state): State<AppState>,
+    Json(req): Json<InputRequest>,
+) -> Json<ComprehendDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::Comprehend {
+        text: req.text,
+        reply: tx,
+    }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(ComprehendDto::default()),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/analyze — MODALITÀ OSSERVATORE (analisi di testi di terzi)
+// Segmenta un testo (anche lungo) in frasi, comprende ciascuna in modo
+// STATELESS e COMPATTO, e aggrega. Niente cornice "io sono il destinatario",
+// niente mutazione di stato. Per trascrizioni/verbali/testi lunghi.
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn post_analyze(
+    State(state): State<AppState>,
+    Json(req): Json<InputRequest>,
+) -> Json<AnalyzeDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::Analyze {
+        text: req.text,
+        reply: tx,
+    }).await;
+    match rx.await {
+        Ok(dto) => Json(dto),
+        Err(_) => Json(AnalyzeDto::default()),
     }
 }
 
@@ -331,186 +377,6 @@ pub async fn post_grow(State(state): State<AppState>) -> Json<GrowthDto> {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// GET /api/topology — Grafo completo
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_topology(State(state): State<AppState>) -> Json<TopologyDto> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::GetTopology { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(TopologyDto {
-            nodes: Vec::new(),
-            edges: Vec::new(),
-        }),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/navigate/:from/:to — Geodetica
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_navigate(
-    State(state): State<AppState>,
-    Path((from, to)): Path<(String, String)>,
-) -> Json<Option<NavigationDto>> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::Navigate {
-        from,
-        to,
-        reply: tx,
-    }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(None),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/projection — Proiezione olografica
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_projection(State(state): State<AppState>) -> Json<Option<ProjectionDto>> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::Projection { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(None),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/introspect — Introspezione
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_introspect(State(state): State<AppState>) -> Json<IntrospectionDto> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::Introspect { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(IntrospectionDto {
-            fractal_count: 0,
-            simplex_count: 0,
-            conceptual_gaps: 0,
-            disconnected_worlds: 0,
-            densest_region: None,
-            sparsest_region: None,
-            field_energy: 0.0,
-            emergent_dimensions: 0,
-            most_experienced: None,
-            least_experienced: None,
-        }),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/why — Spiegazione ultimo output
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_why(State(state): State<AppState>) -> Json<WhyDto> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::Why { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(WhyDto {
-            explanation: String::new(),
-            fractal_sequence: Vec::new(),
-            propagation_bridges: Vec::new(),
-        }),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/ask — Incertezze aperte (domande reali dell'entità)
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_ask(State(state): State<AppState>) -> Json<Vec<QuestionDto>> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::Ask { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(Vec::new()),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/open-questions — Incertezze aperte (versione diretta)
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_open_questions(State(state): State<AppState>) -> Json<Vec<UncertaintyDto>> {
-    let (tx, rx) = oneshot::channel::<Vec<UncertaintyDto>>();
-    let _ = state.cmd_tx.send(EngineCommand::GetOpenQuestions { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(Vec::new()),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/thought-chain — Ultima catena di ragionamento autonomo
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_thought_chain(State(state): State<AppState>) -> Json<Option<ThoughtChainDto>> {
-    let (tx, rx) = oneshot::channel::<Option<ThoughtChainDto>>();
-    let _ = state.cmd_tx.send(EngineCommand::GetLastThoughtChain { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(None),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// POST /api/clarity — L'utente illumina un'incertezza dell'entità
-// ═══════════════════════════════════════════════════════════════
-
-#[derive(serde::Deserialize)]
-pub struct ClarityRequest {
-    pub topic: String,
-    pub illumination: String,
-}
-
-pub async fn post_clarity(
-    State(state): State<AppState>,
-    Json(req): Json<ClarityRequest>,
-) -> Json<ClarityResponseDto> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::Clarity {
-        topic: req.topic.clone(),
-        illumination: req.illumination.clone(),
-        reply: tx,
-    }).await;
-    match rx.await {
-        Ok(true) => Json(ClarityResponseDto {
-            acknowledged: true,
-            topic: req.topic.clone(),
-            message: format!("Comprensione ricevuta su '{}'. Il campo si aggiorna.", req.topic),
-        }),
-        _ => Json(ClarityResponseDto {
-            acknowledged: false,
-            topic: req.topic,
-            message: "Impossibile elaborare la comprensione.".to_string(),
-        }),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/generate — Genera testo dal campo
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_generate(State(state): State<AppState>) -> Json<GenerateDto> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::Generate { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(GenerateDto {
-            text: String::new(),
-            structure: String::new(),
-            cluster_count: 0,
-        }),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
 // POST /api/save — Salva stato
 // ═══════════════════════════════════════════════════════════════
 
@@ -537,19 +403,6 @@ pub async fn get_will(State(state): State<AppState>) -> Json<WillDto> {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// GET /api/compounds — Composti frattali attivi
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_compounds(State(state): State<AppState>) -> Json<Vec<CompoundDto>> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::GetCompounds { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(Vec::new()),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
 // GET /api/wordfield — Campo parole top attive
 // ═══════════════════════════════════════════════════════════════
 
@@ -560,92 +413,6 @@ pub async fn get_wordfield(State(state): State<AppState>) -> Json<WordFieldDto> 
         Ok(dto) => Json(dto),
         Err(_) => Json(WordFieldDto::default()),
     }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/phase/:a/:b — Fase tra due parole
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_phase(
-    State(state): State<AppState>,
-    Path((a, b)): Path<(String, String)>,
-) -> Json<PhaseDto> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::GetPhase { word_a: a, word_b: b, reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(PhaseDto::default()),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/tension/:a/:b — Parole di tensione tra due poli
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_tension(
-    State(state): State<AppState>,
-    Path((a, b)): Path<(String, String)>,
-) -> Json<Vec<TensionWordDto>> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::GetTension { pole_a: a, pole_b: b, reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(Vec::new()),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// POST /api/locus-simulate — Simula dal punto di vista di un locus
-// ═══════════════════════════════════════════════════════════════
-
-#[derive(Deserialize)]
-pub struct LocusSimRequest {
-    pub locus: String,
-}
-
-pub async fn post_locus_simulate(
-    State(state): State<AppState>,
-    Json(req): Json<LocusSimRequest>,
-) -> Json<Option<LociSimDto>> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::SimulateLocus {
-        locus_name: req.locus,
-        reply: tx,
-    }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(None),
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/simpdb — Serve il file SimplDB binario per download mobile
-// ═══════════════════════════════════════════════════════════════
-
-pub async fn get_simpdb() -> Response {
-    // Cerca prima il formato v3 (.bin), poi il legacy JSON
-    let paths = [
-        "prometeo_topology_state.bin",
-        "prometeo_state.bin",
-    ];
-
-    for path in &paths {
-        match tokio::fs::read(path).await {
-            Ok(bytes) => {
-                return (
-                    StatusCode::OK,
-                    [
-                        (header::CONTENT_TYPE, "application/octet-stream"),
-                        (header::CONTENT_DISPOSITION, "attachment; filename=\"prometeo_state.bin\""),
-                    ],
-                    bytes,
-                ).into_response();
-            }
-            Err(_) => continue,
-        }
-    }
-
-    (StatusCode::NOT_FOUND, "SimplDB non disponibile — usa :save prima").into_response()
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -785,6 +552,87 @@ pub async fn post_word_connect(
         reply: tx,
     }).await;
     Json(rx.await.unwrap_or(false))
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GET /api/explore?word=X — UI-r1 prova a collocare la parola DA SOLA
+// (cammino multi-hop tipato verso un'ancora; vista Stato interno).
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_explore(
+    State(state): State<AppState>,
+    Query(params): Query<WordQuery>,
+) -> Json<crate::web::state::ExploreDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::ExploreWord {
+        word: params.word,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/clarity — l'utente FONDA un'incertezza aperta
+// engine.receive_clarity → insegna il testo + abbassa la tensione
+// (resolve_uncertainty). È il modo reale di "chiudere" un'incertezza
+// dalla vista Stato interno: l'entità chiede, l'utente risponde.
+// ═══════════════════════════════════════════════════════════════
+
+#[derive(serde::Deserialize)]
+pub struct ClarityBody {
+    pub topic: String,
+    pub illumination: String,
+}
+
+pub async fn post_clarity(
+    State(state): State<AppState>,
+    Json(body): Json<ClarityBody>,
+) -> Json<bool> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::Clarity {
+        topic: body.topic,
+        illumination: body.illumination,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+
+// === IAm-gotchi (glass-box) — Step 5: correzione del modello-dell'Altro ===
+pub async fn post_correct_interlocutor(
+    State(state): State<AppState>,
+    Json(body): Json<crate::web::state::CorrectInterlocutorBody>,
+) -> Json<bool> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::CorrectInterlocutor {
+        intent: body.intent,
+        emotional_valence: body.emotional_valence,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or(false))
+}
+// === fine IAm-gotchi ===
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/correct — Phase 84: l'utente corregge la risposta del sistema
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn post_correct(
+    State(state): State<AppState>,
+    Json(body): Json<crate::web::state::CorrectBody>,
+) -> Json<crate::web::state::CorrectDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::Correct {
+        input: body.input,
+        given: body.given,
+        wanted: body.wanted,
+        context: body.context,
+        reply: tx,
+    }).await;
+    Json(rx.await.unwrap_or_else(|_| crate::web::state::CorrectDto {
+        accepted: false,
+        message: "Errore di canale interno".to_string(),
+        ..Default::default()
+    }))
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1017,6 +865,31 @@ pub async fn get_self(State(state): State<AppState>) -> Json<SelfDto> {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// GET /api/speaker — P2 (Tsunami): ritratto-utente (SpeakerProfile)
+// Persistito cross-sessione: name, self_facts, entity_facts,
+// open_questions, gaps (open+closed con closed_by), mentioned, corrections.
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn get_speaker_profile(State(state): State<AppState>) -> Json<SpeakerProfileDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetSpeakerProfile { reply: tx }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/persist — P2 (Tsunami): forza il salvataggio del .bin
+// L'app lo chiama sui lifecycle event (onPause/onStop) per persistere
+// il vissuto (SpeakerProfile, narrativa, identità, simplessi). Ritorna {ok}.
+// ═══════════════════════════════════════════════════════════════
+
+pub async fn post_persist(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::Persist { reply: tx }).await;
+    let ok = rx.await.unwrap_or(false);
+    Json(serde_json::json!({ "ok": ok }))
+}
+
+// ═══════════════════════════════════════════════════════════════
 // GET /api/episodes?n=20 — Episodi semantici recenti
 // ═══════════════════════════════════════════════════════════════
 
@@ -1231,51 +1104,10 @@ impl Default for StateSnapshot {
                 total_perturbations: 0,
                 vocabulary_size: 0,
                 emergent_dimensions: 0,
+                kg_edge_count: 0,
             },
             field_signature: vec![0.5; 8],
         }
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Phase 52: Dialogo Interiore
-// ═══════════════════════════════════════════════════════════════
-
-/// GET /api/inner-dialogue — Aggregato di pensieri, domande e proposizioni
-pub async fn get_inner_dialogue(
-    State(state): State<AppState>,
-) -> Json<InnerDialogueDto> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::GetInnerDialogue { reply: tx }).await;
-    match rx.await {
-        Ok(dto) => Json(dto),
-        Err(_) => Json(InnerDialogueDto {
-            thoughts: vec![],
-            questions: vec![],
-            propositions: vec![],
-        }),
-    }
-}
-
-/// POST /api/respond — L'utente risponde a un item del dialogo interiore
-pub async fn post_respond(
-    State(state): State<AppState>,
-    Json(req): Json<RespondRequest>,
-) -> Json<RespondResult> {
-    let (tx, rx) = oneshot::channel();
-    let _ = state.cmd_tx.send(EngineCommand::RespondToInsight {
-        item_type: req.item_type,
-        item_id: req.item_id,
-        response: req.response,
-        action: req.action,
-        reply: tx,
-    }).await;
-    match rx.await {
-        Ok(result) => Json(result),
-        Err(_) => Json(RespondResult {
-            success: false,
-            effect: "Errore comunicazione con engine".to_string(),
-        }),
     }
 }
 
@@ -1392,6 +1224,13 @@ pub async fn patch_edge(
 pub async fn get_biennale_field(State(state): State<AppState>) -> Json<BiennaleFieldDto> {
     let (tx, rx) = oneshot::channel();
     let _ = state.cmd_tx.send(EngineCommand::GetBiennaleField { reply: tx }).await;
+    Json(rx.await.unwrap_or_default())
+}
+
+// GET /api/biennale/field_all — TUTTO il lessico (nessun filtro), per campovastotest
+pub async fn get_biennale_field_all(State(state): State<AppState>) -> Json<BiennaleFieldDto> {
+    let (tx, rx) = oneshot::channel();
+    let _ = state.cmd_tx.send(EngineCommand::GetBiennaleFieldAll { reply: tx }).await;
     Json(rx.await.unwrap_or_default())
 }
 
@@ -1777,86 +1616,6 @@ pub async fn get_biennale_circuit(
         reply: tx,
     }).await;
     Json(rx.await.unwrap_or_default())
-}
-
-// ═══════════════════════════════════════════════════════════════
-// GET /api/diffraction?a=X&b=Y — Semantic Diffraction Score
-// Chiama diffraction_api.py e restituisce JSON per D3.js
-// ═══════════════════════════════════════════════════════════════
-
-#[derive(Deserialize)]
-pub struct DiffractionParams {
-    pub a: String,
-    pub b: String,
-    pub top: Option<u32>,
-    pub lambda_val: Option<f64>,
-}
-
-pub async fn get_diffraction(
-    Query(params): Query<DiffractionParams>,
-) -> Response {
-    use std::process::Stdio;
-
-    let top = params.top.unwrap_or(40).to_string();
-    let lambda = params.lambda_val.unwrap_or(1.5).to_string();
-
-    // Trova il path assoluto dello script rispetto all'eseguibile
-    let script = std::env::current_dir()
-        .unwrap_or_default()
-        .join("diffraction_api.py");
-
-    let output = tokio::process::Command::new("python")
-        .arg(&script)
-        .arg("--a").arg(&params.a)
-        .arg("--b").arg(&params.b)
-        .arg("--top").arg(&top)
-        .arg("--lambda_val").arg(&lambda)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await;
-
-    match output {
-        Ok(out) if out.status.success() => {
-            let body = String::from_utf8_lossy(&out.stdout).to_string();
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
-                body,
-            ).into_response()
-        }
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            // Lo script può aver scritto JSON di errore su stdout anche in caso di exit != 0
-            if stdout.trim_start().starts_with('{') {
-                (
-                    StatusCode::OK,
-                    [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
-                    stdout.to_string(),
-                ).into_response()
-            } else {
-                let err = serde_json::json!({
-                    "error": format!("diffraction_api.py error: {}", stderr.trim())
-                });
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
-                    err.to_string(),
-                ).into_response()
-            }
-        }
-        Err(e) => {
-            let err = serde_json::json!({
-                "error": format!("Impossibile eseguire python: {}. Assicurati che Python sia installato e diffraction_api.py sia nella directory corrente.", e)
-            });
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
-                err.to_string(),
-            ).into_response()
-        }
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════

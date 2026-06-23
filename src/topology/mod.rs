@@ -81,14 +81,26 @@ pub mod expression;
 pub mod events;
 pub mod understanding;
 pub mod comprehension_graph;
+pub mod comprehension_path;
+pub mod derivation;
+pub mod prepositions;
+pub mod path_collapse;
+pub mod need;
+pub mod analisi_logica;
 pub mod deliberation;
 pub mod speaker_profile;
+pub mod correction;
 pub mod comprehension_report;
 pub mod action_reasoning;
 pub mod pattern_matcher;
 pub mod self_profile;
 pub mod kg_proc_field;
 pub mod sentence_proposition;
+/// Phase 85 — kg_self: le convinzioni profonde come grafo (la lente che rifrange).
+pub mod kg_self;
+/// Phase 85 (Stage 4) — self_audit: derivazione di opinioni dal confronto
+/// kg_self × kg_sem (risonanze, tensioni, epifanie candidate con tramite).
+pub mod self_audit;
 /// Phase 82 — Memoria-sfera di haiku come geometria sferica di cerchi
 /// tangenti sulla sfera I Ching. Vedi `src/topology/haiku_memory.rs`.
 pub mod haiku_memory;
@@ -136,6 +148,7 @@ pub use semantic_episode::{SemanticEpisodeLog, SemanticEpisode};
 pub use provenance::{ActivationSource, ProvenanceMap};
 pub use relation::{RelationType, TypedEdge, EdgeSource};
 pub use knowledge_graph::{KnowledgeGraph, KgSnapshot};
+pub use kg_self::{KgSelf, SelfEdge};
 pub use inference::InferenceEngine;
 pub use proposition::{Proposition, PropRelation, extract_propositions};
 pub use needs::{NeedsHierarchy, NeedsState, NeedsPressure, NeedLevel, FieldMetrics};

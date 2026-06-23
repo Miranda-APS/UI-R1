@@ -203,6 +203,7 @@ impl WordTopology {
                 RelationType::FeelsAs    => 0.05,  // Intima risonanza
                 RelationType::WondersAbout => 0.15, // Tensione esplorativa
                 RelationType::RemembersAs  => 0.10, // Risonanza episodica
+                RelationType::DerivesFrom  => 0.08, // Famiglia derivazionale: vicina
             }
         };
 
@@ -231,6 +232,7 @@ impl WordTopology {
                 RelationType::FeelsAs    => 0.85,
                 RelationType::WondersAbout => 0.70,
                 RelationType::RemembersAs  => 0.80,
+                RelationType::DerivesFrom  => 0.82, // Legame forte alla base
             }
         };
 
@@ -280,6 +282,12 @@ impl WordTopology {
 
             // 1. Archi diretti per ogni relazione
             for (rel, target, confidence) in kg.all_outgoing(word) {
+                // Phase 86 (decisione #4a): `DerivesFrom` è navigazione morfologica,
+                // NON propagazione di campo. Non genera un arco topologico: attivare
+                // "pulire" non deve accendere "pulizia/pulito" via la famiglia (sporcherebbe
+                // il campo). Resta attraversabile dal pathfinding (comprehension_path
+                // legge il KG direttamente), ma non semina la spreading-activation.
+                if rel == RelationType::DerivesFrom { continue; }
                 let id_b = match self.word_to_id.get(target) {
                     Some(&id) => id,
                     None => continue, // target non nel lessico: skip
@@ -472,6 +480,7 @@ impl WordTopology {
             RT::FeelsAs    => 0.05,  // Molto intimo, risonanza forte
             RT::WondersAbout => 0.15, // Tensione esplorativa leggera
             RT::RemembersAs  => 0.10, // Risonanza della memoria
+            RT::DerivesFrom  => 0.08, // Famiglia derivazionale
         };
         let weight = match rel {
             RT::SimilarTo  => 0.90,
@@ -496,6 +505,7 @@ impl WordTopology {
             RT::FeelsAs    => 0.85,
             RT::WondersAbout => 0.70,
             RT::RemembersAs  => 0.80,
+            RT::DerivesFrom  => 0.82,
         };
         let id_a = self.add_word(word_a);
         let id_b = self.add_word(word_b);

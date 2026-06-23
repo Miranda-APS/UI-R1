@@ -203,6 +203,36 @@ pub fn seed_from_position(
     }
 }
 
+/// Phase 85 (kg_self): la POSIZIONE come secondo canale di posizionamento,
+/// accanto al CD5 affettivo di `seed_from_position`. Quando la frase compresa
+/// confligge con (o conferma) una convinzione del sé — `confront_with_self`
+/// (Livello 1) — l'entità è mossa a RIFRANGERE: articola la propria posizione
+/// invece di elaborare la cornice dell'input.
+///
+/// - `conflitto` → percetto `dissonanza`, intensità = `max_conflitto()`
+///   (= confidenza dell'edge colpito: la sua resistenza).
+/// - `risonanza` → percetto `conferma`, intensità = `max_risonanza()`.
+///
+/// Nessuna soglia (vigilanza design §9.2): l'intensità È la magnitudine
+/// (effetto continuo del campo, come `vicinanza` con |CD5|). Una convinzione a
+/// 0.97 rifrange più forte di una a 0.80, senza alcun numero in condizione. Il
+/// "flip" dell'atto avviene dove i punteggi di risonanza si incrociano — a
+/// conflitto forte `posizionamento` supera `asserzione`/`esplorazione`.
+pub fn seed_from_self_confrontation(
+    activation: &mut KgProcActivation,
+    self_conf: &crate::topology::sentence_proposition::SelfConfrontation,
+    kg_proc: &KnowledgeGraph,
+) {
+    let conflitto = self_conf.max_conflitto();
+    if conflitto > 0.0 {
+        activation.seed_percetto("dissonanza", conflitto, kg_proc);
+    }
+    let risonanza = self_conf.max_risonanza();
+    if risonanza > 0.0 {
+        activation.seed_percetto("conferma", risonanza, kg_proc);
+    }
+}
+
 /// Detecta se l'utterance contiene un verbo coniugato in 2a singolare (presente).
 /// Usa `grammar::lemmatize` per riconoscere le forme verbali. È euristico:
 /// non distingue 2sg da forme nominali ambigue (es. "vivi" può essere verbo o
@@ -533,5 +563,60 @@ mod tests {
         seed_from_position(&mut act, &drives, &kg);
         assert_eq!(select_pattern_by_resonance(&act, &kg).as_deref(), Some("esplorazione"),
             "l'entità fortemente mossa si volge verso l'Altro (esplorazione)");
+    }
+
+    // ── Phase 85 (kg_self): seed_from_self_confrontation → posizionamento ──
+
+    fn build_self_kg() -> KnowledgeGraph {
+        let mut kg = KnowledgeGraph::new();
+        // posizionamento UsedFor rispondere via=prospettiva
+        kg.add("posizionamento", RelationType::IsA, "pattern");
+        kg.add_edge(TypedEdge { subject: "posizionamento".into(), relation: RelationType::UsedFor,
+            object: "rispondere".into(), confidence: 0.95, source: EdgeSource::Curated, via: Some("prospettiva".into()) });
+        // asserzione UsedFor affermare (concorrente, segna 0 senza percetto affermazione)
+        kg.add("asserzione", RelationType::IsA, "pattern");
+        kg.add_edge(TypedEdge { subject: "asserzione".into(), relation: RelationType::UsedFor,
+            object: "affermare".into(), confidence: 0.95, source: EdgeSource::Curated, via: None });
+        // percetto dissonanza → rispondere + prospettiva
+        kg.add("dissonanza", RelationType::IsA, "percetto");
+        kg.add_edge(TypedEdge { subject: "dissonanza".into(), relation: RelationType::Causes,
+            object: "rispondere".into(), confidence: 0.7, source: EdgeSource::Curated, via: None });
+        kg.add_edge(TypedEdge { subject: "dissonanza".into(), relation: RelationType::Causes,
+            object: "prospettiva".into(), confidence: 0.85, source: EdgeSource::Curated, via: None });
+        // percetto conferma → rispondere + prospettiva
+        kg.add("conferma", RelationType::IsA, "percetto");
+        kg.add_edge(TypedEdge { subject: "conferma".into(), relation: RelationType::Causes,
+            object: "rispondere".into(), confidence: 0.6, source: EdgeSource::Curated, via: None });
+        kg.add_edge(TypedEdge { subject: "conferma".into(), relation: RelationType::Causes,
+            object: "prospettiva".into(), confidence: 0.7, source: EdgeSource::Curated, via: None });
+        kg
+    }
+
+    #[test]
+    fn conflitto_col_se_fa_vincere_posizionamento() {
+        use crate::topology::sentence_proposition::{SelfConfrontation, SelfHit};
+        let kg = build_self_kg();
+        let mut act = KgProcActivation::new();
+        let sc = SelfConfrontation {
+            conflitti: vec![SelfHit { subject: "incertezza".into(), relation: RelationType::IsA,
+                object: "fallimento".into(), magnitude: 0.88, polarity: false }],
+            risonanze: vec![],
+        };
+        seed_from_self_confrontation(&mut act, &sc, &kg);
+        // dissonanza seminata → posizionamento risuona (rispondere+prospettiva),
+        // asserzione resta a 0 → l'entità RIFRANGE.
+        assert_eq!(select_pattern_by_resonance(&act, &kg).as_deref(), Some("posizionamento"),
+            "conflitto con una convinzione → posizionamento (rifrazione)");
+    }
+
+    #[test]
+    fn nessun_confronto_col_se_non_semina_nulla() {
+        use crate::topology::sentence_proposition::SelfConfrontation;
+        let kg = build_self_kg();
+        let mut act = KgProcActivation::new();
+        seed_from_self_confrontation(&mut act, &SelfConfrontation::default(), &kg);
+        // Confronto vuoto → nessun percetto → nessun pattern risuona.
+        assert_eq!(select_pattern_by_resonance(&act, &kg), None,
+            "confronto col sé vuoto non deve seminare nulla");
     }
 }

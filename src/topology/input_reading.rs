@@ -292,22 +292,59 @@ pub fn detect_speaker_claim(
     //   kg_proc, di default "azione" — così riuscire/dormire/concentrarsi sono
     //   riconosciuti come verbi del claim senza enumerarli a mano.
     let mut verb_match: Option<(usize, String, crate::topology::grammar::Person, &'static str)> = None;
-    for (pos, w) in raw_words.iter().enumerate() {
+    'find_verb: for (pos, w) in raw_words.iter().enumerate() {
         if is_kg_proc_function_word(w, kg_proc) {
             continue;
         }
         // Analisi logica (Phase 86+, no-trucchi): una parola preceduta da
         // articolo o determinante è la TESTA DI UN SINTAGMA NOMINALE — mai un
         // verbo coniugato ("il silenzio" ≠ 1sg di silenziare; "io silenzio i
-        // critici" resta verbo perché "io" è pronome). Il contesto decide,
-        // come DATO del kg_proc (classe→funzione), non come euristica.
-        if pos > 0 && is_nominal_intro(&raw_words[pos - 1], kg_proc) {
-            continue;
+        // critici" resta verbo perché "io" è pronome). Una parola preceduta da
+        // PREPOSIZIONE non è mai un verbo FINITO (la preposizione regge nome o
+        // infinito): "di accordo"/"con anna" → accordo/anna sono nomi, non
+        // accordare/annare. Il contesto decide, come DATO del kg_proc.
+        if pos > 0 {
+            let prev = raw_words[pos - 1].to_lowercase();
+            if is_nominal_intro(&prev, kg_proc)
+                || crate::topology::prepositions::is_preposition(&prev) {
+                continue;
+            }
         }
         if let Some((infinitive, person)) = lemma_of_verb(w, kg_proc, kg) {
-            let category = verb_category(&infinitive, kg_proc)
+            let curated = verb_category(&infinitive, kg_proc);
+            let category = curated
                 .or_else(|| if is_verb_concept(&infinitive, kg) { Some("azione") } else { None });
             if let Some(category) = category {
+                // Disambiguazione nome-proprio/verbo, STRUTTURALE (no maiuscole, no
+                // liste di nomi): un candidato DEBOLMENTE attestato (verbità solo
+                // dalla catena semantica del kg_sem, non curato nel kg_proc) e
+                // immediatamente seguito da un verbo CURATO è il SOGGETTO, non il
+                // verbo. "Marco preferisce" → marcare (debole) precede preferire
+                // (curato, valutativo) → marco è soggetto. La congiunzione spezza
+                // l'adiacenza ("nuoto e amo": "e" non è verbo → nuoto resta verbo).
+                if curated.is_none() {
+                    for next in raw_words.iter().skip(pos + 1) {
+                        let nl = next.to_lowercase();
+                        let ninf = lemma_of_verb(next, kg_proc, kg).map(|(i, _)| i);
+                        // copula o verbo CURATO più avanti ⇒ il candidato debole era
+                        // il SOGGETTO ("Marco preferisce", "Marco non è d'accordo").
+                        let stronger_verb = kg_proc.map_or(false, |kp| {
+                            is_kg_proc_isa(kp, &nl, "copula")
+                                || ninf.as_deref().map_or(false, |x|
+                                    verb_category(x, kg_proc).is_some()
+                                        || is_kg_proc_isa(kp, x, "copula"))
+                        });
+                        if stronger_verb { continue 'find_verb; }
+                        // salta SOLO negazione/avverbio interposti; una CONGIUNZIONE o
+                        // una parola di contenuto non-verbo chiude la scansione (la
+                        // congiunzione coordina due verbi: "nuoto e amo" → nuoto verbo).
+                        let skippable = kg_proc.map_or(false, |kp|
+                            is_kg_proc_isa(kp, &nl, "marcatore")
+                                || is_kg_proc_isa(kp, &nl, "avverbio"));
+                        if skippable { continue; }
+                        break;
+                    }
+                }
                 verb_match = Some((pos, infinitive, person, category));
                 break;
             }
@@ -480,6 +517,9 @@ pub fn detect_speaker_claim(
                 return None;
             }
         }
+        // "amo/preferisco/desidero X" — attitudine valutativa: un posizionamento
+        // affettivo verso l'oggetto (FeelsAs, non Expresses). È un Feeling.
+        "valutativo"   => ClaimKind::Feeling,
         "cognitivo" | "comunicativo" | "azione" => ClaimKind::Action,
         "copula"       => {
             // "io sono triste" → Feeling; "io ho un cane" → Identity.
@@ -548,7 +588,12 @@ fn build_dative_claim(
         predicate: emotion,
         verb_category: Some("percettivo".to_string()),
         complement: theme,
-        verb_lemma: Some(infinitive.to_string()),
+        // Nel frame dativo il verbo ("piace"/"manca") è ASSORBITO nella relazione
+        // (FeelsAs) + nell'emozione lessicalizzata (predicate): non c'è un verbo
+        // di contenuto da realizzare. Inoltre concorderebbe con lo STIMOLO, non
+        // con l'esperiente → coniugarlo alla persona del soggetto darebbe forme
+        // sbagliate ("piaci"). `None` → la voce usa il verbo-relazione ("provi").
+        verb_lemma: None,
         subject_surface,
     })
 }
@@ -607,7 +652,7 @@ fn build_reflexive_claim(
 /// Phase 86+: l'infinito-contenuto dopo un modale (o un catenativo), saltando
 /// la preposizione "a"/"di" e le funzionali. "devo [—] studiare", "voglio
 /// cambiare", "riesco A dormire". Finestra breve; ritorna (posizione, lemma).
-fn infinitive_after(
+pub(crate) fn infinitive_after(
     raw_words: &[String],
     from: usize,
     kg_proc: Option<&KnowledgeGraph>,
@@ -759,7 +804,7 @@ fn direct_object_after(
 /// avere+nome, non "ho gelato" (Phase 86+, bug stanato su input vari: "gelato"
 /// è morfologicamente un participio, ma il chunker lo vede complemento). Mirror
 /// di `analisi_logica::participio_dopo`.
-fn find_past_participle(
+pub(crate) fn find_past_participle(
     raw_words: &[String],
     from: usize,
     kg_proc: Option<&KnowledgeGraph>,
@@ -825,6 +870,82 @@ fn verb_frame(infinitive: &str, kg_proc: Option<&KnowledgeGraph>) -> Option<Stri
         .map(|f| f.to_string())
 }
 
+/// Espande un token grezzo trattando l'ELISIONE come GRAMMATICA, non come taglio
+/// cieco dell'apostrofo. Un token con apostrofo è [parola-funzione elisa | resto];
+/// la regola è unica e chiusa-classe (nessun dato per-caso):
+///  - preposizione elisa (dall'/dell'/d'/nell'/sull'/all'/coll') → PRESERVATA come
+///    token: porta l'ipotesi di relazione. "dall'ignoto" → ["da","ignoto"].
+///  - clitico eliso (m'/t'/c'/s'/v'/n') → PRESERVATO: porta un ruolo (oggetto/
+///    riflessivo). "m'ascolti" → ["mi","ascolti"].
+///  - "l'" AMBIGUO (articolo vs clitico-oggetto): lo decide la categoria della
+///    parola SEGUENTE — verbo → clitico "lo" ("l'ascolto"→["lo","ascolto"]); nome
+///    → articolo, scartato ("l'amore"→["amore"]). Ponderato, non cieco: serve la
+///    grammatica (kg_proc); se assente, default articolo (comportamento storico).
+///  - articolo eliso non ambiguo (un'/gl') → scartato (gli articoli si saltano).
+///  - apocope (po'=poco, be'=bene): niente dopo l'apostrofo → forma piena.
+/// I pezzi passano per `clean_token` (pulizia/lowercase). Per un token SENZA
+/// apostrofo è esattamente `clean_token` — comportamento invariato.
+pub fn expand_elision(
+    raw: &str,
+    kg_proc: Option<&crate::topology::knowledge_graph::KnowledgeGraph>,
+    kg: Option<&crate::topology::knowledge_graph::KnowledgeGraph>,
+) -> Vec<String> {
+    use crate::topology::lexicon::clean_token;
+    let clean1 = |s: &str| clean_token(s).into_iter().collect::<Vec<String>>();
+
+    let apos = raw.char_indices().find(|(_, c)| *c == '\'' || *c == '\u{2019}');
+    let (i, ch) = match apos {
+        Some(x) => x,
+        None => return clean1(raw),
+    };
+    let pre = raw[..i].to_lowercase();
+    let post = &raw[i + ch.len_utf8()..];
+
+    // Apocope: nulla di alfabetico dopo l'apostrofo (po' / be' / mo').
+    if !post.chars().any(|c| c.is_alphabetic()) {
+        let full = match pre.as_str() { "po" => "poco", "be" => "bene", o => o };
+        return clean1(full);
+    }
+
+    // Preposizione elisa → preservata (porta l'ipotesi di relazione).
+    if let Some(p) = match pre.as_str() {
+        "dall" => Some("da"), "dell" => Some("di"), "d" => Some("di"),
+        "nell" => Some("in"), "sull" => Some("su"), "all" => Some("a"),
+        "coll" => Some("con"), _ => None,
+    } {
+        let mut out = vec![p.to_string()];
+        out.extend(clean1(post));
+        return out;
+    }
+
+    // Clitico eliso → preservato (porta un ruolo: oggetto/riflessivo).
+    if let Some(cl) = match pre.as_str() {
+        "m" => Some("mi"), "t" => Some("ti"), "c" => Some("ci"),
+        "s" => Some("si"), "v" => Some("vi"), "n" => Some("ne"), _ => None,
+    } {
+        let mut out = vec![cl.to_string()];
+        out.extend(clean1(post));
+        return out;
+    }
+
+    // "l'" ambiguo: verbo dopo → clitico-oggetto "lo"; nome dopo → articolo
+    // (scartato). La categoria della parola seguente decide — ponderato, non cieco.
+    if pre == "l" {
+        let rest = clean1(post);
+        let follows_verb = kg_proc.is_some()
+            && rest.first().map(|w| lemma_of_verb(w, kg_proc, kg).is_some()).unwrap_or(false);
+        if follows_verb {
+            let mut out = vec!["lo".to_string()];
+            out.extend(rest);
+            return out;
+        }
+        return rest;
+    }
+
+    // un'/gl' (articolo) e forme sconosciute → comportamento storico (tieni il resto).
+    clean1(post)
+}
+
 /// Phase 80: lemmatizza una forma verbale italiana usando, in ordine:
 ///   1. `grammar::lemmatize` (irregolari + suffissi noti)
 ///   2. Match diretto del token come infinito nel kg_proc
@@ -843,6 +964,39 @@ pub fn lemma_of_verb(
     use crate::topology::grammar::{lemmatize, Person};
 
     let w = word.to_lowercase();
+
+    // (0) PONDERAZIONE omografi nome/verbo (es. "deriva"): la grammatica CURATA
+    //     batte l'inferenza semantica rumorosa. `lemmatize` può leggere una forma
+    //     ambigua come imperfetto ("der-iva"→"derire", che il kg_sem attesta per
+    //     rumore) quando il presente regolare dà un verbo CURATO ("derivare", IsA
+    //     verbo nel kg_proc). Preferiamo il verbo attestato nel kg_proc, da
+    //     qualunque interpretazione provenga — candidati + selezione, non congettura.
+    if kg_proc.is_some() {
+        let is_proc_verb = |c: &str| {
+            kg_proc.map_or(false, |kp| is_kg_proc_isa(kp, c, "verbo"))
+        };
+        if let Some(r) = lemmatize(&w) {
+            if is_proc_verb(&r.infinitive) {
+                return Some((r.infinitive, r.person));
+            }
+        }
+        const PRESENT0: &[(&str, Person)] = &[
+            ("iamo", Person::FirstPlural), ("ate", Person::SecondPlural),
+            ("ete", Person::SecondPlural), ("ite", Person::SecondPlural),
+            ("ano", Person::ThirdPlural), ("ono", Person::ThirdPlural),
+            ("o", Person::First), ("i", Person::Second),
+            ("a", Person::Third), ("e", Person::Third),
+        ];
+        for (suf, person) in PRESENT0 {
+            if let Some(stem) = w.strip_suffix(suf) {
+                if stem.len() < 2 { continue; }
+                for inf_suf in &["are", "ere", "ire"] {
+                    let cand = format!("{}{}", stem, inf_suf);
+                    if is_proc_verb(&cand) { return Some((cand, *person)); }
+                }
+            }
+        }
+    }
 
     // (1) Irregolari + suffissi noti — ma validati strutturalmente.
     //     `grammar::lemmatize` ha falsi positivi su forme regolari: es.
@@ -1045,7 +1199,7 @@ pub fn verb_category(
     let kp = kg_proc?;
     let parents = kp.query_objects(infinitive, RelationType::IsA);
     const PRIORITY: &[&str] = &[
-        "denominativo", "percettivo", "cognitivo",
+        "denominativo", "percettivo", "valutativo", "cognitivo",
         "comunicativo", "copula", "azione",
     ];
     PRIORITY.iter().find(|cat| parents.contains(cat)).copied()

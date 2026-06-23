@@ -1,0 +1,32 @@
+# corpus dialoghi VERI per il bench — NON casi curati. Scratch, non committare senza decidere.
+
+# confidenze (registro emotivo, soggetto = parlante)
+ho litigato con mia sorella
+mi sento solo da quando me ne sono andato di casa
+non riesco a dormire la notte
+
+# domande aperte (interrogazione)
+perché ho sempre paura?
+cosa dovrei fare della mia vita?
+chi sei davvero?
+
+# posizioni / affermazioni sul mondo (qui serve una posizione, non uno specchio)
+la libertà è sopravvalutata
+secondo me l'amore non basta
+il dolore serve a qualcosa
+
+# oggetti concreti — KG cieco: la risposta buona è onestamente parziale
+ho comprato una bicicletta nuova
+stamattina ho bevuto un caffè freddo
+
+# ambigui / minimi
+non lo so
+boh
+
+# dump ADHD (multi-locus → strutturare): più proposizioni INDIPENDENTI
+devo chiamare il dottore e comprare il latte e non ho finito il report
+
+# thread multi-turno (continuità: il 2º e 3º si legano al 1º)
+mio padre è morto l'anno scorso
+da allora non parlo più con nessuno
+forse è colpa mia

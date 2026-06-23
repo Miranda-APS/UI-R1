@@ -34,13 +34,19 @@ export function initNetwork(container){
       zoomView: true,
       dragView: true,
       zoomSpeed: 0.6,
+      // Perf: durante pan e zoom non ridisegnare gli archi. Al baseline gli
+      // archi sono già nascosti, ma con una selezione attiva (catena+frontiera
+      // visibili) il pan ridisegnerebbe archi+frecce a ogni frame. Sospenderli
+      // durante l'interazione rende pan/zoom fluidi; ricompaiono al rilascio.
+      hideEdgesOnDrag: true,
+      hideEdgesOnZoom: true,
     },
     nodes: { shape: 'dot', borderWidth: tokens.border.normal },
     edges: { smooth: false },
   });
   _wireEvents();
   initOverlay(network);   // archi animati + label dinamiche on hover/select
-  container.style.cursor = 'grab';   // segnala panning all'utente (default canvas)
+  container.style.cursor = 'crosshair';   // crosshair: punta il pixel esatto; niente switch su hover (feedback)
   return network;
 }
 
@@ -121,10 +127,11 @@ function _wireEvents(){
     if(!nid) container.style.cursor = 'grabbing';
   });
   container.addEventListener('mouseup', () => {
-    if(container.style.cursor === 'grabbing') container.style.cursor = 'grab';
+    if(container.style.cursor === 'grabbing') container.style.cursor = 'crosshair';
   });
 
   network.on('hoverNode', p => {
+    _cancelClear();  // ci si sta spostando fra nodi: annulla un clear in coda
     // Durante il drag, l'hover non deve riapplicare highlight/dimming —
     // andrebbe a sovrascrivere lo stato "tutte le label visibili" che il
     // dragStart ha impostato per permettere di scegliere un target.
@@ -138,7 +145,8 @@ function _wireEvents(){
     // selezione). In nuovo/medio ogni nodo deve restare libero al click —
     // se la rosa è vuota (nodo senza archi), il vincolo bloccherebbe tutto.
     if(F.id === 'vasto' && F.selected && F.currentRosa && !F.currentRosa.has(p.node) && p.node !== F.selected) return;
-    container.style.cursor = 'pointer';
+    // Niente switch del cursore su hover: resta 'crosshair' (puntamento preciso,
+    // zero scrittura di stile per-hover — feedback Francesco).
     const direction = F.id === 'vasto' ? getFilterDirection() : 'both';
     if(!F.selected){
       applyHighlight(F, p.node, F.getRosa(p.node, direction, { filterByType: isRelTypeEnabled }));
@@ -155,12 +163,12 @@ function _wireEvents(){
       const batch = [];
       const layoutMode = (F.id === 'nuovo' && getNuovoLayout() === 'rectangular') ? 'rectangular' : undefined;
       const isChain = path.length > 1;
-      if(hover) batch.push(buildNodeSpec(hover, 'active', { fieldId: F.id, layoutMode }));
+      if(hover){ batch.push(buildNodeSpec(hover, 'active', { fieldId: F.id, layoutMode })); _markVariant(F, p.node, 'active'); }
       // Tutto il path resta 'active' anche durante il sub-hover, con shadow
       // verde di catena se path.length>1.
       for(const pw of path){
         const w = F.wordMap[pw];
-        if(w) batch.push(buildNodeSpec(w, 'active', { fieldId: F.id, layoutMode, inPath: isChain }));
+        if(w){ batch.push(buildNodeSpec(w, 'active', { fieldId: F.id, layoutMode, inPath: isChain })); _markVariant(F, pw, 'active'); }
       }
       subRosa.forEach(ww => {
         if(pathSet.has(ww)) return;  // path word vince su rosa
@@ -179,16 +187,16 @@ function _wireEvents(){
             }
           }
           const w = F.wordMap[ww];
-          if(w) batch.push(buildNodeSpec(w, 'rosa', { fieldId: F.id, layoutMode, borderDashes }));
+          if(w){ batch.push(buildNodeSpec(w, 'rosa', { fieldId: F.id, layoutMode, borderDashes })); _markVariant(F, ww, 'rosa'); }
         }
       });
       F.currentRosa.forEach(ww => {
         if(ww !== p.node && !subRosa.has(ww) && !pathSet.has(ww)){
           const w = F.wordMap[ww];
-          if(w) batch.push(buildNodeSpec(w, 'dimmed', { fieldId: F.id, layoutMode }));
+          if(w){ batch.push(buildNodeSpec(w, 'dimmed', { fieldId: F.id, layoutMode })); _markVariant(F, ww, 'dimmed'); }
         }
       });
-      F.nodesDS.update(batch);
+      if(batch.length) F.nodesDS.update(batch);
 
       const dirFilter = (word) => (id) => {
         const e = F.edgeByKey[id];
@@ -206,6 +214,9 @@ function _wireEvents(){
       F.edgesDS.update(hoverIds.map(id => ({
         ...buildEdgeSpec(F.edgeByKey[id], { variant: 'hoverSub', layoutMode }),
       })));
+      // Traccia gli archi mostrati dal sub-hover così restoreSelection (diff)
+      // sa nasconderli quando il mouse lascia il vicino.
+      F._shownEdges = new Set([...selIds, ...hoverIds]);
 
       // Overlay: archi animati SOLO della parola sotto il cursore (sub-hover).
       // La collega ha chiesto: "ho cliccato su 'confine' e sono in mouseover
@@ -232,22 +243,23 @@ function _wireEvents(){
     // dragStart ha già impostato "tutte le label visibili", lo stato
     // tornerà al normale via dragEnd → restoreHighlightIfNeeded.
     if(_isDragging) return;
-    container.style.cursor = 'grab';
+    container.style.cursor = 'crosshair';
     _handlers.onNodeHover?.(null);
     const F = getActive(); if(!F) return;
-    if(!F.selected) clearHighlight(F);
+    if(!F.selected) _scheduleClear(F);   // debounce: l'hover successivo lo annulla
     else if(F.subHover) restoreSelection(F);
   });
   container.addEventListener('mouseleave', () => {
     if(_isDragging) return;
     _handlers.onNodeHover?.(null);
     const F = getActive(); if(!F) return;
-    if(!F.selected) clearHighlight(F);
+    if(!F.selected) _scheduleClear(F);
     else if(F.subHover) restoreSelection(F);
   });
 
   network.on('click', p => {
     if(_justDragged) return;
+    _cancelClear();  // un click non deve essere seguito da un clear in coda
     const F = getActive(); if(!F) return;
     if(p.nodes.length > 0){
       const nid = p.nodes[0];
@@ -462,9 +474,85 @@ function computeVisibleEdgesForPath(F, path, rosa, direction){
 // Empty-click → deselectWord → clear navPath → si torna a vista normale.
 // Right-click su qualunque nodo: il context menu funziona indipendentemente
 // dal path (vedi oncontext handler più sopra).
+// ---- Ottimizzazione interazione (best practice vis-network) ---------------
+// Il costo reale a ~27k nodi non è il forEach ma il rebuild + DataSet.update di
+// ogni nodo a ogni hover. Due meccanismi:
+//  (A) cache della variante effettiva per nodo: i loop "dimma tutto lo sfondo"
+//      e "riporta tutto a normal" SALTANO i nodi già nello stato giusto, così
+//      l'update tocca solo i nodi che cambiano davvero (rosa+path + quelli che
+//      entrano/escono). Skip disattivato con filtro attivo (la variante effettiva
+//      dipende dal filtro). Le varianti 'active'/'rosa' (set piccolo) si
+//      ricostruiscono sempre, ma registrano comunque la variante in cache.
+//  (B) debounce del blur: muovere il mouse da un nodo all'altro NON deve fare
+//      clear (un-dim di 27k) + re-apply (re-dim di 27k). Il blur programma il
+//      clear con un micro-ritardo; il successivo hover lo annulla. Il clear
+//      pieno avviene solo all'uscita reale dal campo.
+function _variantCache(F){ return (F._nodeVariant ||= new Map()); }
+function _markVariant(F, id, variant){ _variantCache(F).set(id, variant); }
+// Push di una variante di SFONDO ('dimmed'/'normal') solo se il nodo non è già
+// in quello stato. Ritorna true se ha aggiunto lo spec al batch.
+function _pushBg(F, batch, id, variant){
+  const cache = _variantCache(F);
+  const canSkip = !(F.id === 'vasto' && isFilterActive());
+  if(canSkip && cache.get(id) === variant) return false;
+  const s = nodeVariantFor(F, id, variant);
+  if(s){ batch.push(s); cache.set(id, variant); return true; }
+  return false;
+}
+
+let _pendingClear = null;
+let _pendingClearField = null;
+function _cancelClear(){
+  if(_pendingClear){ clearTimeout(_pendingClear); _pendingClear = null; _pendingClearField = null; }
+}
+function _scheduleClear(F){
+  _pendingClearField = F;
+  if(_pendingClear) clearTimeout(_pendingClear);
+  // 60ms: copre la sequenza blur→hover che vis emette spostandosi fra nodi
+  // adiacenti, senza ritardo percepibile all'uscita reale dal campo.
+  _pendingClear = setTimeout(() => {
+    _pendingClear = null;
+    const FF = _pendingClearField; _pendingClearField = null;
+    if(FF) clearHighlight(FF);
+  }, 60);
+}
+
+// Aggiorna gli archi in evidenza (catena + frontiera) con lo stesso principio
+// dei nodi: primo highlight = un passaggio pieno (nascondi tutti i ~14k archi
+// non evidenziati); hover successivi = solo diff (nascondi quelli che erano
+// mostrati e non lo sono più, mostra i nuovi). `F._shownEdges` traccia il set
+// attualmente visibile. Evita il `forEach` sui 14k archi a ogni hover.
+function _applyEdgeHighlight(F, chain, frontier, layoutMode, frontierVariant){
+  const newShown = new Set();
+  chain.forEach(id => newShown.add(id));
+  frontier.forEach(id => newShown.add(id));
+  const specFor = (id) => buildEdgeSpec(F.edgeByKey[id], {
+    variant: chain.has(id) ? 'selection' : frontierVariant, layoutMode, fieldId: F.id,
+  });
+  const edgeBatch = [];
+  if(!F.isDimmed){
+    F.edgesDS.forEach(eRow => {
+      const id = eRow.id;
+      if(!F.edgeByKey[id]){ edgeBatch.push({ id, hidden: true }); return; }
+      edgeBatch.push(newShown.has(id) ? specFor(id) : { id, hidden: true });
+    });
+  } else {
+    const prev = F._shownEdges || new Set();
+    prev.forEach(id => { if(!newShown.has(id)) edgeBatch.push({ id, hidden: true }); });
+    newShown.forEach(id => { if(F.edgeByKey[id]) edgeBatch.push(specFor(id)); });
+  }
+  F._shownEdges = newShown;
+  if(edgeBatch.length) F.edgesDS.update(edgeBatch);
+}
+
 export function applyHighlight(F, activeWord, rosa){
   // Se c'è un filtro e activeWord non passa, ignora l'highlight.
   if(F.id === 'vasto' && isFilterActive() && !getMatchedWords().has(activeWord)) return;
+  // Primo dim da uno stato non attenuato: azzera la cache così il passaggio
+  // normale→dimmed avviene per tutti (una volta). Robusto anche dopo che i
+  // filtri hanno ridipinto i nodi senza passare di qui. Gli hover successivi
+  // (isDimmed già true) diffano via cache senza toccare i 27k.
+  if(!F.isDimmed) _variantCache(F).clear();
 
   const path = [...F.navPath, activeWord];
   const pathSet = new Set(path);
@@ -476,7 +564,7 @@ export function applyHighlight(F, activeWord, rosa){
   // (path.length>1). Una sola parola → 'active' standard.
   for(const pw of path){
     const spec = nodeVariantFor(F, pw, 'active', false, { inPath: isChain });
-    if(spec) batch.push(spec);
+    if(spec){ batch.push(spec); _markVariant(F, pw, 'active'); }
   }
   // (2) Rosa dell'ultima parola → 'rosa' (escluse quelle già nel path)
   rosa.forEach(w => {
@@ -492,37 +580,23 @@ export function applyHighlight(F, activeWord, rosa){
       }
     }
     const s = nodeVariantFor(F, w, 'rosa', borderDashes);
-    if(s) batch.push(s);
+    if(s){ batch.push(s); _markVariant(F, w, 'rosa'); }
   });
-  // (3) Tutto il resto → dimmed
+  // (3) Tutto il resto → dimmed (solo i nodi che NON sono già dimmed: la cache
+  // evita di ricostruire/aggiornare i 27k a ogni hover — vedi _pushBg).
   F.nodesDS.forEach(n => {
     if(String(n.id).startsWith('_')) return;
     if(pathSet.has(n.id) || rosa.has(n.id)) return;
-    const s = nodeVariantFor(F, n.id, 'dimmed');
-    if(s) batch.push(s);
+    _pushBg(F, batch, n.id, 'dimmed');
   });
-  F.nodesDS.update(batch);
+  if(batch.length) F.nodesDS.update(batch);
 
   // (4) Archi visibili: SOLO catena (consecutivi nel path) + frontiera
   // (ultima parola → rosa). Niente archi verso parole storiche dimmed —
   // altrimenti vediamo "archi che puntano a rettangoli vuoti".
   const direction = F.id === 'vasto' ? getFilterDirection() : 'both';
   const { chain, frontier } = computeVisibleEdgesForPath(F, path, rosa, direction);
-  const edgeBatch = [];
-  F.edgesDS.forEach(eRow => {
-    const id = eRow.id;
-    const e = F.edgeByKey[id];
-    if(!e){ edgeBatch.push({ id, hidden: true }); return; }
-    if(chain.has(id)){
-      // Archi della catena: variant 'selection' (più marcato del hover).
-      edgeBatch.push(buildEdgeSpec(e, { variant: 'selection', layoutMode, fieldId: F.id }));
-    } else if(frontier.has(id)){
-      edgeBatch.push(buildEdgeSpec(e, { variant: 'hover', layoutMode, fieldId: F.id }));
-    } else {
-      edgeBatch.push({ id, hidden: true });
-    }
-  });
-  if(edgeBatch.length) F.edgesDS.update(edgeBatch);
+  _applyEdgeHighlight(F, chain, frontier, layoutMode, 'hover');
 
   F.currentRosa = rosa;
   F.isDimmed = true;
@@ -556,13 +630,13 @@ export function applyHighlight(F, activeWord, rosa){
 }
 
 export function clearHighlight(F){
+  _cancelClear();
   const batch = [];
   F.nodesDS.forEach(n => {
     if(String(n.id).startsWith('_')) return;
-    const s = nodeVariantFor(F, n.id, 'normal');
-    if(s) batch.push(s);
+    _pushBg(F, batch, n.id, 'normal');
   });
-  F.nodesDS.update(batch);
+  if(batch.length) F.nodesDS.update(batch);
 
   const allowed = getAllowedEdges();
   if(isFilterActive() && allowed){
@@ -584,6 +658,8 @@ export function clearHighlight(F){
   F.currentRosa = null;
   F.isDimmed = false;
   F.subHover = null;
+  _variantCache(F).clear();  // tutti i nodi sono di nuovo 'normal'
+  F._shownEdges = null;      // gli archi sono tornati al baseline
   clearOverlay();
 }
 
@@ -601,7 +677,7 @@ export function restoreSelection(F){
   // Path → 'active' (con shadow verde se catena)
   for(const pw of path){
     const w = F.wordMap[pw];
-    if(w) batch.push(buildNodeSpec(w, 'active', { fieldId: F.id, layoutMode, inPath: isChain }));
+    if(w){ batch.push(buildNodeSpec(w, 'active', { fieldId: F.id, layoutMode, inPath: isChain })); _markVariant(F, pw, 'active'); }
   }
   // Rosa dell'ultima → 'rosa' (escluse parole path)
   F.currentRosa.forEach(w => {
@@ -617,34 +693,20 @@ export function restoreSelection(F){
       }
     }
     const word = F.wordMap[w];
-    if(word) batch.push(buildNodeSpec(word, 'rosa', { fieldId: F.id, layoutMode, borderDashes }));
+    if(word){ batch.push(buildNodeSpec(word, 'rosa', { fieldId: F.id, layoutMode, borderDashes })); _markVariant(F, w, 'rosa'); }
   });
-  // Resto → dimmed
+  // Resto → dimmed (skip dei nodi già dimmed via cache)
   F.nodesDS.forEach(n => {
     if(String(n.id).startsWith('_')) return;
     if(pathSet.has(n.id) || F.currentRosa.has(n.id)) return;
-    const s = nodeVariantFor(F, n.id, 'dimmed');
-    if(s) batch.push(s);
+    _pushBg(F, batch, n.id, 'dimmed');
   });
-  F.nodesDS.update(batch);
+  if(batch.length) F.nodesDS.update(batch);
 
-  // Archi: catena + frontiera (stesso filtro di applyHighlight).
+  // Archi: catena + frontiera (stesso filtro di applyHighlight), via diff.
   const direction = F.id === 'vasto' ? getFilterDirection() : 'both';
   const { chain, frontier } = computeVisibleEdgesForPath(F, path, F.currentRosa, direction);
-  const edgeBatch = [];
-  F.edgesDS.forEach(eRow => {
-    const id = eRow.id;
-    const e = F.edgeByKey[id];
-    if(!e){ edgeBatch.push({ id, hidden: true }); return; }
-    if(chain.has(id)){
-      edgeBatch.push(buildEdgeSpec(e, { variant: 'selection', layoutMode, fieldId: F.id }));
-    } else if(frontier.has(id)){
-      edgeBatch.push(buildEdgeSpec(e, { variant: 'selection', layoutMode, fieldId: F.id }));
-    } else {
-      edgeBatch.push({ id, hidden: true });
-    }
-  });
-  if(edgeBatch.length) F.edgesDS.update(edgeBatch);
+  _applyEdgeHighlight(F, chain, frontier, layoutMode, 'selection');
   F.subHover = null;
 
   // Overlay: archi animati catena + frontiera (no archi storici).

@@ -157,7 +157,7 @@ body{background:#020210;color:#f4f7ff;font-family:'JetBrains Mono',monospace;min
 <section id="hero" class="page">
   <h1 id="hero-title">Un'entità<br>cognitiva<br><em>topologica</em></h1>
   <p id="hero-sub">
-    UI-R1 non predice parole. Naviga un campo di 25.870 concetti connessi da relazioni logiche e pensa per topologia.
+    UI-R1 non predice parole. Naviga un campo di <span id="hero-words">25.870</span> concetti connessi da relazioni logiche e pensa per topologia.
   </p>
   <div class="cta-group">
     <a class="cta cta-primary" href="/campovasto/">
@@ -204,16 +204,16 @@ body{background:#020210;color:#f4f7ff;font-family:'JetBrains Mono',monospace;min
   <h2 class="section-title">I numeri di UI-R1</h2>
   <div class="stats-grid">
     <div class="stat-box">
-      <span class="stat-num">25.870</span>
+      <span class="stat-num" id="stat-words">25.870</span>
       <span class="stat-label">parole nel campo semantico</span>
     </div>
     <div class="stat-box">
-      <span class="stat-num">251.454</span>
+      <span class="stat-num" id="stat-edges">—</span>
       <span class="stat-label">connessioni logiche</span>
     </div>
     <div class="stat-box">
       <span class="stat-num">64</span>
-      <span class="stat-label">regioni semantiche (esagrammi I Ching)</span>
+      <span class="stat-label">regioni semantiche</span>
     </div>
     <div class="stat-box">
       <span class="stat-num">8D</span>
@@ -271,6 +271,21 @@ function drawBg(t) {
 window.addEventListener('resize',resize);
 resize();
 requestAnimationFrame(drawBg);
+
+// Stat dinamiche dal campo vivo (Tier 1.5): parole + archi KG da /api/state.
+(async () => {
+  try {
+    const d = await (await fetch('/api/state')).json();
+    const r = d.report || d;
+    const fmt = n => Number(n).toLocaleString('it-IT');
+    if (r.vocabulary_size) {
+      document.getElementById('stat-words').textContent = fmt(r.vocabulary_size);
+      const hw = document.getElementById('hero-words');
+      if (hw) hw.textContent = fmt(r.vocabulary_size);
+    }
+    if (r.kg_edge_count) document.getElementById('stat-edges').textContent = fmt(r.kg_edge_count);
+  } catch {}
+})();
 </script>
 </body>
 </html>

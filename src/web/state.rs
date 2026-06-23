@@ -251,6 +251,15 @@ pub enum EngineCommand {
         text: String,
         reply: oneshot::Sender<ComprehendDto>,
     },
+    /// MODALITÀ ANALISI (osservatore): segmenta un testo in frasi, comprende
+    /// ciascuna in modo STATELESS e COMPATTO, e aggrega (concetti ricorrenti,
+    /// distribuzione degli atti, contraddizioni). Per analizzare trascrizioni di
+    /// terzi / testi lunghi — niente cornice "io sono il destinatario", niente
+    /// mutazione di stato. Riusa `build_comprehension_stateless` per frase.
+    Analyze {
+        text: String,
+        reply: oneshot::Sender<AnalyzeDto>,
+    },
     /// Stato completo del SelfModel (credenze, valori, incertezze)
     GetSelf {
         reply: oneshot::Sender<SelfDto>,
@@ -367,6 +376,10 @@ pub enum EngineCommand {
     // ── Biennale endpoints ────────────────────────────────────────
     /// Campo semantico 2D per visualizzazione galassia
     GetBiennaleField {
+        reply: oneshot::Sender<BiennaleFieldDto>,
+    },
+    /// Campo semantico 2D — TUTTO il lessico nel KG (nessun filtro Phase70/stabilità/grado-cap)
+    GetBiennaleFieldAll {
         reply: oneshot::Sender<BiennaleFieldDto>,
     },
     /// Dettaglio parola con vicini KG tipati
@@ -500,6 +513,142 @@ pub struct WordUnderstandingDto {
     pub outgoing: Vec<WordRelationGroupDto>,
     /// Archi entranti (chi punta a questa parola)
     pub incoming: Vec<WordRelationGroupDto>,
+    /// Firma 8D (None se la parola non è nel lessico). Ordine I Ching canonico:
+    /// [potere, materia, ardore, divenire, spazio, intreccio, verità, armonia].
+    /// È lo strato CONNOTAZIONE (il "sentire"), curato a mano nell'evento.
+    pub signature: Option<[f64; 8]>,
+    /// Regione (frattale dominante) in cui la firma colloca la parola — nome
+    /// italiano, niente glifi/numeri (vista utente).
+    pub region: Option<String>,
+    /// Letture connotative salienti derivate dalla firma (la "tonalità").
+    pub connotation: Vec<ConnotationDto>,
+    /// Indice di ricchezza (quanto la parola è curata: grado, famiglie, multi-hop).
+    pub richness: RichnessDto,
+}
+
+/// Una lettura connotativa su una dimensione della firma: cosa quella dimensione
+/// "dice" del tono della parola (derivata, non curata a parte — è la firma che parla).
+#[derive(Serialize, Clone, Debug)]
+pub struct ConnotationDto {
+    /// Nome canonico della dimensione (potere/materia/ardore/divenire/spazio/
+    /// intreccio/verità/armonia) — coerente con campovasto.
+    pub dimension: String,
+    /// Valore 0..1 sulla dimensione.
+    pub value: f64,
+    /// Polo: "alto" o "basso".
+    pub pole: String,
+    /// Lettura in italiano del polo (es. "futuro", "attrae", "intensa").
+    pub reading: String,
+}
+
+/// Indice di ricchezza di una parola (o dell'intera frase): rende VISIBILE quanto
+/// la cura ha arricchito un nodo. NON è un giudizio morale — è la materia che la
+/// cura aggiunge (grado, diversità di famiglie di relazione, reach multi-hop).
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct RichnessDto {
+    /// Archi totali (uscenti + entranti).
+    pub degree: usize,
+    /// Numero di tipi distinti di relazione.
+    pub relation_types: usize,
+    /// Numero di FAMIGLIE distinte di relazione (max 5: strutturale/causale/
+    /// semantica/fenomenologica/logica).
+    pub families: usize,
+    /// Le famiglie presenti, per nome (per accendere lo spettro nel frontend).
+    pub family_ids: Vec<String>,
+    /// Cammini multi-hop che partono da questa parola.
+    pub multihop: usize,
+    /// Indice sintetico [0,1], blend trasparente di grado/famiglie/multi-hop.
+    pub score: f64,
+    /// Fascia leggibile: "essenziale" | "articolata" | "ricca".
+    pub label: String,
+}
+
+/// Come le FIRME colorano la comprensione dell'intera frase. Il grafo dice COSA
+/// sono le parole (denotazione); le firme dicono COME suonano (connotazione /
+/// tonalità). Curando le firme, questa lettura cambia — la frase si sposta di
+/// regione e di tono. È lo strato "sentire" reso leggibile nella comprensione.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct TonalityDto {
+    /// Firma aggregata della frase (media delle firme delle parole-contenuto).
+    pub signature: [f64; 8],
+    /// Regione (frattale) in cui la firma aggregata colloca la frase.
+    pub region: String,
+    /// Letture connotative salienti dell'aggregato.
+    pub readings: Vec<ConnotationDto>,
+    /// Sunto in prosa: "la frase, dalle firme, suona …".
+    pub summary: String,
+    /// Parole che contribuiscono alla tonalità (quelle con firma).
+    pub contributors: Vec<String>,
+}
+
+/// Il RAGIONAMENTO di comprensione: i cammini tipati SELEZIONATI (non tutti i
+/// possibili) che connettono i nodi della frase tra loro e al terreno fondato.
+/// Da `comprehension_path::explore` (Phase 86). È il "filo" che porta la frase a
+/// un senso compiuto — il sistema sceglie quali percorsi evidenziare (preferenza
+/// strutturale: sé > attrattore > nodo-frase, poi tassonomico, poi più corto),
+/// non li elenca tutti. Risponde a "quali percorsi, e perché proprio questi".
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct ComprehensionPathDto {
+    /// Confronto della relazione asserita col mondo:
+    /// "conferma" | "contraddizione" | "novità" | "—".
+    pub confront: String,
+    /// Il cammino diretto soggetto→oggetto (la relazione asserita), se i due nodi
+    /// del Mondo sono connessi. Vuoto se non applicabile.
+    pub claim_path: Vec<PathStepDto>,
+    /// Per ogni nodo-contenuto, il cammino SCELTO al terreno fondato più vicino.
+    pub groundings: Vec<GroundingDto>,
+    /// Nodi che non toccano terra: gap onesti ("non so ancora cosa sia X").
+    pub ungrounded: Vec<String>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct GroundingDto {
+    /// Nodo di partenza (una parola-contenuto della frase).
+    pub from: String,
+    pub steps: Vec<PathStepDto>,
+    /// Come ha toccato terra: "categoria" | "me stesso" | "un'altra parola della
+    /// frase" | "già fondato" | "nessuna ancora".
+    pub ground: String,
+    /// L'ancora finale (dove il cammino tocca terra).
+    pub endpoint: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct PathStepDto {
+    /// Tipo relazione in maiuscolo (es. "IS_A").
+    pub relation: String,
+    /// Etichetta italiana (es. "è", "produce").
+    pub label: String,
+    /// false = arco percorso al contrario (entrante).
+    pub forward: bool,
+    /// Tramite (point de capiton) se presente.
+    pub via: Option<String>,
+    /// Nodo raggiunto da questo passo.
+    pub to: String,
+    pub confidence: f32,
+}
+
+/// Come un ATTRIBUTO (aggettivo) rende più NITIDA la lettura dell'oggetto: la sua
+/// connotazione (firma) illumina certi rami del vicinato dell'oggetto e ne lascia
+/// in ombra altri. È la capacità olografica resa concreta: aggiungere un dettaglio
+/// («bello») non cambia COSA è il futuro — ne mette a fuoco una regione.
+/// «futuro» ≠ «futuro bello».
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct QualifiedReadingDto {
+    /// Il nome qualificato (es. "futuro").
+    pub head: String,
+    /// L'attributo (es. "bello").
+    pub attribute: String,
+    /// Letture connotative dell'attributo (dalla firma: es. "attrae").
+    pub attribute_tone: Vec<String>,
+    /// Segno della valenza dell'attributo: "positiva" | "negativa" | "neutra".
+    pub attribute_valence: String,
+    /// Rami del vicinato dell'oggetto COERENTI con l'attributo (messi a fuoco).
+    pub illuminated: Vec<String>,
+    /// Rami in TENSIONE con l'attributo (lasciati in ombra).
+    pub dimmed: Vec<String>,
+    /// Sunto in prosa.
+    pub summary: String,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -924,6 +1073,140 @@ pub struct ComprehendDto {
     pub coverage: Vec<TokenCoverageDto>,
     /// VERDETTO di saturazione (C1–C4): quanto la comprensione è "satura".
     pub saturation: SaturationDto,
+    /// ATTO LINGUISTICO dell'enunciato: cosa l'input È, oltre la proposizione.
+    /// Permette al Gate di trattare OGNI input (saluto, frammento, domanda pura,
+    /// asserzione) e non solo i claim soggetto-verbo-oggetto. Vedi
+    /// `classify_input` in server.rs.
+    pub speech_act: SpeechActSummaryDto,
+    /// COME LE FIRME colorano la comprensione della frase (strato "sentire"):
+    /// firma aggregata + regione + tonalità. None se nessuna parola-contenuto
+    /// ha una firma. Vedi `build_tonality`.
+    pub tonality: Option<TonalityDto>,
+    /// Ricchezza AGGREGATA della frase (grado/famiglie/multi-hop su tutte le
+    /// parole-contenuto): l'indice che sale visibilmente dopo la cura.
+    pub richness: Option<RichnessDto>,
+    /// Il RAGIONAMENTO: i cammini tipati selezionati che connettono la frase al
+    /// terreno fondato (da `explore`). È il "filo" che porta a un senso compiuto.
+    pub reasoning: Option<ComprehensionPathDto>,
+    /// Letture qualificate: come gli attributi (aggettivi) mettono a fuoco
+    /// l'oggetto. La capacità olografica — «futuro» ≠ «futuro bello».
+    pub qualified: Vec<QualifiedReadingDto>,
+}
+
+/// Atto linguistico, classificato STRUTTURALMENTE (no liste hardcoded): legge
+/// la presenza di una proposizione, l'interrogazione, la classe `IsA saluto`
+/// del kg_sem. Dà al Gate una posizione su input non-proposizionali.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct SpeechActSummaryDto {
+    /// "asserzione" | "interrogazione" | "atto-fatico" | "frammento" |
+    /// "non-comprensibile".
+    pub kind: String,
+    /// L'input contiene un marcatore interrogativo (pronome o "?").
+    pub is_question: bool,
+    /// Parole-contenuto conosciute ma non legate a una proposizione (per i
+    /// frammenti: "libertà", "il mare la sera"). Il Gate le àncora al grafo.
+    pub content_lemmas: Vec<String>,
+}
+
+/// MODALITÀ ANALISI (osservatore) — risultato di `/api/analyze`. Un testo (anche
+/// lungo: una trascrizione, un paragrafo) segmentato in frasi, ciascuna compresa
+/// in modo STATELESS e COMPATTO, più un'aggregazione. Pensato per l'analisi di
+/// testi di TERZI: nessuna cornice "io sono il destinatario" (no addressee/
+/// self_relevance), nessuna mutazione di stato. È il passo verso la lettura di
+/// interi capitoli.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct AnalyzeDto {
+    /// Numero di frasi segmentate.
+    pub sentence_count: usize,
+    /// Analisi compatta di ogni frase, nell'ordine del testo.
+    pub sentences: Vec<SentenceAnalysisDto>,
+    /// Sintesi sull'intero testo (concetti ricorrenti, atti, contraddizioni).
+    pub aggregate: AnalysisAggregateDto,
+    /// Strato 3: integrazione TRA frasi (catene, fili tematici, conflitti).
+    pub cross: CrossSentenceDto,
+}
+
+/// Strato 3 — il testo come UN insieme, non N frasi isolate.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct CrossSentenceDto {
+    /// Catene emergenti: X→Y in una frase, Y→Z in un'altra ⇒ il testo dice X→…→Z.
+    pub chains: Vec<ChainDto>,
+    /// Fili tematici: concetti che attraversano ≥2 frasi (su quali frasi).
+    pub threads: Vec<ThreadDto>,
+    /// Conflitti TRA frasi: stesso soggetto con oggetti opposti o polarità opposta.
+    pub conflicts: Vec<ConflictDto>,
+}
+
+/// Una catena di proposizioni che attraversa più frasi.
+#[derive(Serialize, Clone, Debug)]
+pub struct ChainDto {
+    /// I concetti in sequenza: [a, b, c].
+    pub nodes: Vec<String>,
+    /// Le relazioni tra i nodi: [Causes, Causes].
+    pub relations: Vec<String>,
+    /// Gli indici delle frasi che compongono la catena.
+    pub sentences: Vec<usize>,
+    /// Lettura emergente in italiano leggibile.
+    pub reading: String,
+}
+
+/// Un concetto che ricorre attraverso più frasi (filo tematico).
+#[derive(Serialize, Clone, Debug)]
+pub struct ThreadDto {
+    pub concept: String,
+    pub sentences: Vec<usize>,
+}
+
+/// Un conflitto rilevato TRA due frasi diverse.
+#[derive(Serialize, Clone, Debug)]
+pub struct ConflictDto {
+    pub subject: String,
+    pub a: String,
+    pub a_sentence: usize,
+    pub b: String,
+    pub b_sentence: usize,
+    /// "opposti" (oggetti opposti nel kg_sem) | "polarità" (stessa tripla negata).
+    pub kind: String,
+}
+
+/// Analisi COMPATTA di una singola frase: l'essenziale per l'estrazione
+/// (chi-dice-cosa, su-cosa, con quali legami), senza il rumore del turno
+/// dialogico (no deliberation/dream/fractal/octalysis).
+#[derive(Serialize, Clone, Debug)]
+pub struct SentenceAnalysisDto {
+    pub text: String,
+    /// L'atto: asserzione/interrogazione/atto-fatico/frammento/non-comprensibile.
+    pub speech_act: SpeechActSummaryDto,
+    /// Il contenuto proposizionale (soggetto-relazione-oggetto-via-complementi).
+    /// `None` se la frase non porta una proposizione.
+    pub claim: Option<SentencePropositionDto>,
+    /// Concetti-ancora con il loro vicinato KG (per tagging tematico / mappe).
+    pub anchor_concepts: Vec<AnchorConceptDto>,
+    /// Catene inferenziali 2-hop dal grafo (es. "sole → calore → energia").
+    pub inferences: Vec<String>,
+    /// Coppie di opposti che rendono la frase in tensione col grafo.
+    pub contradictions: Vec<(String, String)>,
+}
+
+/// Un concetto-ancora dell'input con la sua collocazione ontologica (compatto).
+#[derive(Serialize, Clone, Debug)]
+pub struct AnchorConceptDto {
+    pub word: String,
+    /// Catena IS_A (cos'è): es. ["emozione", "stato"].
+    pub isa: Vec<String>,
+    /// Altre relazioni salienti, già formattate: es. "causa: pianto, dolore".
+    pub relations: Vec<String>,
+}
+
+/// Sintesi su tutto il testo analizzato.
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct AnalysisAggregateDto {
+    /// Distribuzione degli atti linguistici: [(kind, conteggio)].
+    pub speech_acts: Vec<(String, usize)>,
+    /// Concetti ricorrenti (anchor che tornano in più frasi): [(parola, conteggio)].
+    pub concepts: Vec<(String, usize)>,
+    /// Tutte le contraddizioni rilevate nel testo.
+    pub contradictions: Vec<(String, String)>,
 }
 
 /// Copertura di un singolo token: lo stato di comprensione di OGNI parola
@@ -1124,6 +1407,32 @@ pub struct SentencePropositionDto {
     /// "devo"→"io"): il soggetto celato reso esplicito. `None` per i soggetti
     /// del mondo (in `subject_name`) o le domande.
     pub subject_surface: Option<String>,
+    /// Il VERBO realmente usato, coniugato alla persona (deittica) del soggetto:
+    /// "preferire"→"preferisci", "amare"→"ami". La `relation` resta il TIPO
+    /// (FeelsAs/Does/…), ma il display mostra il verbo concreto invece del verbo-
+    /// relazione generico ("provi"). `None` per le copule (verb_lemma assente).
+    pub verb_display: Option<String>,
+    /// ANALISI LOGICA COMPLETA: ogni sintagma preposizionale come legame tipato,
+    /// oltre il singolo `via` (che resta il complemento di specificazione
+    /// primario, e compare anche qui). Senza questo il Gate mostrava solo
+    /// soggetto→verbo→oggetto→via e buttava via il resto ("con Marco", "a Roma",
+    /// "domani"). Vedi `sentence_proposition::Complement`.
+    pub complements: Vec<ComplementDto>,
+}
+
+/// Un complemento preposizionale dell'analisi logica: preposizione + nome, con
+/// la relazione kg_sem disambiguata. "vado al mare **con Marco**" →
+/// `{preposition:"con", noun:"Marco", relation:Some("Has")}` (o None se la
+/// preposizione non porta ipotesi-contenuto, es. "a" dativo).
+#[derive(Serialize, Clone, Debug)]
+pub struct ComplementDto {
+    pub preposition: String,
+    pub noun: String,
+    /// La relazione kg_sem disambiguata (es. "IsA", "Has", "Causes"), o `None`.
+    pub relation: Option<String>,
+    /// Ruolo logico (paragone/termine/specificazione/fine/compagnia/…): il
+    /// "secondo argomento" dell'analisi logica.
+    pub role: Option<String>,
 }
 
 /// Confronto fra la PROP e il kg_sem. Vedi
@@ -1142,16 +1451,46 @@ pub struct KgConfrontationDto {
     pub contradictions: Vec<(String, String)>,
 }
 
+/// La persona grammaticale del soggetto, deicticamente SHIFTATA: nella
+/// comprensione di UI-r1 l'«io» del parlante diventa «tu» (1ª↔2ª), così il verbo
+/// si accorda alla prospettiva ribaltata ("preferisco"→"preferisci"). I soggetti
+/// di terza persona (il Mondo) non si spostano. Vedi DEIXIS nel frontend.
+fn deictic_person(subject_surface: Option<&str>, subject_kind: &str) -> crate::topology::grammar::Person {
+    use crate::topology::grammar::Person::*;
+    let base = match subject_surface.map(|s| s.to_lowercase()).as_deref() {
+        Some("io") => First, Some("tu") => Second,
+        Some("noi") => FirstPlural, Some("voi") => SecondPlural,
+        Some("loro") => ThirdPlural,
+        Some("lui") | Some("lei") | Some("egli") | Some("ella") => Third,
+        _ => match subject_kind {
+            "Speaker" => First, "Entity" => Second, _ => Third,
+        },
+    };
+    match base { // io↔tu, noi↔voi (la prospettiva di UI-r1 ribalta il deittico)
+        First => Second, Second => First,
+        FirstPlural => SecondPlural, SecondPlural => FirstPlural,
+        other => other,
+    }
+}
+
 pub fn sentence_proposition_to_dto(
     prop: &crate::topology::sentence_proposition::SentenceProposition,
 ) -> SentencePropositionDto {
     use crate::topology::sentence_proposition::{ObjectRef, SubjectRef};
+    use crate::topology::grammar::{conjugate, Tense};
     let (subject_kind, subject_name) = match &prop.subject {
         SubjectRef::Speaker => ("Speaker".to_string(), String::new()),
         SubjectRef::Entity => ("Entity".to_string(), String::new()),
         SubjectRef::World(w) => ("World".to_string(), w.clone()),
         SubjectRef::Variable(v) => ("Variable".to_string(), v.clone()),
     };
+    // Verbo concreto coniugato (alla persona deittica): mostra "preferisci" non
+    // il generico verbo-relazione "provi". Solo i verbi lessicali (verb_lemma);
+    // le copule restano None → il frontend usa il verbo-relazione.
+    let verb_display = prop.verb_lemma.as_ref().map(|lemma| {
+        let person = deictic_person(prop.subject_surface.as_deref(), &subject_kind);
+        conjugate(lemma, person, Tense::Present)
+    });
     let (object_kind, object_name) = match &prop.object {
         Some(ObjectRef::Word(w)) => ("Word".to_string(), w.clone()),
         Some(ObjectRef::Variable(v)) => ("Variable".to_string(), v.clone()),
@@ -1167,6 +1506,13 @@ pub fn sentence_proposition_to_dto(
         verb_lemma: prop.verb_lemma.clone(),
         polarity: prop.polarity,
         subject_surface: prop.subject_surface.clone(),
+        verb_display,
+        complements: prop.complements.iter().map(|c| ComplementDto {
+            preposition: c.preposition.clone(),
+            noun: c.noun.clone(),
+            relation: c.relation.map(|r| format!("{:?}", r)),
+            role: c.role.clone(),
+        }).collect(),
     }
 }
 

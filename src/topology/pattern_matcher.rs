@@ -540,17 +540,45 @@ fn render_riconoscimento(
     inst: &InstantiatedPattern,
     decision: &ActionDecision,
     report: &ComprehensionReport,
+    prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
+    kg_proc: &KnowledgeGraph,
 ) -> Option<Expression> {
+    // Il verbo del riconoscimento è VINCOLATO alla classe percettiva (dato
+    // kg_proc): il campo sceglie SOLO entro la classe (spareggio/coloritura),
+    // mai fuori — senza vincolo lo slot generico "verbo" prendeva qualunque
+    // verbo attivo nel campo ("Servi triste.", stato-dipendente = non
+    // derivabile). ESCLUSI i verbi con frame che rimappa i ruoli (dativo/
+    // pronominale): la costruzione qui è "TU <verbo> <oggetto>" e un dativo
+    // la inverte ("manchi paura" ≠ percepisci). Tutto letto dal kg_proc come
+    // dato. Fuori classe → default deterministico "sentire".
+    let usable = |v: &&str| -> bool {
+        use crate::topology::input_reading::is_kg_proc_isa;
+        is_kg_proc_isa(kg_proc, v, "percettivo")
+            && !is_kg_proc_isa(kg_proc, v, "dativo")
+            && !is_kg_proc_isa(kg_proc, v, "pronominale")
+    };
     let verb_lemma = inst.find_with_via("verbo", "percettivo")
-        .or_else(|| inst.find("verbo")).unwrap_or("sentire");
+        .or_else(|| inst.find("verbo"))
+        .filter(usable)
+        .unwrap_or("sentire");
 
-    // Phase 79: closure-aware. Se il report contiene closure
-    // (`closes_prior_gap`), il predicato è il trigger (es. "paura") e lo
-    // specifier è la closing_word (es. "buio") — letti direttamente dal
-    // percetto, non passati attraverso la pre-shaping di action_reasoning.
-    // Per claim normali (senza closure), si cade nel comportamento standard.
+    // Predicato + specifier in ordine di affidabilità strutturale:
+    //   1. closure (`closes_prior_gap`): trigger + closing_word (turno N→N+1).
+    //   2. PROP (Phase 84, 2b): `object` = emozione, `via` = oggetto-specificazione
+    //      ("mi manca mia madre" → predicate=mancanza, specifier=madre). È il
+    //      legame strutturale dell'enunciato, non una categoria astratta.
+    //   3. fallback: decision.target.Claim.predicate + anchor_words[1].
     let (predicate, specifier) = if let Some(c) = &report.closes_prior_gap {
         (c.trigger.clone(), Some(c.closing_word.clone()))
+    } else if let Some(p) = prop {
+        let pred = match &p.object {
+            Some(crate::topology::sentence_proposition::ObjectRef::Word(w)) => w.clone(),
+            _ => match &decision.target {
+                ActionTarget::Claim { predicate, .. } => predicate.clone(),
+                _ => decision.anchor_words.first().cloned()?,
+            },
+        };
+        (pred, p.via.clone())
     } else {
         let p = match &decision.target {
             ActionTarget::Claim { predicate, .. } => predicate.clone(),
@@ -563,39 +591,37 @@ fn render_riconoscimento(
         };
         (p, s)
     };
-    
-    // Controlla se il pattern ha istanziato una preposizione per lo specifier
-    let prep = inst.find_with_via("preposizione", "specificazione")
-        .or_else(|| inst.find("preposizione"));
 
     let verb_conj = grammar::conjugate(verb_lemma, Person::Second, Tense::Present);
-    
+
     let mut text = String::new();
     let mut words_used: Vec<String> = vec![verb_lemma.to_string(), predicate.clone()];
-    
-    text.push_str(&capitalize(&verb_conj));
+
+    // Polarità (2026-06-10, bug semantico): l'atto deve rispettare la negazione
+    // della proposizione. "non ho paura" (polarity=false) → "Non senti paura.",
+    // mai "Senti paura." — dire il contrario di ciò che si è capito è il
+    // fallimento peggiore della comprensione. La negazione vive nella PROP.
+    let negated = prop.map(|p| !p.polarity).unwrap_or(false);
+    if negated {
+        text.push_str("Non ");
+        text.push_str(&verb_conj);
+    } else {
+        text.push_str(&capitalize(&verb_conj));
+    }
     text.push(' ');
     text.push_str(&predicate);
-    
+
     if let Some(spec) = specifier {
+        // Phase 84 (2b): preposizione articolata derivata dal genere/numero
+        // dello specifier — "del futuro", "della madre", "dell'amore" —
+        // invece dell'hardcoded "di buio".
         text.push(' ');
-        if let Some(p) = prep {
-            text.push_str(p);
-            text.push(' ');
-            words_used.push(p.to_string());
-        } else {
-            // Default preposizione (specificazione)
-            text.push_str("di ");
-        }
-        // Idealmente useremmo preposizioni articolate (del/dello/della/...) ma
-        // per ora la preposizione base è sufficiente per "Hai paura del buio."
-        // (richiederà il pattern_matcher di leggere prep_articolate da kg_proc).
-        text.push_str(&spec);
+        text.push_str(&grammar::di_articulated(&spec));
         words_used.push(spec);
     }
-    
+
     text.push('.');
-    
+
     Some(Expression {
         text,
         words_used,
@@ -635,6 +661,8 @@ fn render_presentazione(
 fn render_esplorazione(
     decision: &ActionDecision,
     report: &ComprehensionReport,
+    lexicon: &Lexicon,
+    kg_sem: Option<&KnowledgeGraph>,
 ) -> Option<Expression> {
     let emotion = match &report.closes_prior_gap {
         Some(c) => c.trigger.clone(),
@@ -644,13 +672,52 @@ fn render_esplorazione(
         },
     };
     if emotion.is_empty() { return None; }
-    let art = grammar::with_definite_article(&emotion);
+    // Gate STRUTTURALE (2026-06-10, anti over-firing): l'atto "guardare oltre
+    // l'emozione" richiede UN'EMOZIONE — chiedere "Cosa vedi, oltre la dormire?"
+    // su un predicato d'azione è un non-atto. La condizione è di classe
+    // (IsA chain verso gli stati interni, stessa lettura di input_reading),
+    // non una soglia: se il predicato non è uno stato interno, il pattern
+    // non è istanziabile → fallback onesto. Senza kg (test) si resta permissivi.
+    if let Some(k) = kg_sem {
+        if !crate::topology::input_reading::is_inner_state(&emotion, lexicon, Some(k)) {
+            return None;
+        }
+    }
+    // L'articolo vuole un NOME: se il predicato è una forma derivata
+    // ("triste"), la base nominale viene dalla famiglia derivazionale
+    // (`DerivesFrom`) oppure dal genitore tassonomico quando è esso stesso
+    // uno stato interno (`triste IsA tristezza`, e tristezza IsA emozione).
+    // "Cosa vedi, oltre la tristezza?" e mai "oltre la triste".
+    let emotion_noun = kg_sem
+        .and_then(|k| {
+            let w = emotion.to_lowercase();
+            k.query_objects(&w, RelationType::DerivesFrom)
+                .first()
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    k.query_objects(&w, RelationType::IsA)
+                        .into_iter()
+                        .map(|s| s.to_string())
+                        .find(|p| crate::topology::input_reading::is_inner_state(p, lexicon, Some(k)))
+                })
+        })
+        .unwrap_or_else(|| emotion.clone());
+    let art = grammar::with_definite_article(&emotion_noun);
     let text = format!("Cosa vedi, oltre {}?", art);
     Some(Expression {
         text,
-        words_used: vec!["vedere".to_string(), emotion],
+        words_used: vec!["vedere".to_string(), emotion_noun],
     })
 }
+
+// NB (riconcezione 2026-06-10): `render_posizionamento` — il rendering Phase 85
+// che RECITAVA l'edge del sé ("Per me l'incertezza non è un fallimento.") — è
+// stato RIMOSSO. Il reframe "grana, non lista" vieta di renderizzare l'edge del
+// sé (è la negazione nuda): la grana deforma quale cammino è saliente
+// (`self_salience`, `GroundKind::SelfNode`), e la voce della posizione è il
+// collasso del cammino in `engine::position_voice`. Il pattern `posizionamento`
+// nel kg_proc resta come dato: i percetti `dissonanza`/`conferma` (dalle future
+// OPINIONI derivate+validate) muovono l'ATTO, mai il testo.
 
 /// Dispatch del rendering in base al nome del pattern.
 pub fn render(
@@ -659,13 +726,19 @@ pub fn render(
     report: &ComprehensionReport,
     lexicon: &Lexicon,
     kg_proc: &KnowledgeGraph,
+    kg_sem: Option<&KnowledgeGraph>,
+    prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
+    _self_confrontation: Option<&crate::topology::sentence_proposition::SelfConfrontation>,
 ) -> Option<Expression> {
     match inst.name.as_str() {
         "articolazione"  => render_articolazione(inst, decision, report),
         "identificazione" => render_identificazione(inst, decision, report, lexicon, kg_proc),
-        "riconoscimento" => render_riconoscimento(inst, decision, report),
+        "riconoscimento" => render_riconoscimento(inst, decision, report, prop, kg_proc),
         "presentazione"  => render_presentazione(decision),
-        "esplorazione"   => render_esplorazione(decision, report),
+        "esplorazione"   => render_esplorazione(decision, report, lexicon, kg_sem),
+        // `posizionamento`: NESSUN render — l'edge del sé non si recita mai
+        // (riconcezione 2026-06-10). La voce della posizione è il collasso del
+        // cammino saliente in `engine::position_voice`; qui fallback.
         // ricambio + asserzione + altri: lasciati al path esistente
         // (compose_word_response per ricambio, nuclei semantici per asserzione).
         // Restituisce None ⇒ fallback al pipeline corrente di compose().
@@ -688,8 +761,16 @@ pub fn compose_from_pattern(
     word_topology: &WordTopology,
     lexicon: &Lexicon,
     valence_drives: Option<&[f64; 8]>,
+    // Phase 84 (2b): la proposizione strutturale, per `prop.via` nel rendering.
+    prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
+    // Phase 85 (kg_self): conflitto/risonanza con le convinzioni → percetti
+    // `dissonanza`/`conferma` → `posizionamento` può vincere per risonanza.
+    self_confrontation: Option<&crate::topology::sentence_proposition::SelfConfrontation>,
+    // 2026-06-10: kg_sem per i gate strutturali dei render (es. esplorazione
+    // richiede uno stato interno). `None` nei test = permissivo.
+    kg_sem: Option<&KnowledgeGraph>,
 ) -> Option<Expression> {
-    use crate::topology::kg_proc_field::{KgProcActivation, seed_from_comprehension, seed_from_position, select_pattern_by_resonance};
+    use crate::topology::kg_proc_field::{KgProcActivation, seed_from_comprehension, seed_from_position, seed_from_self_confrontation, select_pattern_by_resonance};
 
     // Campo procedurale dal report (percetti → concetti) E dalla posizione
     // dell'entità (freccia b): l'atto emerge da comprensione + posizione,
@@ -699,13 +780,17 @@ pub fn compose_from_pattern(
     if let Some(drives) = valence_drives {
         seed_from_position(&mut activation, drives, kg_proc);
     }
+    // Phase 85: la posizione del SÉ semina il campo (secondo canale).
+    if let Some(sc) = self_confrontation {
+        seed_from_self_confrontation(&mut activation, sc, kg_proc);
+    }
 
     // Selezione per risonanza (sostituisce il dispatch pattern_name_for).
     let pattern_name = select_pattern_by_resonance(&activation, kg_proc)?;
 
     let schema = load_pattern_schema(&pattern_name, kg_proc)?;
     let inst = instantiate(&schema, decision, kg_proc, word_topology, lexicon)?;
-    render(&inst, decision, report, lexicon, kg_proc)
+    render(&inst, decision, report, lexicon, kg_proc, kg_sem, prop, self_confrontation)
 }
 
 /// Variante diagnostica: ritorna il pattern selezionato + i punteggi di
@@ -717,13 +802,19 @@ pub fn compose_from_pattern_with_trace(
     word_topology: &WordTopology,
     lexicon: &Lexicon,
     valence_drives: Option<&[f64; 8]>,
+    prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
+    self_confrontation: Option<&crate::topology::sentence_proposition::SelfConfrontation>,
+    kg_sem: Option<&KnowledgeGraph>,
 ) -> (Option<Expression>, Option<String>, Vec<(String, f64)>) {
-    use crate::topology::kg_proc_field::{KgProcActivation, seed_from_comprehension, seed_from_position, select_pattern_by_resonance, pattern_scores};
+    use crate::topology::kg_proc_field::{KgProcActivation, seed_from_comprehension, seed_from_position, seed_from_self_confrontation, select_pattern_by_resonance, pattern_scores};
 
     let mut activation = KgProcActivation::new();
     seed_from_comprehension(&mut activation, report, kg_proc);
     if let Some(drives) = valence_drives {
         seed_from_position(&mut activation, drives, kg_proc);
+    }
+    if let Some(sc) = self_confrontation {
+        seed_from_self_confrontation(&mut activation, sc, kg_proc);
     }
 
     let scores = pattern_scores(&activation, kg_proc);
@@ -732,7 +823,7 @@ pub fn compose_from_pattern_with_trace(
     let expr = pattern_name.as_deref()
         .and_then(|name| load_pattern_schema(name, kg_proc))
         .and_then(|schema| instantiate(&schema, decision, kg_proc, word_topology, lexicon))
-        .and_then(|inst| render(&inst, decision, report, lexicon, kg_proc));
+        .and_then(|inst| render(&inst, decision, report, lexicon, kg_proc, kg_sem, prop, self_confrontation));
 
     (expr, pattern_name, scores)
 }
@@ -1017,7 +1108,7 @@ mod tests {
         // attivare il percetto "apertura" (che risuona con articolazione).
         let mut report = make_report("ho paura", "posizionamento", "Speaker");
         add_gap(&mut report, "oggetto", "paura");
-        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None).unwrap();
+        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None, None, None, None).unwrap();
         // Atteso: "Di cosa hai paura?" (oppure simile con verbo coerente)
         assert!(expr.text.starts_with("Di cosa"), "Got: {}", expr.text);
         assert!(expr.text.contains("paura"));
@@ -1043,7 +1134,7 @@ mod tests {
         };
         let mut report = make_report("sono triste", "posizionamento", "Speaker");
         add_gap(&mut report, "causa", "tristezza");
-        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None).unwrap();
+        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None, None, None, None).unwrap();
         // "perché" non vuole preposizione: deve iniziare direttamente con "Perché"
         assert!(expr.text.starts_with("Perché"), "Got: {}", expr.text);
         assert!(expr.text.ends_with("?"));
@@ -1068,7 +1159,7 @@ mod tests {
         };
         // Phase 79: subject=Self_ attiva il boost identità → identificazione vince.
         let report = make_report("chi sei?", "interrogazione", "Self_");
-        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None).unwrap();
+        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None, None, None, None).unwrap();
         assert!(expr.text.starts_with("Sono"), "Got: {}", expr.text);
         assert!(expr.text.contains("entità"));
         // Articolo indeterminativo: "Sono un'entità." (vocale → un')
@@ -1096,10 +1187,14 @@ mod tests {
         };
         // Phase 79: posizionamento senza vuoto → percetto "posizione" → riconoscimento.
         let report = make_report("io sono felice", "posizionamento", "Speaker");
-        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None).unwrap();
+        let expr = compose_from_pattern(&decision, &report, &kg, &wt, &lex, None, None, None, None).unwrap();
         assert!(expr.text.contains("felice"), "Got: {}", expr.text);
         // Verbo coniugato in 2a singolare presente
         assert!(expr.text.starts_with("Senti") || expr.text.starts_with("Hai"),
                 "Got: {}", expr.text);
     }
+
+    // NB (riconcezione 2026-06-10): i test di `render_posizionamento` sono stati
+    // rimossi con la funzione — l'edge del sé non si recita mai. La voce della
+    // posizione è verificata nei test di `path_collapse` + `engine::position_voice`.
 }

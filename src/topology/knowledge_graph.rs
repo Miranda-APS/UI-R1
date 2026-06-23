@@ -351,6 +351,52 @@ impl KnowledgeGraph {
         false
     }
 
+    /// Phase 84: confidence corrente di un arco specifico, se esiste.
+    /// Cerca anche varianti con `via` (prende la prima triple con quella
+    /// `subject/rel/object`, ignorando il via).
+    pub fn edge_confidence(&self, subject: &str, rel: RelationType, object: &str) -> Option<f32> {
+        self.outgoing.get(subject)
+            .and_then(|m| m.get(&rel))
+            .and_then(|v| v.iter().find(|t| t.object == object))
+            .map(|t| t.confidence)
+    }
+
+    /// Phase 84: verifica se un nodo esiste nel grafo. Alias di `contains`
+    /// con nome semantico piu' chiaro per i call site nuovi.
+    pub fn has_node(&self, word: &str) -> bool {
+        self.contains(word)
+    }
+
+    /// Phase 84: aggiunge una triple specializzata `subject rel object via context`
+    /// con la confidence specificata. Se la stessa triple-via esiste gia',
+    /// aggiorna la confidence al massimo fra l'esistente e la nuova
+    /// (idempotente: piu' correzioni dello stesso tipo non degradano).
+    pub fn add_via(&mut self, subject: &str, rel: RelationType, object: &str,
+                   via: &str, confidence: f32)
+    {
+        let s_lc = subject.to_lowercase();
+        let o_lc = object.to_lowercase();
+        let v_lc = via.to_lowercase();
+        // Cerca triple esistente con stesso via.
+        if let Some(rel_map) = self.outgoing.get_mut(&s_lc) {
+            if let Some(targets) = rel_map.get_mut(&rel) {
+                if let Some(existing) = targets.iter_mut().find(|t| {
+                    t.object == o_lc && t.via.as_deref() == Some(v_lc.as_str())
+                }) {
+                    if confidence > existing.confidence {
+                        existing.confidence = confidence.clamp(0.0, 1.0);
+                    }
+                    return;
+                }
+            }
+        }
+        // Nuova triple-via.
+        let edge = TypedEdge::new(&s_lc, rel, &o_lc)
+            .with_confidence(confidence)
+            .with_via(Some(v_lc));
+        self.add_edge(edge);
+    }
+
     /// Aggiorna la confidence di un arco. Ritorna true se trovato e aggiornato.
     pub fn update_confidence(&mut self, subject: &str, rel: RelationType, object: &str, new_confidence: f32) -> bool {
         if let Some(rel_map) = self.outgoing.get_mut(subject) {

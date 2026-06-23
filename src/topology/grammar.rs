@@ -452,6 +452,10 @@ pub fn irregular_participle(word: &str) -> Option<String> {
         ("mort", "morire"), ("nascost", "nascondere"), ("rimast", "rimanere"),
         ("vissut", "vivere"), ("prodott", "produrre"), ("condott", "condurre"),
         ("ridott", "ridurre"), ("tradott", "tradurre"), ("distrutt", "distruggere"),
+        ("propost", "proporre"), ("compost", "comporre"), ("espost", "esporre"),
+        ("impost", "imporre"), ("dispost", "disporre"), ("suppost", "supporre"),
+        ("post", "porre"), ("assunt", "assumere"), ("presunt", "presumere"),
+        ("svolt", "svolgere"), ("risolt", "risolvere"),
     ];
     let stem = if w.ends_with(|c| matches!(c, 'o' | 'a' | 'i' | 'e')) {
         &w[..w.len() - 1]

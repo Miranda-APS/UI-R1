@@ -100,6 +100,8 @@ impl Facet {
             RelationType::RemembersAs   => Facet::EmotionalMemory,
             RelationType::WondersAbout  => Facet::InquiryHorizon,
             RelationType::Implies       => Facet::Effects,
+            // Parentela morfologica: vicina alla risonanza lessicale.
+            RelationType::DerivesFrom   => Facet::Resonances,
         }
     }
 }

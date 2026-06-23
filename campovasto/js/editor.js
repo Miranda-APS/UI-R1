@@ -9,7 +9,7 @@
 // Niente innerHTML manuale per ctx-menu o titoli/azioni del panel
 // (vedi CLAUDE.md §3 "una responsabilità per file").
 
-import { CD_NAMES, RL, NEUTRAL_SIG } from './constants.js';
+import { CD_NAMES, RL, REL_LEGEND_LABEL_IT, NEUTRAL_SIG } from './constants.js';
 import { CD_COLORS, UI, colorForSig } from './theme.js';
 import { computeOctalysis, esc } from './geometry.js';
 import { getActive, saveField, FIELDS } from './manager.js';
@@ -558,7 +558,11 @@ export function openQuickEdge(edgeKey){
 export function openConnect(from, to){
   const F = getActive();
   if(from === to) return;
-  const relTypes = Object.keys(RL);
+  // TUTTE le 21 relazioni disponibili nel drag-to-connect (non più solo le 12 di
+  // RL): la gente le ha tutte sotto mano e sceglie. Le etichette complete vivono
+  // in REL_LEGEND_LABEL_IT (constants.js), ordinate per famiglia.
+  const LBL = REL_LEGEND_LABEL_IT;
+  const relTypes = Object.keys(LBL);
   const fromCol = F.wordMap[from] ? colorForSig(F.wordMap[from].sig) : UI.edgeFallback;
   const toCol   = F.wordMap[to]   ? colorForSig(F.wordMap[to].sig)   : UI.edgeFallback;
 
@@ -569,10 +573,10 @@ export function openConnect(from, to){
     const s = (raw || '').trim();
     if(!s) return '';
     const up = s.toUpperCase();
-    if(RL[up]) return up;
+    if(LBL[up]) return up;
     const norm = s.toLowerCase();
     for(const k of relTypes){
-      if(RL[k].toLowerCase() === norm) return k;
+      if(LBL[k].toLowerCase() === norm) return k;
     }
     return up;
   };
@@ -585,7 +589,7 @@ export function openConnect(from, to){
       // gli identificatori KG. resolveRel rimappa al codice prima di salvare.
       body.innerHTML = `
         <datalist id="connectRelList">${
-          relTypes.map(r => `<option value="${esc(RL[r])}"></option>`).join('')
+          relTypes.map(r => `<option value="${esc(LBL[r])}"></option>`).join('')
         }</datalist>
         <div class="rel-header">
           <span style="color:${fromCol}">${esc(from)}</span>
@@ -595,7 +599,7 @@ export function openConnect(from, to){
         <div class="edit-row">
           <label>tipo</label>
           <input type="text" id="cType" class="edit-input" list="connectRelList"
-                 value="${esc(RL[relTypes[0]])}" autocomplete="off"
+                 value="${esc(LBL[relTypes[0]])}" autocomplete="off"
                  placeholder="scrivi o scorri con la rotellina">
         </div>
         <div class="edit-row">
@@ -616,7 +620,7 @@ export function openConnect(from, to){
       // Rotellina sull'input tipo: cicla nella lista delle relazioni note
       // (etichette italiane) senza scrollare il pannello. Se l'utente ha
       // digitato un alias non in RL, il ciclo riparte dall'inizio.
-      const labels = relTypes.map(r => RL[r]);
+      const labels = relTypes.map(r => LBL[r]);
       typeInput.addEventListener('wheel', (e) => {
         e.preventDefault();
         const cur = typeInput.value.trim().toLowerCase();

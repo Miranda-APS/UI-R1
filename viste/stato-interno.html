@@ -17,11 +17,14 @@
     font-size: 14px;
     line-height: 1.5;
   }
-  body { max-width: 1080px; margin: 0 auto; padding: var(--space-lg); }
+  body { max-width: 1080px; margin: 0 auto; padding: var(--space-lg) var(--space-lg) 64px; }
 
   header.page { margin-bottom: var(--space-lg); }
-  header.page h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
-  header.page .sub { color: var(--color-text-dim); margin-top: 4px; font-size: 13px; }
+  header.page .home { font-size: 12px; color: var(--color-text-dim); text-decoration: none; }
+  header.page .home:hover { color: var(--color-text); }
+  header.page h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.3px; margin-top: 6px; }
+  header.page .sub { color: var(--color-text-dim); margin-top: 6px; font-size: 13px; max-width: 720px; line-height: 1.6; }
+  header.page .sub b { color: var(--color-text); }
 
   .context {
     display: flex; flex-wrap: wrap; gap: var(--space-md);
@@ -34,7 +37,7 @@
   .context .ws { margin-left: auto; }
   .context .ws.ok { color: var(--c-closed); }
 
-  .controls { display: flex; gap: var(--space-sm); margin-top: var(--space-md); }
+  .controls { display: flex; gap: var(--space-sm); margin-top: var(--space-md); align-items: center; }
   .controls button {
     font-family: inherit; font-size: 12px; cursor: pointer;
     background: var(--color-surface); color: var(--color-text);
@@ -47,12 +50,15 @@
   section.block { margin-top: var(--space-lg); }
   section.block > h2 {
     font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
-    color: var(--h3-color); font-weight: 600; margin-bottom: var(--space-sm);
+    color: var(--h3-color); font-weight: 600; margin-bottom: 4px;
     display: flex; align-items: baseline; gap: var(--space-sm);
   }
   section.block > h2 .count {
     font-size: 11px; color: var(--color-text-dim); letter-spacing: 0;
     text-transform: none;
+  }
+  section.block > .hint {
+    font-size: 11px; color: var(--testo-tenue); margin-bottom: var(--space-sm); line-height: 1.5;
   }
   section.block.hero > h2 { color: var(--color-text); font-size: 15px; }
 
@@ -62,27 +68,124 @@
     background: var(--color-surface); border: 1px solid var(--color-border);
     border-left-width: 3px; border-radius: 8px;
     padding: var(--space-md); margin-bottom: var(--space-sm);
+    transition: var(--transition-smooth);
   }
   .card.q     { border-left-color: var(--c-question); }
   .card.open  { border-left-color: var(--c-open); }
   .card.closed{ border-left-color: var(--c-closed); }
   .card.think { border-left-color: var(--c-think); }
   .card.unc   { border-left-color: var(--c-open); }
+  .card.expandable { cursor: pointer; }
+  .card.expandable:hover { border-color: var(--bordo-hover); }
+  .card.expandable:hover .word { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
 
-  .card .lead { font-size: 15px; color: var(--color-text); }
-  .card .lead.dim { color: var(--color-text-dim); text-decoration: line-through; text-decoration-thickness: 1px; }
-  .card .meta { margin-top: 6px; font-size: 11px; color: var(--color-text-dim); display: flex; flex-wrap: wrap; gap: 10px; }
-  .card .meta .tag {
-    background: var(--chip-attivo-sfondo); border-radius: 4px; padding: 1px 7px;
-    color: var(--color-text);
-  }
+  /* riga-titolo leggibile: la parola + cosa la tiene qui in italiano */
+  .card .said { font-size: 15px; color: var(--color-text); line-height: 1.5; }
+  .card .said .word { font-weight: 700; }
+  .card .said.dim { color: var(--color-text-dim); }
+  .card .said.dim .word { text-decoration: line-through; text-decoration-thickness: 1px; }
+  .card .why { margin-top: 4px; font-size: 12px; color: var(--color-text-dim); line-height: 1.5; }
+  .card .why .em { color: var(--color-text); }
   .card .raw { margin-top: 6px; font-size: 12px; color: var(--testo-tenue); font-style: italic; }
   .card .resolution { margin-top: 8px; font-size: 12px; color: var(--c-closed); }
   .card .resolution b { color: var(--color-text); }
 
+  .card .toggle { margin-top: 8px; font-size: 11px; color: var(--c-question); opacity: 0.8; }
+  .card.expandable:hover .toggle { opacity: 1; }
+
   /* barra tensione per le incertezze di fondo */
-  .tension { height: 4px; border-radius: 2px; background: var(--color-border); margin-top: 8px; overflow: hidden; }
+  .tension { height: 4px; border-radius: 2px; background: var(--color-border); margin-top: 10px; overflow: hidden; }
   .tension > span { display: block; height: 100%; background: var(--c-open); }
+
+  /* pannello "cosa so / non so di questa parola" (da /api/concept) */
+  .knows {
+    margin-top: var(--space-md); padding-top: var(--space-md);
+    border-top: 1px dashed var(--color-border);
+    font-size: 12px; color: var(--color-text-dim); line-height: 1.6;
+  }
+  .knows.loading { font-style: italic; }
+  .knows .def { color: var(--color-text); margin-bottom: var(--space-sm); }
+  .knows .rel { margin-bottom: 5px; }
+  .knows .rel .lbl { color: var(--testo-tenue); margin-right: 6px; }
+  .knows .chip {
+    display: inline-block; background: var(--chip-attivo-sfondo); color: var(--color-text);
+    border-radius: 4px; padding: 1px 7px; margin: 2px 4px 2px 0; font-size: 11px;
+  }
+  .knows .void { color: var(--c-open); font-style: italic; }
+  .knows .from-head { color: var(--testo-tenue); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+
+  /* la richiesta esplicita di UI-r1 + la risposta inline (FONDARE) */
+  .card .ask {
+    margin-top: 10px; font-size: 13.5px; color: var(--color-text); line-height: 1.6;
+    border-left: 2px solid var(--c-question); padding-left: var(--space-sm);
+  }
+  .card .ask .q { color: var(--c-question); }
+  .card .answer { margin-top: var(--space-sm); }
+  .card .answer textarea {
+    width: 100%; resize: vertical; min-height: 52px; font-family: inherit; font-size: 13px;
+    background: var(--color-bg); color: var(--color-text); line-height: 1.5;
+    border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 10px; outline: none;
+  }
+  .card .answer textarea:focus { border-color: var(--bordo-hover); }
+  .card .answer-row { display: flex; align-items: center; gap: var(--space-sm); margin-top: 6px; flex-wrap: wrap; }
+  .card .answer button {
+    font-family: inherit; font-size: 12px; cursor: pointer; border-radius: 6px; padding: 6px 12px;
+    border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
+    transition: var(--transition-smooth);
+  }
+  .card .answer button:hover { border-color: var(--bordo-hover); }
+  .card .answer button.solve {
+    border-color: color-mix(in srgb, var(--c-closed) 55%, var(--color-border)); color: var(--c-closed);
+  }
+  .card .answer button:disabled { opacity: .5; cursor: default; }
+  .card .answer .ack { font-size: 12px; color: var(--c-closed); }
+  .card .answer .ack.err { color: var(--c-open); }
+
+  /* il tentativo di auto-chiarimento di UI-r1 (dal suo grafo) */
+  .card .selfwork { margin-top: 8px; font-size: 13px; color: var(--color-text-dim); line-height: 1.6; }
+  .card .selfwork.loading { font-style: italic; }
+  .card .selfwork .lead { color: var(--color-text); }
+  .card .selfwork .know { color: var(--color-text); }
+  .card .selfwork .stop { margin-top: 5px; }
+  .card .selfwork .stop b { color: var(--c-open); }
+
+  /* la catena inferenziale multi-hop (il "ragionamento" di UI-r1) */
+  .card .chain { margin: 7px 0 2px; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; font-size: 12.5px; }
+  .card .chain .node { background: var(--chip-attivo-sfondo); color: var(--color-text); border-radius: 4px; padding: 1px 7px; }
+  .card .chain .node.start { color: var(--c-question); }
+  .card .chain .node.ground { color: var(--c-closed); border: 1px solid color-mix(in srgb, var(--c-closed) 50%, transparent); }
+  .card .chain .arr { color: var(--testo-tenue); font-size: 11px; white-space: nowrap; }
+  .card .chain .arr .v { color: var(--color-text-dim); }
+  .card .arrive { font-size: 12.5px; color: var(--color-text-dim); margin-top: 2px; }
+  .card .arrive b { color: var(--c-closed); }
+
+  /* verdetto: conferma (Nome del Padre) o correzione */
+  .card .gateway { margin-top: var(--space-sm); }
+  .card .verdict-row { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+  .card .verdict-row .q { color: var(--c-question); font-size: 13px; }
+  .card .gateway button {
+    font-family: inherit; font-size: 12px; cursor: pointer; border-radius: 6px; padding: 6px 12px;
+    border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
+    transition: var(--transition-smooth);
+  }
+  .card .gateway button:hover { border-color: var(--bordo-hover); }
+  .card .gateway button:disabled { opacity: .5; cursor: default; }
+  .card .gateway button.yes { border-color: color-mix(in srgb, var(--c-closed) 55%, var(--color-border)); color: var(--c-closed); }
+  .card .gateway .ack { font-size: 12px; color: var(--c-closed); }
+  .card .gateway .ack.err { color: var(--c-open); }
+  .card .correct { margin-top: var(--space-sm); }
+  .card .correct textarea {
+    width: 100%; resize: vertical; min-height: 48px; font-family: inherit; font-size: 13px; line-height: 1.5;
+    background: var(--color-bg); color: var(--color-text);
+    border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 10px; outline: none;
+  }
+  .card .correct textarea:focus { border-color: var(--bordo-hover); }
+  .card .reveal-row { margin-top: var(--space-sm); }
+  .card .reveal-row .reveal {
+    font-family: inherit; font-size: 11px; cursor: pointer; color: var(--c-question); opacity: .85;
+    background: none; border: 0; padding: 0;
+  }
+  .card .reveal-row .reveal:hover { opacity: 1; }
 
   .think-row { display: flex; align-items: baseline; gap: 10px; }
   .think-row .kind { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--c-think); }
@@ -92,8 +195,14 @@
 </head>
 <body>
   <header class="page">
+    <a class="home" href="/admin">← admin</a>
     <h1>Cosa non ho ancora capito</h1>
-    <div class="sub">Lo stato interno di UI-r1: le domande aperte sui propri vuoti di comprensione, e ciò che si è chiuso. Mai inventato — solo ciò che gli organi producono.</div>
+    <div class="sub">
+      Lo stato interno di UI-r1: i vuoti di comprensione, le domande senza risposta, le tensioni
+      che restano aperte. Mai inventato — solo ciò che gli organi producono.
+      <b>Clicca una voce per vedere cosa UI-r1 sa (o non sa) di quella parola nel grafo</b>: spesso è
+      proprio il sapere mancante che la tiene qui.
+    </div>
     <div class="context" id="ctx">
       <span title="Quanti scambi ha avuto l'entità in questa sessione.">turno <b id="ctx-turn">—</b></span>
       <span title="La disposizione interna con cui affronta il turno: aperto, riflessivo, ritirato…">postura <b id="ctx-stance">—</b></span>
@@ -108,26 +217,31 @@
 
   <section class="block hero">
     <h2>Domande aperte <span class="count" id="c-questions"></span></h2>
+    <div class="hint">Interrogativi che mi sono stati posti e a cui non so ancora rispondere.</div>
     <div id="questions"></div>
   </section>
 
   <section class="block hero">
     <h2>Vuoti di comprensione <span class="count" id="c-open"></span></h2>
+    <div class="hint">Elementi che ho letto ma non ho saputo legare: uno slot della frase è rimasto sciolto.</div>
     <div id="open-gaps"></div>
   </section>
 
   <section class="block">
     <h2>Vuoti che si sono chiusi <span class="count" id="c-closed"></span></h2>
+    <div class="hint">Vuoti aperti in un turno e colmati da ciò che è stato detto dopo.</div>
     <div id="closed-gaps"></div>
   </section>
 
   <section class="block">
     <h2>Pensieri vivi sul limite <span class="count" id="c-think"></span></h2>
+    <div class="hint">Lacune, ponti mancanti e bisogni attivi in questo momento nel campo.</div>
     <div id="thoughts"></div>
   </section>
 
   <section class="block">
     <h2>Incertezze di fondo <span class="count" id="c-unc"></span></h2>
+    <div class="hint">Temi che riaffiorano senza che una mia posizione li ancori. Per ciascuno provo a chiarirmi da solo col mio grafo, poi ti chiedo solo il legame che davvero mi manca — non sempre «cos'è». La tua risposta entra nel mio grafo.</div>
     <div id="uncertainties"></div>
   </section>
 
@@ -153,43 +267,100 @@ async function getJSON(url){
   catch { return null; }
 }
 
+// ── "cosa so di questa parola": espansione cliccabile da /api/concept ──
+// È la risposta a "perché questa parola è qui": mostra i legami che HA nel
+// grafo — e, se non ne ha, dice onestamente che è proprio quel vuoto a tenerla.
+const conceptCache = new Map();
+async function fetchConcept(word){
+  if(conceptCache.has(word)) return conceptCache.get(word);
+  const d = await getJSON('/api/concept?word=' + encodeURIComponent(word));
+  conceptCache.set(word, d);
+  return d;
+}
+function chips(arr){ return (arr || []).slice(0, 8).map(x => `<span class="chip">${esc(x)}</span>`).join(''); }
+function renderConcept(word, c, head){
+  const H = head ? `<div class="from-head">${esc(head)}</div>` : '';
+  if(!c){ return `<div class="knows">${H}<span class="void">Non sono riuscito a interrogare il grafo per «${esc(word)}».</span></div>`; }
+  const rels = [
+    ['è',          c.type_chain],
+    ['ha',         c.has],
+    ['fa',         c.does],
+    ['causa',      c.causes],
+    ['opposto di', c.opposites],
+    ['simile a',   c.similar],
+    ['parte di',   c.part_of],
+  ].filter(([,v]) => (v || []).length);
+  const total = rels.reduce((s, [,v]) => s + v.length, 0);
+  if(!total && !c.definition){
+    return `<div class="knows">${H}<span class="void">Non ho legami nel grafo per «${esc(word)}» — è proprio questo vuoto che la tiene qui. Resta una parola senza ancora un mondo intorno.</span></div>`;
+  }
+  let html = '<div class="knows">' + H;
+  if(c.definition) html += `<div class="def">${esc(c.definition)}</div>`;
+  for(const [lbl, v] of rels) html += `<div class="rel"><span class="lbl">${lbl}:</span>${chips(v)}</div>`;
+  html += '</div>';
+  return html;
+}
+// Collega ogni .card.expandable: al click espande/chiude il pannello concept.
+function wireExpansions(container){
+  container.querySelectorAll('.card.expandable').forEach(card => {
+    const word = card.dataset.word;
+    if(!word) return;
+    card.addEventListener('click', async (e) => {
+      if(e.target.closest('a')) return; // non intercettare link interni
+      const existing = card.querySelector('.knows');
+      if(existing){ existing.remove(); return; }
+      const ph = document.createElement('div');
+      ph.className = 'knows loading';
+      ph.textContent = `interrogo il grafo su «${word}»…`;
+      card.appendChild(ph);
+      const c = await fetchConcept(word);
+      ph.outerHTML = renderConcept(word, c);
+    });
+  });
+}
+
 function renderQuestions(qs){
   const open = (qs || []).filter(q => !q.resolved);
   setCount('c-questions', open.length);
   if(!open.length){ $('questions').innerHTML = empty('Nessuna domanda aperta — non ho ricevuto interrogativi a cui non so rispondere.'); return; }
   $('questions').innerHTML = open.map(q => {
-    const interr = q.interrogative ? `«${esc(q.interrogative)}»` : 'domanda';
-    const topic = (q.topic || []).length ? ` su <span class="tag">${q.topic.map(esc).join(', ')}</span>` : '';
-    return `<div class="card q">
-      <div class="lead">${interr}${topic}</div>
-      <div class="meta"><span>turno ${q.turn ?? '—'}</span></div>
+    const interr = q.interrogative ? `«${esc(q.interrogative)}»` : 'una domanda';
+    const topicArr = (q.topic || []);
+    const focus = topicArr[0] || '';
+    const topicTxt = topicArr.length ? ` su <span class="word">${topicArr.map(esc).join(', ')}</span>` : '';
+    const exp = focus ? ' expandable' : '';
+    return `<div class="card q${exp}"${focus ? ` data-word="${esc(focus)}"` : ''}>
+      <div class="said">Mi è stato chiesto ${interr}${topicTxt}, e non so ancora rispondere.</div>
+      <div class="why">Aperta al <span class="em">turno ${q.turn ?? '—'}</span>.</div>
       ${q.raw_input ? `<div class="raw">“${esc(q.raw_input)}”</div>` : ''}
+      ${focus ? '<div class="toggle">▾ cosa so di questa parola</div>' : ''}
     </div>`;
   }).join('');
+  wireExpansions($('questions'));
 }
 
 function renderOpenGaps(gaps){
   setCount('c-open', (gaps||[]).length);
   if(!gaps || !gaps.length){ $('open-gaps').innerHTML = empty('Nessun vuoto aperto — ogni elemento che ho letto è legato o esplicitamente chiuso.'); return; }
-  $('open-gaps').innerHTML = gaps.map(g => `<div class="card open">
-    <div class="lead">${esc(g.question || g.trigger)}</div>
-    <div class="meta">
-      ${g.trigger ? `<span>innescato da <span class="tag">${esc(g.trigger)}</span></span>` : ''}
-      ${g.gap_kind ? `<span>manca: <span class="tag">${esc(g.gap_kind)}</span></span>` : ''}
-      <span>turno ${g.turn ?? '—'}</span>
-    </div>
-  </div>`).join('');
+  $('open-gaps').innerHTML = gaps.map(g => {
+    const trig = g.trigger || '';
+    const exp = trig ? ' expandable' : '';
+    const miss = g.gap_kind ? ` Mi manca <span class="em">${esc(g.gap_kind)}</span>.` : '';
+    return `<div class="card open${exp}"${trig ? ` data-word="${esc(trig)}"` : ''}>
+      <div class="said">${esc(g.question || g.trigger)}</div>
+      <div class="why">${trig ? `Innescato da <span class="word">${esc(trig)}</span>.` : ''}${miss} <span class="em">Turno ${g.turn ?? '—'}</span>.</div>
+      ${trig ? '<div class="toggle">▾ cosa so di questa parola</div>' : ''}
+    </div>`;
+  }).join('');
+  wireExpansions($('open-gaps'));
 }
 
 function renderClosedGaps(gaps){
   setCount('c-closed', (gaps||[]).length);
   if(!gaps || !gaps.length){ $('closed-gaps').innerHTML = empty('Ancora nessun vuoto colmato in questo dialogo.'); return; }
   $('closed-gaps').innerHTML = gaps.map(g => `<div class="card closed">
-    <div class="lead dim">${esc(g.question || g.trigger)}</div>
-    <div class="meta">
-      ${g.trigger ? `<span>innescato da <span class="tag">${esc(g.trigger)}</span></span>` : ''}
-      <span>aperto al turno ${g.turn ?? '—'}</span>
-    </div>
+    <div class="said dim"><span class="word">${esc(g.question || g.trigger)}</span></div>
+    <div class="why">${g.trigger ? `Innescato da <span class="em">${esc(g.trigger)}</span>, ` : ''}aperto al turno ${g.turn ?? '—'}.</div>
     ${g.closed_by ? `<div class="resolution">colmato da <b>«${esc(g.closed_by)}»</b>${g.closed_at_turn != null ? ` al turno ${g.closed_at_turn}` : ''}</div>` : ''}
   </div>`).join('');
 }
@@ -205,21 +376,261 @@ function renderThoughts(thoughts){
       <span class="words">${(t.words || []).map(esc).join(' · ') || '—'}</span>
       <span class="str">${Math.round((t.strength || 0) * 100)}%</span>
     </div>
-    ${(t.fractal_names||[]).length ? `<div class="meta"><span class="tag">${t.fractal_names.map(esc).join('</span> <span class="tag">')}</span></div>` : ''}
+    ${(t.fractal_names||[]).length ? `<div class="why">nella regione di ${t.fractal_names.map(esc).join(', ')}</div>` : ''}
   </div>`).join('');
+}
+
+// ── UI-r1 prova a chiarirsi DA SOLA, poi chiede solo ciò che le manca ──
+// Le ~14 relazioni tipate del grafo. UI-r1 non chiede sempre "cos'è": legge
+// cosa SA già di X (archi uscenti) e individua quale legame le manca davvero.
+const REL_META = {
+  IS_A:           { verb:"è",               short:"di che tipo sia",          ask:"Di che tipo è, esattamente? A quale famiglia appartiene?" },
+  HAS:            { verb:"ha",              short:"cosa contiene",            ask:"Cosa contiene, quali parti o proprietà ha?" },
+  DOES:           { verb:"fa",              short:"cosa fa",                  ask:"Cosa fa? Quale azione mette in atto?" },
+  CAUSES:         { verb:"causa",          short:"cosa provoca",             ask:"Cosa provoca? Cosa fa accadere nel mondo?" },
+  REQUIRES:       { verb:"richiede",       short:"di cosa ha bisogno",       ask:"Di cosa ha bisogno per esistere o accadere?" },
+  PART_OF:        { verb:"è parte di",     short:"di cosa è parte",          ask:"Di quale insieme più grande è parte?" },
+  OPPOSITE_OF:    { verb:"è l'opposto di", short:"qual è il suo contrario",  ask:"Qual è il suo contrario? Cosa la nega?" },
+  SIMILAR_TO:     { verb:"somiglia a",     short:"a cosa somiglia",          ask:"A cosa somiglia? Cosa le sta vicino?" },
+  USED_FOR:       { verb:"serve a",        short:"a cosa serve",             ask:"A cosa serve? Per cosa si usa?" },
+  ENABLES:        { verb:"rende possibile",short:"cosa rende possibile",     ask:"Cosa rende possibile? Cosa abilita?" },
+  EXPRESSES:      { verb:"esprime",        short:"cosa esprime",             ask:"Cosa esprime? Di cosa è segno?" },
+  FEELS_AS:       { verb:"si sente come",  short:"come si prova",            ask:"Come si prova? Che sensazione dà?" },
+  TRANSFORMS_INTO:{ verb:"diventa",        short:"in cosa si trasforma",     ask:"In cosa può trasformarsi?" },
+  DERIVES_FROM:   { verb:"deriva da",      short:"da cosa nasce",            ask:"Da cosa nasce, da cosa deriva?" },
+};
+const ATTEMPT_ORDER = ['IS_A','HAS','DOES','CAUSES','REQUIRES','USED_FOR','PART_OF','OPPOSITE_OF','SIMILAR_TO','ENABLES','EXPRESSES','FEELS_AS','TRANSFORMS_INTO','DERIVES_FROM'];
+// quale relazione mancante è più "viva" da chiedere (l'identità "cos'è" è ultima)
+const GAP_SALIENCE  = ['CAUSES','USED_FOR','OPPOSITE_OF','ENABLES','REQUIRES','DOES','EXPRESSES','PART_OF','TRANSFORMS_INTO','DERIVES_FROM','HAS','FEELS_AS','SIMILAR_TO','IS_A'];
+
+const neighborsCache = new Map();
+async function fetchNeighbors(word){
+  if(neighborsCache.has(word)) return neighborsCache.get(word);
+  const d = await getJSON('/api/biennale/word?word=' + encodeURIComponent(word));
+  const out = {};                                    // REL → [{w, conf}], solo USCENTI
+  ((d && d.neighbors) || []).forEach(n => {
+    const rel = n.rel || '';
+    if(rel.startsWith('←')) return;                  // entranti = cosa il mondo dice di X, non ciò che X afferma
+    (out[rel] = out[rel] || []).push({ w: n.w, conf: n.conf });
+  });
+  for(const k in out) out[k].sort((a,b) => b.conf - a.conf);
+  const parsed = { out, present: new Set(Object.keys(out)), ok: !!d };
+  neighborsCache.set(word, parsed);
+  return parsed;
+}
+
+// Il tentativo di UI-r1: una frase costruita dai suoi archi + il punto preciso in cui si ferma.
+function selfClarify(focus, parsed){
+  const clauses = [];
+  for(const rel of ATTEMPT_ORDER){
+    if(parsed.present.has(rel) && parsed.out[rel].length && REL_META[rel]){
+      clauses.push(`${REL_META[rel].verb} ${esc(parsed.out[rel][0].w)}`);
+      if(clauses.length >= 4) break;
+    }
+  }
+  let gapKey = null;
+  for(const rel of GAP_SALIENCE){ if(!parsed.present.has(rel)){ gapKey = rel; break; } }
+  return { clauses, gapKey };
+}
+
+function renderNeighborhood(focus, parsed){
+  const rels = ATTEMPT_ORDER.filter(r => parsed.present.has(r) && parsed.out[r].length);
+  if(!rels.length){ return `<div class="knows"><div class="from-head">tutto ciò che so</div><span class="void">Non ho legami uscenti per «${esc(focus)}» nel grafo.</span></div>`; }
+  let html = '<div class="knows"><div class="from-head">tutto ciò che so di «' + esc(focus) + '»</div>';
+  for(const r of rels){
+    const chipsHtml = parsed.out[r].slice(0,8).map(x => `<span class="chip">${esc(x.w)}</span>`).join('');
+    html += `<div class="rel"><span class="lbl">${REL_META[r].verb}</span>${chipsHtml}</div>`;
+  }
+  return html + '</div>';
+}
+
+// ── Inferenza MULTI-HOP: UI-r1 prova a collocare la parola DA SOLA ──────
+// /api/explore → cammino tipato dal nodo a un'ancora (attrattore/sé). Camel→verbo
+// + camel→SCREAMING per gli eventuali word_connect di correzione.
+const CAMEL = {
+  IsA:{verb:'è',scream:'IS_A'}, Has:{verb:'ha',scream:'HAS'}, Does:{verb:'fa',scream:'DOES'},
+  Causes:{verb:'causa',scream:'CAUSES'}, PartOf:{verb:'è parte di',scream:'PART_OF'},
+  OppositeOf:{verb:"è l'opposto di",scream:'OPPOSITE_OF'}, SimilarTo:{verb:'somiglia a',scream:'SIMILAR_TO'},
+  UsedFor:{verb:'serve a',scream:'USED_FOR'}, Requires:{verb:'richiede',scream:'REQUIRES'},
+  Enables:{verb:'rende possibile',scream:'ENABLES'}, FeelsAs:{verb:'si sente come',scream:'FEELS_AS'},
+  Expresses:{verb:'esprime',scream:'EXPRESSES'}, TransformsInto:{verb:'diventa',scream:'TRANSFORMS_INTO'},
+  DerivesFrom:{verb:'deriva da',scream:'DERIVES_FROM'}, WondersAbout:{verb:'si interroga su',scream:'WONDERS_ABOUT'},
+};
+const camelVerb = r => (CAMEL[r] && CAMEL[r].verb) || r;
+const GROUND_LABEL = {
+  'attrattore':'una categoria che conosco', 'sé':'qualcosa su cui ho una posizione',
+  'già una categoria':'è già una categoria base del mio mondo', 'nodo-frase':'un nodo noto',
+};
+const exploreCache = new Map();
+async function fetchExplore(word){
+  if(exploreCache.has(word)) return exploreCache.get(word);
+  const d = await getJSON('/api/explore?word=' + encodeURIComponent(word));
+  exploreCache.set(word, d);
+  return d;
+}
+function renderChain(focus, exp){
+  let html = `<div class="chain"><span class="node start">${esc(focus)}</span>`;
+  exp.steps.forEach((s, i) => {
+    const v = camelVerb(s.relation);
+    const arrow = s.forward ? `—<span class="v">${esc(v)}</span>→` : `←<span class="v">${esc(v)}</span>—`;
+    const via = s.via ? ` <span class="v">(${esc(s.via)})</span>` : '';
+    const last = i === exp.steps.length - 1;
+    html += `<span class="arr">${arrow}${via}</span><span class="node${last ? ' ground' : ''}">${esc(s.to)}</span>`;
+  });
+  return html + '</div>';
+}
+function verbalizeChain(focus, exp){
+  let prev = focus; const parts = [];
+  for(const s of exp.steps){
+    const v = camelVerb(s.relation);
+    parts.push(s.forward ? `${prev} ${v} ${s.to}` : `${s.to} ${v} ${prev}`);
+    prev = s.to;
+  }
+  return parts.join('; ');
 }
 
 function renderUncertainties(uncs){
   setCount('c-unc', (uncs||[]).length);
   if(!uncs || !uncs.length){ $('uncertainties').innerHTML = empty('Nessuna incertezza di fondo registrata.'); return; }
-  $('uncertainties').innerHTML = uncs.map(u => `<div class="card unc">
-    <div class="lead">${esc(u.topic)}</div>
-    <div class="meta">
-      <span>emersa ${u.emergence_count ?? 0}× senza risposta</span>
-      <span>tensione ${Math.round((u.tension || 0) * 100)}%</span>
-    </div>
-    <div class="tension"><span style="width:${Math.round((u.tension || 0) * 100)}%"></span></div>
-  </div>`).join('');
+  $('uncertainties').innerHTML = uncs.map(u => {
+    const topic = u.topic || '';
+    const focus = (topic.split(/[\s,]+/)[0] || topic);
+    const n = u.emergence_count ?? 0;
+    const ten = Math.round((u.tension || 0) * 100);
+    const times = n === 1 ? 'una volta' : `${n} volte`;
+    return `<div class="card unc" data-topic="${esc(topic)}" data-word="${esc(focus)}">
+      <div class="said"><span class="word">${esc(topic)}</span></div>
+      <div class="why">È riaffiorata <span class="em">${times}</span> nel campo, ma nessuna mia posizione la àncora — per questo resta aperta. Tensione <span class="em">${ten}%</span>.</div>
+      <div class="tension"><span style="width:${ten}%"></span></div>
+      <div class="selfwork loading">sto provando a collocarla nel mio grafo…</div>
+      <div class="gateway"></div>
+      <div class="reveal-row"><button class="reveal">▾ tutto ciò che so</button></div>
+    </div>`;
+  }).join('');
+  wireUncertainties($('uncertainties'));
+}
+
+// CONFERMA (Nome del Padre): l'inferenza multi-hop è giusta → insegna la catena
+// come testo e abbassa la tensione (clarity → receive_clarity).
+async function confirmInference(topic, focus, exp, ackEl, btn){
+  btn.disabled = true; ackEl.classList.remove('err'); ackEl.textContent = 'confermo…';
+  let ok = false;
+  try {
+    const r = await fetch('/api/clarity', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, illumination: verbalizeChain(focus, exp) })
+    });
+    ok = r.ok && (await r.json()) === true;
+  } catch {}
+  if(ok){ exploreCache.delete(focus); neighborsCache.delete(focus); ackEl.textContent = '✓ confermato — la tensione è scesa.'; setTimeout(refresh, 1400); }
+  else { ackEl.classList.add('err'); ackEl.textContent = 'non sono riuscito a confermare.'; btn.disabled = false; }
+}
+
+// CORREZIONE / RISPOSTA (testo libero): insegna ciò che l'utente dice e abbassa
+// la tensione. Se c'è un gap a 1-hop preciso, pianta anche la relazione tipata.
+async function teachText(topic, focus, gapKey, text, ackEl, btn){
+  const ans = text.trim();
+  if(!ans){ ackEl.classList.add('err'); ackEl.textContent = 'scrivi prima qualcosa.'; return; }
+  btn.disabled = true; ackEl.classList.remove('err'); ackEl.textContent = 'la sto facendo mia…';
+  let planted = false;
+  if(gapKey){
+    try {
+      const r = await fetch('/api/word_connect', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: focus, relation: gapKey, to: ans.toLowerCase(), confidence: 0.85 })
+      });
+      planted = r.ok && (await r.json()) === true;
+    } catch {}
+  }
+  const illum = gapKey ? `${focus} ${REL_META[gapKey].verb} ${ans}` : ans;
+  let resolved = false;
+  try {
+    const r = await fetch('/api/clarity', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, illumination: illum })
+    });
+    resolved = r.ok && (await r.json()) === true;
+  } catch {}
+  if(resolved || planted){
+    exploreCache.delete(focus); neighborsCache.delete(focus); conceptCache.delete(focus);
+    ackEl.textContent = planted
+      ? `✓ ora so che «${focus}» ${REL_META[gapKey].verb} «${ans}» — è nel mio grafo, la tensione è scesa.`
+      : '✓ l\'ho imparato — la tensione è scesa.';
+    setTimeout(refresh, 1500);
+  } else { ackEl.classList.add('err'); ackEl.textContent = 'non sono riuscito a riceverla.'; btn.disabled = false; }
+}
+
+async function wireUncertainties(container){
+  container.querySelectorAll('.card.unc').forEach(async card => {
+    const topic = card.dataset.topic || '';
+    const focus = card.dataset.word || topic;
+    const sw = card.querySelector('.selfwork');
+    const gw = card.querySelector('.gateway');
+    const reveal = card.querySelector('.reveal');
+
+    const exp = await fetchExplore(focus);
+    sw.classList.remove('loading');
+
+    if(exp && exp.reached && exp.steps && exp.steps.length){
+      // ── UI-r1 È RIUSCITA a collocarla: mostra il cammino, chiede conferma ──
+      const endpoint = exp.steps[exp.steps.length - 1].to;
+      sw.innerHTML = `<span class="lead">Provo a collocarla da solo, seguendo il mio grafo:</span>`
+        + renderChain(focus, exp)
+        + `<div class="arrive">Arrivo a <b>«${esc(endpoint)}»</b> — ${GROUND_LABEL[exp.ground] || exp.ground}.</div>`;
+      gw.innerHTML = `<div class="verdict-row">
+          <span class="q">Ho collegato bene?</span>
+          <button class="yes">sì, è così</button>
+          <button class="no">no, correggi</button>
+          <span class="ack"></span>
+        </div>
+        <div class="correct" style="display:none">
+          <textarea placeholder="Dimmi com'è davvero…  (Ctrl+Invio)"></textarea>
+          <div class="answer-row" style="margin-top:6px"><button class="send-correct">insegnamelo</button></div>
+        </div>`;
+      const ack = gw.querySelector('.ack');
+      const yes = gw.querySelector('.yes');
+      const no  = gw.querySelector('.no');
+      const corr = gw.querySelector('.correct');
+      const cta = gw.querySelector('.correct textarea');
+      const send = gw.querySelector('.send-correct');
+      yes.addEventListener('click', () => confirmInference(topic, focus, exp, ack, yes));
+      no.addEventListener('click', () => { corr.style.display = corr.style.display === 'none' ? '' : 'none'; if(corr.style.display === '') cta.focus(); });
+      const sub = () => teachText(topic, focus, null, cta.value, ack, send);
+      send.addEventListener('click', sub);
+      cta.addEventListener('keydown', e => { if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); sub(); } });
+    } else {
+      // ── NON ci arriva da sola: dichiara il limite e chiede la relazione mirata ──
+      const parsed = await fetchNeighbors(focus);
+      if(!parsed.ok){ sw.textContent = 'non riesco a interrogare il mio grafo adesso.'; return; }
+      const { clauses, gapKey } = selfClarify(focus, parsed);
+      sw.innerHTML = (clauses.length
+          ? `<span class="lead">Da solo, di «${esc(focus)}» so dire:</span> <span class="know">${clauses.join(', ')}</span>.`
+          : `<span class="lead">Di «${esc(focus)}» non riesco a dire quasi nulla</span> — intorno è quasi tutto vuoto.`)
+        + `<div class="stop">Non riesco a collegarla a nulla che già conosco${gapKey ? `: <b>non so ${REL_META[gapKey].short}</b>` : ''}.</div>`;
+      gw.innerHTML = `<div class="ask"><span class="q">Ti chiedo:</span> ${gapKey ? REL_META[gapKey].ask : 'tu cosa ne pensi davvero? Dimmi una cosa vera su cui possa fondarmi.'}</div>
+        <div class="answer">
+          <textarea aria-label="rispondi a UI-r1 su ${esc(focus)}" placeholder="${gapKey ? `«${esc(focus)}» ${esc(REL_META[gapKey].verb)}…  (Ctrl+Invio)` : 'la tua risposta…  (Ctrl+Invio)'}"></textarea>
+          <div class="answer-row">
+            <button class="solve">insegnamelo</button>
+            <span class="ack"></span>
+          </div>
+        </div>`;
+      const ta = gw.querySelector('textarea');
+      const ack = gw.querySelector('.ack');
+      const solve = gw.querySelector('.solve');
+      const sub = () => teachText(topic, focus, gapKey || null, ta.value, ack, solve);
+      solve.addEventListener('click', sub);
+      ta.addEventListener('keydown', e => { if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); sub(); } });
+    }
+
+    if(reveal) reveal.addEventListener('click', async () => {
+      const existing = card.querySelector('.knows');
+      if(existing){ existing.remove(); reveal.textContent = '▾ tutto ciò che so'; return; }
+      reveal.textContent = '▴ tutto ciò che so';
+      const parsed = await fetchNeighbors(focus);
+      card.insertAdjacentHTML('beforeend', renderNeighborhood(focus, parsed));
+    });
+  });
 }
 
 function renderContext(nar){

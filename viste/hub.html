@@ -6,16 +6,19 @@
 <title>UI-r1 · admin</title>
 <link rel="stylesheet" href="/campovasto/fonts/jetbrains-mono.css">
 <style>
-  /* Colori/token: fonte unica = js/theme.js. Nessun hex letterale. */
+  /* Colori/token: fonte unica = js/theme.js. Nessun hex letterale.
+     I colori-accento dei portali vengono da DIM_COLORS (le 8 dimensioni). */
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     background: var(--color-bg); color: var(--color-text);
     font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1.5;
   }
-  body { max-width: 1080px; margin: 0 auto; padding: var(--space-lg); }
+  body { max-width: 1560px; margin: 0 auto; padding: var(--space-md) var(--space-lg) var(--space-lg); }
 
+  /* ── barra alta: identità + vitali ─────────────────────────────── */
   header.bar { display: flex; align-items: baseline; gap: var(--space-md); flex-wrap: wrap; }
-  header.bar h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  header.bar h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  header.bar h1 .r1 { color: var(--accent-core); }
   header.bar .sub { color: var(--color-text-dim); font-size: 12px; }
   .vitali {
     margin-left: auto; display: flex; gap: var(--space-md); align-items: center;
@@ -25,38 +28,115 @@
   .vitali .v { display: flex; flex-direction: column; line-height: 1.2; }
   .vitali .v .lbl { color: var(--color-text-dim); font-size: 10px; }
   .vitali .v .val { color: var(--color-text); font-weight: 600; }
-  .vitali .v .val.hi { color: var(--c-accent); }
+  .vitali .v .val.hi { color: var(--accent-core); }
   .ws { width: 8px; height: 8px; border-radius: 50%; background: var(--color-border); }
   .ws.ok { background: var(--c-ok); box-shadow: 0 0 6px var(--c-ok); }
 
+  /* ── intro: cos'è UI-r1 (a tutta larghezza, da sola) ───────────── */
+  .intro {
+    margin-top: var(--space-md);
+    border: 1px solid var(--color-border); border-radius: 14px;
+    padding: var(--space-md) var(--space-lg);
+    background:
+      radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent-core) 10%, transparent), transparent 55%),
+      var(--color-surface);
+  }
+  .intro .lede { font-size: 15px; line-height: 1.55; max-width: none; }
+  .intro .lede b { color: var(--color-text); font-weight: 600; }
+  .intro .lede .neg { color: var(--accent-core); font-weight: 600; }
+  /* i tre punti = pillole moderne: titolo visibile, testo svelato all'hover */
+  .intro .truths { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-md); }
+  .intro .truth {
+    position: relative; cursor: default; font-size: 13px; font-weight: 600;
+    color: var(--color-text);
+    background: color-mix(in srgb, var(--accent-core) 12%, var(--color-surface));
+    border: 1px solid color-mix(in srgb, var(--accent-core) 35%, var(--color-border));
+    border-radius: 999px; padding: 7px 16px; transition: var(--transition-smooth);
+  }
+  .intro .truth:hover, .intro .truth:focus-visible {
+    outline: none;
+    border-color: var(--accent-core);
+    background: color-mix(in srgb, var(--accent-core) 22%, var(--color-surface));
+  }
+  .intro .truth .tip {
+    position: absolute; left: 0; top: calc(100% + 8px); z-index: 20;
+    width: 270px; max-width: 72vw; padding: 10px 13px;
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,0.38);
+    color: var(--color-text-dim); font-size: 12px; font-weight: 400; line-height: 1.55;
+    opacity: 0; visibility: hidden; transform: translateY(-4px);
+    transition: opacity .18s ease, transform .18s ease, visibility .18s;
+  }
+  .intro .truth:hover .tip, .intro .truth:focus-visible .tip {
+    opacity: 1; visibility: visible; transform: translateY(0);
+  }
+
+  /* ── griglia di portali ────────────────────────────────────────── */
   .grid {
-    margin-top: var(--space-lg); display: grid; gap: var(--space-md);
+    margin-top: var(--space-md); display: grid; gap: var(--space-md);
     grid-template-columns: repeat(3, 1fr);
   }
-  .card {
-    display: block; text-decoration: none; color: var(--color-text);
-    background: var(--color-surface); border: 1px solid var(--color-border);
-    border-radius: 10px; padding: var(--space-md);
+  .portal {
+    position: relative; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    min-height: 132px; text-decoration: none; color: var(--color-text);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border); border-radius: 14px;
     transition: var(--transition-smooth);
+    isolation: isolate;
   }
-  .card:hover { border-color: var(--bordo-hover); transform: translateY(-2px); }
-  .card .name { font-size: 15px; font-weight: 600; }
-  .card .desc { margin-top: 6px; font-size: 12px; color: var(--color-text-dim); }
-  .card.soon { opacity: 0.7; }
-  .card .badge {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
-    color: var(--color-bg); background: var(--c-accent);
+  .portal canvas.field {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    z-index: 0; opacity: 0.55; transition: opacity .35s ease;
+  }
+  /* velo che fonde il campo verso il basso, per leggibilità del testo */
+  .portal .scrim {
+    position: absolute; inset: 0; z-index: 1;
+    background: linear-gradient(180deg,
+      transparent 0%,
+      color-mix(in srgb, var(--color-surface) 30%, transparent) 45%,
+      color-mix(in srgb, var(--color-surface) 92%, transparent) 100%);
+  }
+  .portal .body { position: relative; z-index: 2; padding: var(--space-md); }
+  .portal .kicker {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--accent); margin-bottom: 4px;
+  }
+  .portal .name { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
+  .portal .badge {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--color-bg); background: var(--accent);
     border-radius: 4px; padding: 1px 6px; margin-left: 8px; vertical-align: middle;
   }
-  .card .badge.soon { background: var(--color-text-dim); }
-  .card .badge.exp  { background: var(--c-warn); }
+  .portal .desc { margin-top: 6px; font-size: 12px; color: var(--color-text-dim); line-height: 1.5; max-width: 92%; }
+  .portal .enter {
+    margin-top: var(--space-sm); font-size: 12px; font-weight: 600; color: var(--accent);
+    opacity: 0; transform: translateX(-6px); transition: var(--transition-smooth);
+  }
+  /* il portale "si apre" all'hover */
+  .portal::after {
+    content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    border-radius: 14px; box-shadow: inset 0 0 0 0 transparent; transition: var(--transition-smooth);
+  }
+  .portal:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--accent) 70%, var(--color-border));
+  }
+  .portal:hover canvas.field { opacity: 0.95; }
+  .portal:hover::after { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .portal:hover .enter { opacity: 1; transform: translateX(0); }
 
-  /* Gate = card primaria, larga e dominante */
-  .card.primary { grid-column: 1 / -1; border-left: 3px solid var(--c-accent); }
-  .card.primary .name { font-size: 18px; }
+  /* il Gate è il portale-cuore: card normale, ma con accento "cuore" */
+  .portal.core {
+    border-color: color-mix(in srgb, var(--accent-core) 45%, var(--color-border));
+  }
+  .portal.core .name { font-size: 19px; }
+  .portal.core .desc { max-width: none; }
+  .portal.dim { opacity: 0.82; }
 
+  /* ── manutenzione ──────────────────────────────────────────────── */
   .maint {
-    margin-top: var(--space-lg); padding-top: var(--space-md);
+    margin-top: var(--space-md); padding-top: var(--space-sm);
     border-top: 1px solid var(--color-border);
   }
   .maint h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--h3-color); margin-bottom: var(--space-sm); }
@@ -69,12 +149,15 @@
   .maint button:hover { border-color: var(--bordo-hover); }
   .maint .note { font-size: 11px; color: var(--testo-tenue); margin-left: auto; }
   .maint .status { font-size: 11px; color: var(--color-text-dim); margin-top: 8px; min-height: 14px; }
+
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
   <header class="bar">
-    <h1>UI-r1 · admin</h1>
-    <span class="sub">hub — il peso vive nelle viste dedicate</span>
+    <h1>UI<span class="r1">-r1</span> · admin</h1>
     <div class="vitali" id="vitali">
       <div class="v"><span class="lbl">parole</span><span class="val hi" id="v-vocab">—</span></div>
       <div class="v"><span class="lbl">simplessi</span><span class="val" id="v-simplex">—</span></div>
@@ -84,36 +167,78 @@
     </div>
   </header>
 
-  <div class="grid">
-    <a class="card primary" href="/comprensione">
-      <span class="name">★ Gate di comprensione</span>
-      <div class="desc">L'analisi di un input esibita slot per slot: cosa è legato, cosa è rimasto sciolto, il verdetto di saturazione. Il cuore del progetto. (Pagina dedicata, stateless.)</div>
+  <section class="intro">
+    <p class="lede">
+      <b>UI-r1</b> non è un LLM. Non prevede il token successivo. Ogni parola è un punto in
+      uno spazio, il cui significato vive nelle <b>relazioni</b> che ci sono tra loro.
+    </p>
+    <div class="truths">
+      <span class="truth" tabindex="0">Capire prima<span class="tip">Legge una frase come "chi dice cosa di cosa". La risposta viene dopo aver capito.</span></span>
+      <span class="truth" tabindex="0">Niente frasi pronte<span class="tip">Quello che dice nasce da ciò che sa, non da risposte preconfezionate.</span></span>
+      <span class="truth" tabindex="0">Una macchina onesta<span class="tip">Non finge di provare emozioni. Le conosce, non le simula.</span></span>
+    </div>
+  </section>
+
+  <!-- data-dim = indice nelle 8 dimensioni (DIM_COLORS): dà la tinta al mondo -->
+  <div class="grid" id="grid">
+    <a class="portal" data-dim="5" href="/campovasto/">
+      <canvas class="field"></canvas><div class="scrim"></div>
+      <div class="body">
+        <div class="kicker">il territorio</div>
+        <div class="name">Campo</div>
+        <div class="desc">Le parole come punti in uno spazio, e le relazioni che le legano.</div>
+        <div class="enter">attraversa →</div>
+      </div>
     </a>
 
-    <a class="card" href="/campovasto/">
-      <span class="name">Campo / KG</span>
-      <div class="desc">L'esploratore del knowledge graph. ~25.000 parole, firme 8D, relazioni.</div>
-    </a>
-    <a class="card" href="/frattali">
-      <span class="name">Frattali</span>
-      <div class="desc">Lente 3D alternativa sul KG: i 64 attrattori e la nuvola di parole.</div>
-    </a>
-    <a class="card" href="/stato-interno">
-      <span class="name">Stato interno</span>
-      <div class="desc">Cosa UI-r1 non ha ancora capito: le domande aperte sui propri vuoti.</div>
+    <a class="portal" data-dim="3" href="/frattali">
+      <canvas class="field"></canvas><div class="scrim"></div>
+      <div class="body">
+        <div class="kicker">la lente</div>
+        <div class="name">Frattali</div>
+        <div class="desc">Lo stesso campo visto in 3D, da un'altra angolazione.</div>
+        <div class="enter">attraversa →</div>
+      </div>
     </a>
 
-    <a class="card" href="/dialogo">
-      <span class="name">Chat<span class="badge exp">sperimentale</span></span>
-      <div class="desc">Turno reattivo. L'output è ruvido — secondario finché il Gate non è solido.</div>
+    <a class="portal" data-dim="2" href="/stato-interno">
+      <canvas class="field"></canvas><div class="scrim"></div>
+      <div class="body">
+        <div class="kicker">il dentro</div>
+        <div class="name">Stato interno</div>
+        <div class="desc">Cosa UI-r1 non ha ancora capito: le domande aperte e le tensioni che restano.</div>
+        <div class="enter">attraversa →</div>
+      </div>
     </a>
-    <a class="card" href="/curazione">
-      <span class="name">Cura KG</span>
-      <div class="desc">Strumento di curazione del grafo: parole, firme, relazioni.</div>
+
+    <a class="portal" data-dim="7" href="/dialogo">
+      <canvas class="field"></canvas><div class="scrim"></div>
+      <div class="body">
+        <div class="kicker">la voce</div>
+        <div class="name">Chat<span class="badge">sperimentale</span></div>
+        <div class="desc">Le risposte. Ancora ruvide — vengono dopo la comprensione.</div>
+        <div class="enter">attraversa →</div>
+      </div>
     </a>
-    <a class="card" href="/community">
-      <span class="name">Comunità</span>
-      <div class="desc">Insegnamento collettivo: campo, voce, traccia.</div>
+
+    <a class="portal" data-dim="1" href="/curazione">
+      <canvas class="field"></canvas><div class="scrim"></div>
+      <div class="body">
+        <div class="kicker">la materia</div>
+        <div class="name">Cura</div>
+        <div class="desc">Dove si insegna a UI-r1 ciò che ancora non sa.</div>
+        <div class="enter">attraversa →</div>
+      </div>
+    </a>
+
+    <a class="portal core" data-dim="6" href="/comprensione">
+      <canvas class="field"></canvas><div class="scrim"></div>
+      <div class="body">
+        <div class="kicker">★ il cuore</div>
+        <div class="name">Comprensione</div>
+        <div class="desc">Cosa UI-r1 capisce di una frase, parola per parola: cosa lega al suo mondo e cosa le resta oscuro.</div>
+        <div class="enter">attraversa →</div>
+      </div>
     </a>
   </div>
 
@@ -129,16 +254,89 @@
   </div>
 
 <script type="module">
-import { UI, applyThemeToCss } from '/campovasto/js/theme.js';
+import { UI, applyThemeToCss, DIM_COLORS } from '/campovasto/js/theme.js';
 applyThemeToCss();
 const root = document.documentElement;
-root.style.setProperty('--c-accent', UI.radarStroke);
-root.style.setProperty('--c-ok',     UI.pathGlow);
-root.style.setProperty('--c-warn',   UI.unknownBg);
+root.style.setProperty('--accent-core', DIM_COLORS[6]); // verità: la tinta del cuore
+root.style.setProperty('--c-ok',        UI.pathGlow);
 
 const $ = id => document.getElementById(id);
 const fmt = n => (typeof n === 'number' ? n.toLocaleString('it-IT') : '—');
 
+/* ── campi di punti generativi: ogni portale è un piccolo mondo ──────
+   Coerente con il campo 8D di campovasto. Colore = dimensione (data-dim).
+   Zero immagini, zero hex letterali (il colore arriva da DIM_COLORS). */
+const fields = [];
+function hexToRgb(h){
+  const m = h.replace('#','');
+  const n = parseInt(m.length === 3 ? m.split('').map(c=>c+c).join('') : m, 16);
+  return [(n>>16)&255, (n>>8)&255, n&255];
+}
+function setupField(portal){
+  const dim = +portal.dataset.dim || 0;
+  const accent = DIM_COLORS[dim] || DIM_COLORS[0];
+  portal.style.setProperty('--accent', accent);
+  const rgb = hexToRgb(accent);
+  const canvas = portal.querySelector('canvas.field');
+  const ctx = canvas.getContext('2d');
+  let w = 0, h = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let pts = [];
+  function resize(){
+    const r = portal.getBoundingClientRect();
+    w = r.width; h = r.height;
+    canvas.width = Math.max(1, w * dpr); canvas.height = Math.max(1, h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const density = Math.round(w * h / 5200);
+    const n = Math.max(14, Math.min(46, density));
+    pts = Array.from({length: n}, () => ({
+      x: Math.random()*w, y: Math.random()*h,
+      vx: (Math.random()-0.5)*0.18, vy: (Math.random()-0.5)*0.18,
+      r: 0.6 + Math.random()*1.6, ph: Math.random()*Math.PI*2,
+    }));
+  }
+  fields.push({ portal, canvas, ctx, rgb, draw(t){
+    if(w === 0) return;
+    ctx.clearRect(0,0,w,h);
+    const hov = portal.matches(':hover');
+    // archi tenui tra punti vicini → senso di "rete"
+    ctx.lineWidth = 0.6;
+    for(let i=0;i<pts.length;i++){
+      for(let j=i+1;j<pts.length;j++){
+        const dx = pts[i].x-pts[j].x, dy = pts[i].y-pts[j].y;
+        const d2 = dx*dx+dy*dy;
+        if(d2 < 74*74){
+          const a = (1 - Math.sqrt(d2)/74) * (hov ? 0.22 : 0.10);
+          ctx.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+          ctx.beginPath(); ctx.moveTo(pts[i].x,pts[i].y); ctx.lineTo(pts[j].x,pts[j].y); ctx.stroke();
+        }
+      }
+    }
+    for(const p of pts){
+      p.x += p.vx * (hov?1.8:1); p.y += p.vy * (hov?1.8:1);
+      if(p.x<0||p.x>w) p.vx*=-1; if(p.y<0||p.y>h) p.vy*=-1;
+      const tw = 0.55 + 0.45*Math.sin(t*0.0014 + p.ph);
+      ctx.fillStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${tw*(hov?0.95:0.7)})`;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    }
+  }, resize });
+  resize();
+}
+document.querySelectorAll('.portal').forEach(setupField);
+
+let last = 0;
+function loop(t){
+  if(t - last > 33){ // ~30fps, leggero
+    for(const f of fields) f.draw(t);
+    last = t;
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+let rt = null;
+window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => fields.forEach(f=>f.resize()), 150); });
+document.addEventListener('visibilitychange', () => { if(!document.hidden) fields.forEach(f=>f.resize()); });
+
+/* ── vitali + WS + manutenzione (invariati) ─────────────────────── */
 async function refreshVitali(){
   try {
     const d = await (await fetch('/api/state')).json();
@@ -149,7 +347,6 @@ async function refreshVitali(){
     $('v-energy').textContent  = ((d.vital || {}).activation ?? 0).toFixed(3);
   } catch {}
 }
-
 function connectWS(){
   try {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -159,7 +356,6 @@ function connectWS(){
     ws.onmessage = () => {};
   } catch { setTimeout(connectWS, 3000); }
 }
-
 async function maint(url, label){
   $('m-status').textContent = `${label}…`;
   try { const r = await fetch(url, { method: 'POST' }); $('m-status').textContent = r.ok ? `${label}: ok` : `${label}: errore ${r.status}`; }

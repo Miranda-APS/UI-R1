@@ -43,7 +43,7 @@ async function init(){
     // cache: 'no-store' per evitare che il browser serva una versione vecchia
     // del campo dopo modifiche server-side. Il payload è grande (~3K nodi) ma
     // il bottleneck è il rendering, non la fetch.
-    const resp = await fetch('/api/biennale/field', { cache: 'no-store' });
+    const resp = await fetch('/api/biennale/field_all', { cache: 'no-store' });
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     data = await resp.json();
   } catch(e){
@@ -150,7 +150,9 @@ async function init(){
     onEditEdge: openQuickEdge,
     onNodeHover: (word) => setTrailHover(word),
   });
-  mountField('vasto', { fit: true });
+  // animate:false sul mount iniziale: la fit-animation ridisegnerebbe i 9k
+  // nodi a ogni frame per ~500ms al boot. Fit istantaneo → caricamento scheggia.
+  mountField('vasto', { fit: true, animate: false });
   // Body class iniziale per il gating CSS (es. #filtri visibile solo in vasto).
   document.body.classList.add('campo-vasto');
 

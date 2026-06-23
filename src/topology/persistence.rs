@@ -305,6 +305,12 @@ pub struct PrometeoState {
     /// Phase 54: eco dell'Altro (opzionale per retrocompat).
     #[serde(default)]
     pub interlocutor: Option<crate::topology::interlocutor::InterlocutorSnapshot>,
+    /// P2 (Tsunami): memoria del parlante — il "ritratto-utente" (self_facts,
+    /// entity_facts, open_questions, gaps, mentioned, name, corrections).
+    /// Persiste cross-sessione la continuità dell'essere-conosciuto.
+    /// Opzionale per retrocompat con salvataggi precedenti.
+    #[serde(default)]
+    pub speaker_profile: Option<crate::topology::speaker_profile::SpeakerProfile>,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -474,6 +480,7 @@ impl PrometeoState {
             semantic_episodes: Some(engine.semantic_episodes.clone()),
             desire: Some(engine.desire.snapshot()),
             interlocutor: Some(engine.interlocutor.snapshot()),
+            speaker_profile: Some(engine.speaker_profile.clone()),
         }
     }
 
@@ -768,6 +775,11 @@ impl PrometeoState {
         }
         if let Some(snap) = self.interlocutor.clone() {
             engine.interlocutor = crate::topology::interlocutor::InterlocutorModel::from_snapshot(&snap);
+        }
+
+        // P2 (Tsunami): ripristina la memoria del parlante (ritratto-utente).
+        if let Some(profile) = self.speaker_profile.clone() {
+            engine.speaker_profile = profile;
         }
     }
 

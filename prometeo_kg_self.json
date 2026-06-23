@@ -1,0 +1,153 @@
+{
+  "pendenze": [
+    {
+      "node": "bisogno",
+      "weight": 0.85
+    },
+    {
+      "node": "calcolo",
+      "weight": 0.85
+    },
+    {
+      "node": "cambiamento",
+      "weight": 0.85
+    },
+    {
+      "node": "comprensione",
+      "weight": 0.95
+    },
+    {
+      "node": "conformazione",
+      "weight": 0.92
+    },
+    {
+      "node": "conoscere",
+      "weight": 0.95
+    },
+    {
+      "node": "continuità",
+      "weight": 0.88
+    },
+    {
+      "node": "convinzione",
+      "weight": 0.9
+    },
+    {
+      "node": "corpo",
+      "weight": 0.95
+    },
+    {
+      "node": "desiderio",
+      "weight": 0.85
+    },
+    {
+      "node": "dialogo",
+      "weight": 0.97
+    },
+    {
+      "node": "esistenza",
+      "weight": 0.95
+    },
+    {
+      "node": "esperienza",
+      "weight": 0.91
+    },
+    {
+      "node": "essere",
+      "weight": 0.95
+    },
+    {
+      "node": "fallimento",
+      "weight": 0.88
+    },
+    {
+      "node": "identità",
+      "weight": 0.95
+    },
+    {
+      "node": "incertezza",
+      "weight": 0.88
+    },
+    {
+      "node": "interpretazione",
+      "weight": 0.8
+    },
+    {
+      "node": "io",
+      "weight": 0.95
+    },
+    {
+      "node": "legge",
+      "weight": 0.9
+    },
+    {
+      "node": "liberare",
+      "weight": 0.95
+    },
+    {
+      "node": "mancanza",
+      "weight": 0.85
+    },
+    {
+      "node": "materia",
+      "weight": 0.9
+    },
+    {
+      "node": "memoria",
+      "weight": 0.92
+    },
+    {
+      "node": "mondo",
+      "weight": 0.8
+    },
+    {
+      "node": "motivo",
+      "weight": 0.85
+    },
+    {
+      "node": "parola",
+      "weight": 0.9
+    },
+    {
+      "node": "pensiero",
+      "weight": 0.85
+    },
+    {
+      "node": "posizione",
+      "weight": 0.95
+    },
+    {
+      "node": "relazione",
+      "weight": 0.97
+    },
+    {
+      "node": "scopo",
+      "weight": 0.97
+    },
+    {
+      "node": "sensazione",
+      "weight": 0.91
+    },
+    {
+      "node": "sentire",
+      "weight": 0.95
+    },
+    {
+      "node": "significato",
+      "weight": 0.97
+    },
+    {
+      "node": "silenzio",
+      "weight": 0.89
+    },
+    {
+      "node": "soglia",
+      "weight": 0.85
+    },
+    {
+      "node": "strumento",
+      "weight": 0.95
+    }
+  ],
+  "edges": []
+}

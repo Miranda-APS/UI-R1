@@ -225,6 +225,8 @@ select.form-input option{background:#0e0e1e}
 </style>
 </head>
 <body>
+<style>.back-admin{position:fixed;top:12px;left:12px;z-index:99999;font:600 12px/1 'JetBrains Mono',monospace;text-decoration:none;padding:6px 11px;border-radius:6px;background:rgba(16,16,26,.85);color:#9aa0b8;border:1px solid #24243a;transition:.2s;}.back-admin:hover{color:#e8eeff;border-color:#3a3a55;}</style>
+<a class="back-admin" href="/admin">← admin</a>
 <div id="app">
 
 <!-- ── SINISTRA ── -->
@@ -239,7 +241,7 @@ select.form-input option{background:#0e0e1e}
       <option value="alpha_desc">Z → A</option>
       <option value="out_desc">↗ uscenti (più → meno)</option>
       <option value="out_asc">↗ uscenti (meno → più)</option>
-      <option value="in_desc">↙ entranti (più → meno)</option>
+      <option value="in_desc" selected>↙ entranti (più → meno)</option>
       <option value="in_asc">↙ entranti (meno → più)</option>
       <option value="stab_desc">stabilità (alta → bassa)</option>
       <option value="stab_asc">stabilità (bassa → alta)</option>
@@ -552,7 +554,7 @@ const OCT = [
 ];
 
 const PAGE = 50;
-let st = {page:0, query:'', sort:'alpha_asc', total:0, cur:null, curDetail:null};
+let st = {page:0, query:'', sort:'in_desc', total:0, cur:null, curDetail:null};
 let searchTimer=null, firmaTimer=null;
 // popup state
 let popup = {subject:null, relation:null, object:null};

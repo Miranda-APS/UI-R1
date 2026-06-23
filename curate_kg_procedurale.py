@@ -437,14 +437,32 @@ add("comprendere", "IsA", "verbo")
 add("comprendere", "IsA", "cognitivo")
 add("comprendere", "UsedFor", "esprimere", via="comprensione")
 
-# Verbi modali (volere/dovere/potere/preferire) — esprimono intenzione/obbligo/capacità.
+# Verbi modali (volere/dovere/potere) — esprimono intenzione/obbligo/capacità.
 # `IsA cognitivo` perché il loro contenuto è una posizione del soggetto;
 # `IsA modale` perché modulano un altro verbo (struttura modale + infinito).
-for modale_v in ["volere", "dovere", "potere", "preferire"]:
+for modale_v in ["volere", "dovere", "potere"]:
     add(modale_v, "IsA", "verbo")
     add(modale_v, "IsA", "cognitivo")
     add(modale_v, "IsA", "modale")
     add(modale_v, "UsedFor", "esprimere", via="intenzione")
+
+# ── Verbi VALUTATIVI (frame `valutativo`) ───────────────────────────────────
+# amare/odiare/preferire/desiderare/gradire: NON "esprimono" (Expresses) — sono
+# un'ATTITUDINE valutativa verso un oggetto → relazione FeelsAs (una presa di
+# posizione affettiva). Prima cadevano nel bucket `cognitivo`→Expresses ("io
+# esprimo pizza"), la discarica dei verbi mentali. Il frame `valutativo` dice
+# all'estrattore: la relazione è FeelsAs, l'oggetto è la cosa valutata. Lo stesso
+# meccanismo del frame dativo (Phase 83): la relazione vive nel verbo, come dato.
+# (Pochi frame finiti, verbi infiniti — minimi denominatori.) `preferire` resta
+# anche `modale`: "preferisco andare" → frame modale (Does sull'infinito);
+# "preferisco la pizza" → valutativo (FeelsAs pizza).
+add("valutativo", "IsA", "qualificatore")
+for val_v in ["amare", "odiare", "preferire", "desiderare", "gradire",
+              "adorare", "detestare", "apprezzare", "prediligere", "bramare", "stimare"]:
+    add(val_v, "IsA", "verbo")
+    add(val_v, "IsA", "valutativo")
+    add(val_v, "UsedFor", "valutare", via="preferenza")
+add("preferire", "IsA", "modale")
 
 # Verbi di movimento (per dichiarazione-di-azione: "vado al mare")
 for mov_v in ["andare", "venire", "tornare", "uscire", "entrare", "partire", "arrivare"]:
@@ -489,6 +507,28 @@ for dat_v, emozione in [
 # La relazione FeelsAs viene dalla categoria percettiva del verbo (mappa esistente).
 add("pronominale", "IsA", "qualificatore")
 add("sentire", "IsA", "pronominale")
+
+# ── Verbi di GENESI / ORIGINE (frame `genesi`) ──────────────────────────────
+# "X nasce/deriva/proviene/scaturisce/sorge DA Y": Y è la FONTE che fa nascere X.
+# Verbo intransitivo + complemento di "da" (origine). Il frame `genesi` dice
+# all'estrattore di leggere la relazione dalla PREPOSIZIONE ("da" propone la
+# famiglia causale) e di porre la FONTE come soggetto:
+#   la paura nasce dall'ignoto  →  ignoto Causes paura
+# La preposizione propone, il frame dispone — NON "da→Causes" cieco: un verbo
+# senza frame lascia "da" come circostanza ("il giorno inizia dal mattino").
+add("genesi", "IsA", "qualificatore")
+for gen_v in ["nascere", "derivare", "provenire", "scaturire", "sorgere"]:
+    add(gen_v, "IsA", "verbo")
+    add(gen_v, "IsA", "genesi")
+
+# ── Verbi di DIPENDENZA (frame `dipendenza`) ────────────────────────────────
+# "X dipende DA Y": non è genesi, è necessità — X è condizionato da Y. Il frame
+# `dipendenza` legge la relazione come Requires (necessità) MANTENENDO il
+# soggetto: tutto dipende dal caso  →  tutto Requires caso.
+add("dipendenza", "IsA", "qualificatore")
+for dep_v in ["dipendere"]:
+    add(dep_v, "IsA", "verbo")
+    add(dep_v, "IsA", "dipendenza")
 
 # ══════════════════════════════════════════════════════════════════════════
 # § H — AVVERBI MODALI (per esitazione)

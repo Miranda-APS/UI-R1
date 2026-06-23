@@ -86,8 +86,17 @@ header .sub{color:var(--text-dim);font-size:13px;margin:0 0 20px}
 /* proposizione (SVG) */
 .prop-box{border:1px solid var(--border);border-radius:var(--radius);
   background:var(--surface);padding:8px;min-height:60px;display:flex;
-  align-items:center;justify-content:center}
+  flex-direction:column;align-items:center;justify-content:center;gap:10px}
 .prop-empty{color:var(--text-dim);font-size:13px;font-style:italic;padding:18px}
+/* complementi (analisi logica completa, oltre il via primario) */
+.compl-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 8px 4px}
+.compl{font-size:12.5px;color:var(--text-muted);border:1px solid var(--via);
+  border-radius:6px;padding:3px 9px;background:var(--surface2)}
+.compl b{color:var(--via)}
+/* clausole secondarie nella narrazione */
+.narr .clause{color:var(--text);margin-top:8px;padding-left:12px;
+  border-left:2px solid var(--accent)}
+.narr .clause b{color:var(--accent)}
 /* narrazione */
 .narr{border:1px solid var(--border);border-radius:var(--radius);
   background:var(--surface);padding:16px 18px;font-size:14.5px;line-height:1.7}
@@ -117,6 +126,90 @@ header .sub{color:var(--text-dim);font-size:13px;margin:0 0 20px}
 .world.w-none{color:var(--part);border-color:var(--part)}
 .empty-state{color:var(--text-dim);text-align:center;padding:40px 0;font-style:italic}
 .err{color:var(--unk);padding:14px}
+/* ── Indice di ricchezza (la cura resa visibile) ── */
+.rich-pips{display:flex;gap:2px;align-items:center}
+.rich-pips .pip{width:6px;height:6px;border-radius:50%;background:var(--border-hi);opacity:.35}
+.rich-pips .pip.on{opacity:1}
+.rich-pips.r-ricca .pip.on{background:var(--ok)}
+.rich-pips.r-articolata .pip.on{background:var(--accent)}
+.rich-pips.r-essenziale .pip.on{background:var(--part)}
+.tok .rich{margin-top:2px}
+.rich-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--text-muted)}
+.rich-line .tier{font-weight:700}
+.rich-line .tier.r-ricca{color:var(--ok)} .rich-line .tier.r-articolata{color:var(--accent)}
+.rich-line .tier.r-essenziale{color:var(--part)}
+.rich-num{color:var(--text)}
+/* ── Spettro famiglie di relazione ── */
+.fam-spectrum{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.fam{font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);
+  color:var(--text-dim);background:var(--surface2)}
+.fam.on{color:var(--text-bright);border-color:var(--border-hi)}
+.fam.on.f-strutturale{border-color:#7C9CE8;color:#9fb8f0}
+.fam.on.f-causale{border-color:#E89A5A;color:#f0b27e}
+.fam.on.f-semantica{border-color:#A86EDB;color:#c39ae8}
+.fam.on.f-fenomenologica{border-color:#4AC880;color:#7adba2}
+.fam.on.f-logica{border-color:#E8D040;color:#efe07a}
+/* ── Firma 8D (lo strato del sentire) ── */
+.firma{margin-top:10px}
+.firma-row{display:grid;grid-template-columns:78px 1fr 56px;align-items:center;gap:8px;
+  margin:3px 0;font-size:12px}
+.firma-row .fn{color:var(--text-dim);text-align:right}
+.firma-row.sal .fn{color:var(--text)}
+.firma-track{height:9px;border-radius:5px;background:var(--surface);position:relative;
+  border:1px solid var(--border);overflow:hidden}
+.firma-track .mid{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border-hi);opacity:.5}
+.firma-fill{height:100%;background:var(--border-hi);opacity:.5}
+.firma-row.sal .firma-fill{background:var(--via);opacity:1}
+.firma-row .fv{color:var(--text-muted);font-size:11px}
+.firma-row.sal .fv{color:var(--via)}
+.conno{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.conno .c{font-size:12px;padding:2px 9px;border-radius:6px;border:1px solid var(--via);
+  color:var(--via);background:var(--surface2)}
+.region-chip{display:inline-block;font-size:12px;padding:2px 9px;border-radius:6px;
+  background:var(--surface2);border:1px solid var(--border-hi);color:var(--text);margin-top:8px}
+/* ── Tonalità: come le firme colorano la lettura ── */
+.tonality{border:1px solid var(--via);border-radius:var(--radius);background:var(--surface);
+  padding:16px 18px}
+.tonality .lead{color:var(--text-bright);font-size:14.5px;line-height:1.6}
+.tonality .principle{color:var(--text-muted);font-size:12.5px;font-style:italic;margin-top:8px;
+  padding-top:8px;border-top:1px solid var(--border)}
+.tonality .contrib{color:var(--text-dim);font-size:12px;margin-top:6px}
+/* ── Cammini multi-hop ── */
+.chains{display:flex;flex-direction:column;gap:6px}
+.chain{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;
+  border:1px solid var(--border);border-radius:8px;padding:7px 12px;background:var(--surface)}
+.chain .hop{color:var(--text-bright);font-weight:600}
+.chain .rel{color:var(--accent);font-size:11.5px}
+.chain .arrow{color:var(--text-dim)}
+.chain .cc{margin-left:auto;color:var(--text-dim);font-size:11px}
+/* ── tonalità per-parola nel dettaglio (grafo vs firma) ── */
+.dual-read{padding:0 16px 12px;font-size:12.5px;color:var(--text-muted)}
+.dual-read .lab{color:var(--text-dim)}
+.dual-read .kg{color:var(--accent)} .dual-read .firma-tag{color:var(--via)}
+/* ── Ragionamento: i passi che portano al senso compiuto ── */
+.reason-steps{border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);padding:6px 8px}
+.rstep{display:flex;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.rstep:last-child{border-bottom:0}
+.rstep .n{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--surface2);
+  border:1px solid var(--border-hi);color:var(--text-muted);font-size:12px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;margin-top:1px}
+.rstep .body{flex:1}
+.rstep .rlab{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);
+  margin-bottom:2px}
+.rstep .rtxt{color:var(--text);font-size:14px;line-height:1.55}
+.rstep .rtxt b{color:var(--text-bright)}
+.rstep.synth{background:var(--surface2)}
+.rstep.synth .rtxt{color:var(--text-bright)}
+.rstep.synth .n{border-color:var(--ok);color:var(--ok)}
+.focus-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.focus-chip{font-size:12.5px;padding:2px 9px;border-radius:6px;border:1px solid var(--border)}
+.focus-chip.lit{border-color:var(--ok);color:var(--ok)}
+.focus-chip.dim{border-color:var(--text-dim);color:var(--text-dim);text-decoration:line-through;
+  opacity:.7}
+.evidence{margin-top:10px}
+.evidence .ev-t{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);
+  margin:0 0 6px}
 </style>
 </head>
 <body>
@@ -125,7 +218,7 @@ header .sub{color:var(--text-dim);font-size:13px;margin:0 0 20px}
 <div class="wrap">
   <header>
     <h1>Gate di Comprensione</h1>
-    <p class="sub">Cosa UI-r1 comprende di un input — slot per slot, senza punti ciechi.</p>
+    <p class="sub">Cosa UI-r1 comprende di un input, slot per slot, senza punti ciechi.</p>
   </header>
 
   <div class="inrow">
@@ -158,7 +251,8 @@ const ROLE_LABEL = {
   soggetto:"soggetto", verbo:"verbo", copula:"verbo", ausiliare:"verbo (ausiliare)",
   specificazione:"complemento", avverbio:"avverbio", preposizione:"preposizione",
   articolo:"articolo", congiunzione:"congiunzione", pronome:"pronome",
-  interiezione:"esclamazione", funzionale:"parola funzione",
+  interiezione:"esclamazione", esclamazione:"saluto/esclamazione", funzionale:"parola funzione",
+  attributo:"attributo",
 };
 // Lo slot "oggetto" della proposizione, nominato secondo cosa lo lega:
 // "ho paura"→stato, "la paura è emozione"→categoria, "mangio una mela"→oggetto.
@@ -182,7 +276,7 @@ function friendlyRole(role, tok){
 const FUNCTIONAL_ROLES = ["copula","ausiliare","articolo","preposizione","congiunzione","pronome","marcatore","determinante","avverbio","interiezione","funzionale"];
 function friendlyReason(c){
   if(c.status==="compreso" && FUNCTIONAL_ROLES.includes(c.role))
-    return "parola che serve a costruire la frase ("+friendlyRole(c.role,c.token)+") — struttura, non contenuto.";
+    return "parola che serve a costruire la frase ("+friendlyRole(c.role,c.token)+"), struttura, non contenuto.";
   if(c.status==="compreso")
     return "legata alla frase come "+friendlyRole(c.role,c.token)+", e ancorata a ciò che so.";
   if(c.status==="parziale" && c.bound)
@@ -194,6 +288,194 @@ function friendlyReason(c){
 
 const $ = s => document.querySelector(s);
 const el = (t,c,txt)=>{const e=document.createElement(t);if(c)e.className=c;if(txt!=null)e.textContent=txt;return e;};
+
+// ── Strato SENTIRE + ricchezza: rendono VISIBILE la cura ───────────────────
+// I nomi delle 8 dimensioni (ordine I Ching canonico), uguali a quelli che la
+// gente cura in campovasto. Niente glifi: solo le parole.
+const DIM_NAMES = ['potere','materia','ardore','divenire','spazio','intreccio','verità','armonia'];
+const FAMILIES = ['strutturale','causale','semantica','fenomenologica','logica'];
+
+// Indice di ricchezza come 5 pallini (quanto un nodo è curato a colpo d'occhio).
+function richPips(rich){
+  const wrap = el("span","rich-pips r-"+(rich.label||"essenziale"));
+  const n = Math.max(0, Math.min(5, Math.round((rich.score||0)*5)));
+  for(let i=0;i<5;i++){ const p=el("span","pip"+(i<n?" on":"")); wrap.appendChild(p); }
+  return wrap;
+}
+// Spettro delle 5 famiglie di relazione: accese quelle presenti sul nodo.
+function famSpectrum(familyIds){
+  const row = el("div","fam-spectrum");
+  const set = new Set(familyIds||[]);
+  FAMILIES.forEach(f=>{
+    const on = set.has(f);
+    const chip = el("span","fam"+(on?" on f-"+f:""), f);
+    row.appendChild(chip);
+  });
+  return row;
+}
+// Firma 8D come 8 barre nominate. Le dimensioni "salienti" (quelle che la
+// connotazione segnala) sono evidenziate: sono ciò che la firma DICE.
+function firmaBars(sig, connotation){
+  const box = el("div","firma");
+  const salient = new Set((connotation||[]).map(c=>c.dimension));
+  sig.forEach((v,i)=>{
+    const name = DIM_NAMES[i];
+    const sal = salient.has(name);
+    const row = el("div","firma-row"+(sal?" sal":""));
+    row.appendChild(el("span","fn",name));
+    const track = el("div","firma-track");
+    track.appendChild(el("div","mid"));
+    const fill = el("div","firma-fill"); fill.style.width = Math.round(v*100)+"%";
+    track.appendChild(fill); row.appendChild(track);
+    row.appendChild(el("span","fv", Math.round(v*100)));
+    box.appendChild(row);
+  });
+  return box;
+}
+// I chip di connotazione (le letture salienti: "attrae", "futuro", "intensa"…).
+function connoChips(connotation){
+  const row = el("div","conno");
+  (connotation||[]).forEach(c=>{ row.appendChild(el("span","c", c.reading)); });
+  return row;
+}
+// ── COME LE FIRME CAMBIANO LA COMPRENSIONE ──
+// Il grafo dà la DENOTAZIONE (cosa sono le parole); le firme danno la
+// CONNOTAZIONE (come suonano). Questa sezione mostra la tonalità della frase
+// DERIVATA dalle firme: curandole, cambia. È lo strato del "sentire", reso
+// leggibile dentro la comprensione.
+function tonalitySection(t){
+  if(!t) return null;
+  const box = el("div","tonality");
+  box.appendChild(el("div","lead", cap(t.summary||"")));
+  if(t.region) box.appendChild(el("span","region-chip","regione del sentire: "+t.region));
+  if(t.signature) box.appendChild(firmaBars(t.signature, t.readings));
+  if(t.readings && t.readings.length) box.appendChild(connoChips(t.readings));
+  if(t.contributors && t.contributors.length)
+    box.appendChild(el("div","contrib","Dalle firme di: "+t.contributors.join(", ")+"."));
+  box.appendChild(el("div","principle","Le firme non cambiano COSA dico che la frase sia, quello lo tiene il grafo. Cambiano il TONO con cui la leggo. Curare le firme sposta la frase di regione e di tinta: la comprensione resta, la sua tonalità cambia."));
+  return box;
+}
+// Cammini multi-hop: il ragionamento a 2 passi che la cura abilita
+// (futuro → attesa → emozione). Più relazioni curate = più cammini.
+function chainsSection(chains){
+  if(!chains || !chains.length) return null;
+  const wrap = el("div","chains");
+  chains.forEach(ch=>{
+    const c = el("div","chain");
+    c.appendChild(el("span","hop",ch.origin));
+    c.appendChild(el("span","rel",ch.first_label));
+    c.appendChild(el("span","arrow","→"));
+    c.appendChild(el("span","hop",ch.first_target));
+    c.appendChild(el("span","rel",ch.second_label));
+    c.appendChild(el("span","arrow","→"));
+    c.appendChild(el("span","hop",ch.second_target));
+    c.appendChild(el("span","cc", Math.round((ch.combined_confidence||0)*100)+"%"));
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+
+// ── IL RAGIONAMENTO, come UI-r1 arriva al senso compiuto ──
+// Non "ho capito che vogliamo futuro" + dump generico: una serie di passi che
+// COMPONGONO la frase (chi-fa-cosa, l'oggetto qualificato, cos'è nel grafo, la
+// messa a fuoco dell'attributo) fino a un senso compiuto. È il modo umano di
+// capire una frase: futuro ≠ futuro bello ≠ vogliamo un futuro bello.
+function attrsOf(p, cov){
+  const pw=new Set();
+  if(p)[p.subject_name,p.object_name,p.via,p.verb_lemma].forEach(w=>{if(w)pw.add(w.toLowerCase());});
+  return (cov||[]).filter(c=>c.role==="attributo" && !pw.has((c.lemma||c.token).toLowerCase())).map(c=>c.token);
+}
+function objectDisplay(p, cov){
+  if(!p) return "";
+  const base = p.object_name || "";
+  const at = attrsOf(p, cov);
+  return at.length ? ((base?base+" ":"")+at.join(" ")) : base;
+}
+const PRON=/^(io|tu|noi|voi|lui|lei|loro|egli|ella|me|te|sé|si|ci|vi|mi|ti)$/i;
+function evidencePaths(reasoning){
+  if(!reasoning) return [];
+  return (reasoning.groundings||[]).filter(g=>g.steps&&g.steps.length&&!PRON.test(g.endpoint||""));
+}
+function pathChain(from, steps){
+  const c=el("div","chain");
+  c.appendChild(el("span","hop",from));
+  steps.forEach(s=>{
+    c.appendChild(el("span","arrow",s.forward?"→":"←"));
+    c.appendChild(el("span","rel",s.label+(s.via?" ·"+s.via:"")));
+    c.appendChild(el("span","hop",s.to));
+  });
+  return c;
+}
+function reasoningSection(r, cov){
+  const p=r.primary; if(!p||!p.relation) return null;
+  const box=el("div","reason-steps");
+  let n=1;
+  const step=(lab,cls,build)=>{ const s=el("div","rstep"+(cls?" "+cls:"")); s.appendChild(el("span","n",String(n++)));
+    const b=el("div","body"); b.appendChild(el("div","rlab",lab)); const t=el("div","rtxt"); build(t); b.appendChild(t); s.appendChild(b); box.appendChild(s); return t; };
+  const surf=p.subject_surface?deictic(p.subject_surface):null;
+  const subj=surf||(p.subject_kind==="World"?p.subject_name:(SUBJ[p.subject_kind]||"?"));
+  const verb=p.verb_display||verbFor(p,surf);
+  const neg=p.polarity===false?"non ":"";
+  const objDisp=objectDisplay(p,cov);
+  const isQ=p.object_kind==="Variable";
+
+  step("Chi parla, e cosa fa","",t=>{ t.innerHTML = isQ
+    ? `<b>${cap(subj)}</b> mi pone una domanda.`
+    : `<b>${cap(subj)}</b> ${neg}<b>${verb}</b>, è l'atto della frase.`; });
+
+  if(!isQ && objDisp){
+    step("L'oggetto, qualificato","",t=>{
+      let h = p.object_name && objDisp!==p.object_name
+        ? `Non un <b>${p.object_name}</b> qualunque: <b>${objDisp}</b>.`
+        : `L'oggetto è <b>${objDisp}</b>.`;
+      if(p.via) h+=` Riguarda <b>${p.via}</b> (un complemento, introdotto da preposizione).`;
+      else { const at=attrsOf(p,cov);
+        if(at.length) h+=` Nessun complemento di preposizione: a precisarlo è l'attributo «${at.join(", ")}», non un «di/a/da…».`; }
+      t.innerHTML=h;
+    });
+  }
+
+  const head=(r.qualified&&r.qualified[0]&&r.qualified[0].head)||p.object_name;
+  const gc=head?groundedClause(head):null;
+  if(gc) step("Cos'è, nel mio grafo","",t=>{ t.innerHTML=`<b>${head}</b> ${gc}.`; });
+
+  (r.qualified||[]).forEach(q=>{
+    if(!q.illuminated.length && !q.dimmed.length) return;
+    step("La messa a fuoco (olografica)","",t=>{
+      t.innerHTML=`Con «<b>${q.attribute}</b>» (qualità ${q.attribute_valence}) la stessa parola si fa più nitida:`;
+      const row=el("div","focus-row");
+      q.illuminated.forEach(w=>row.appendChild(el("span","focus-chip lit",w)));
+      q.dimmed.forEach(w=>row.appendChild(el("span","focus-chip dim",w)));
+      t.appendChild(row);
+      t.appendChild(el("div","subj-hint","ciò che le è coerente lo metto a fuoco; ciò che le è in tensione lo lascio in ombra, l'informazione è la stessa, l'immagine è più nitida. (Dalle firme di adesso: se un ramo vi sembra fuori posto, è proprio una firma da curare.)"));
+    });
+  });
+
+  if(!isQ){
+    const lit=(r.qualified||[]).flatMap(q=>q.illuminated);
+    step("Senso compiuto","synth",t=>{
+      let h=`<b>${cap(subj)} ${neg}${verb} ${objDisp}</b>`;
+      if(lit.length) h+=`, e nel mio grafo lo leggo soprattutto come ${joinIt(lit)}`;
+      h+=".";
+      t.innerHTML=h;
+    });
+  }
+
+  // Evidenza: i cammini tipati che ho davvero seguito (da explore), non tutti i
+  // rimandi possibili, quelli SCELTI per fondare la frase.
+  const ev=evidencePaths(r.reasoning);
+  const claim=(r.reasoning&&r.reasoning.claim_path)||[];
+  if(ev.length||claim.length){
+    const wrap=el("div","evidence");
+    wrap.appendChild(el("p","ev-t","I legami che ho seguito (scelti, non tutti i possibili)"));
+    const chains=el("div","chains");
+    if(claim.length) chains.appendChild(pathChain(p.subject_kind==="World"?p.subject_name:(subj||"?"), claim));
+    ev.forEach(g=>chains.appendChild(pathChain(g.from,g.steps)));
+    wrap.appendChild(chains);
+    box.appendChild(wrap);
+  }
+  return box;
+}
 
 // Grounding per-parola dall'ultima analisi (asse Conoscenza del dettaglio-token).
 let UNDERSTANDING = [];
@@ -228,7 +510,7 @@ function render(r){
   const v = el("div","verdict");
   const dot = el("span","dot"); dot.style.background = DOTCOL[s.verdict]||"var(--text-dim)";
   v.appendChild(dot);
-  v.appendChild(el("span","v-label", s.verdict||"—"));
+  v.appendChild(el("span","v-label", s.verdict||"·"));
   const counts = el("span","v-counts",
     `✅ ${s.compreso||0}  🟡 ${s.parziale||0}  🔴 ${s.ignoto||0}  / ${s.total||0}`);
   v.appendChild(counts);
@@ -237,14 +519,30 @@ function render(r){
   }
   out.appendChild(v);
 
+  // ── Ricchezza della frase: l'indice che SALE dopo la cura ──
+  if(r.richness && r.richness.degree>0){
+    const rl = el("div","rich-line");
+    rl.appendChild(el("span","lab","Ricchezza della frase:"));
+    rl.appendChild(richPips(r.richness));
+    rl.appendChild(el("span","tier r-"+r.richness.label, r.richness.label));
+    rl.appendChild(el("span","rich-num",
+      r.richness.degree+" relazioni · "+r.richness.families+"/5 famiglie · "+r.richness.multihop+" cammini"));
+    out.appendChild(rl);
+  }
+
   // ── Striscia copertura ──
-  out.appendChild(el("div","section-t","Copertura — ogni parola, il suo stato"));
+  out.appendChild(el("div","section-t","Copertura: ogni parola, il suo stato"));
   const strip = el("div","cov");
   const detail = el("div","detail"); detail.id="detail";
   cov.forEach((c,i)=>{
     const t = el("div","tok "+c.status);
     t.appendChild(el("span","w",c.token));
     t.appendChild(el("span","r",friendlyRole(c.role, c.token)));
+    // Indice di ricchezza per-parola (5 pallini): la cura visibile a colpo d'occhio.
+    const gw = groundingFor(c.lemma, c.token);
+    if(gw && gw.richness && gw.richness.degree>0){
+      const rp = richPips(gw.richness); rp.classList.add("rich"); t.appendChild(rp);
+    }
     t.onclick=()=>{
       document.querySelectorAll(".tok.sel").forEach(x=>x.classList.remove("sel"));
       t.classList.add("sel"); showDetail(c, detail);
@@ -254,22 +552,41 @@ function render(r){
   out.appendChild(strip);
   out.appendChild(detail);
 
+  // ── Come le firme colorano la lettura (lo strato del sentire) ──
+  const ton = tonalitySection(r.tonality);
+  if(ton){
+    out.appendChild(el("div","section-t","Come le firme colorano la lettura"));
+    out.appendChild(ton);
+  }
+
   // ── Proposizione + confronto col mondo ──
-  out.appendChild(el("div","section-t","Proposizione — la frase legata al mondo"));
+  out.appendChild(el("div","section-t","Proposizione: la frase legata al mondo"));
   out.appendChild(propBox(r.primary));
   out.appendChild(worldConfront(r.primary, r.kg_confrontation));
 
-  // ── Narrazione ──
+  // ── Narrazione (l'esito in una riga) ──
   out.appendChild(el("div","section-t","In parole"));
   out.appendChild(narration(r, cov, s));
 
-  // ── L'intento di UI-r1 (lo step prima della risposta) — varia col bisogno ──
+  // ── IL RAGIONAMENTO: come arrivo al senso compiuto (i passi + i legami scelti) ──
+  const reas = reasoningSection(r, cov);
+  if(reas){
+    out.appendChild(el("div","section-t","Il ragionamento: come arrivo al senso"));
+    out.appendChild(reas);
+  }
+
+  // ── L'intento di UI-r1 (lo step prima della risposta), varia col bisogno ──
   const pos = positionBox(r, cov);
   if(pos){
     const need = (r.need && r.need.dominant) || "";
-    const titles = {posizionarsi:"L'intento di UI-r1 — posizionarsi", capire:"L'intento di UI-r1 — capire",
-      riconoscere:"L'intento di UI-r1 — riconoscere", strutturare:"L'intento di UI-r1 — mettere in ordine"};
-    out.appendChild(el("div","section-t", titles[need] || "L'intento di UI-r1"));
+    const titles = {posizionarsi:"L'intento di UI-r1: posizionarsi", capire:"L'intento di UI-r1: capire",
+      riconoscere:"L'intento di UI-r1: riconoscere", strutturare:"L'intento di UI-r1: mettere in ordine"};
+    const sak = (r.speech_act && r.speech_act.kind) || "";
+    const saTitles = {"atto-fatico":"L'intento di UI-r1: ricambiare",
+      "frammento":"L'intento di UI-r1: capire cosa intendi",
+      "non-comprensibile":"L'intento di UI-r1: imparare",
+      "interrogazione":"L'intento di UI-r1: rispondere"};
+    out.appendChild(el("div","section-t", titles[need] || saTitles[sak] || "L'intento di UI-r1"));
     out.appendChild(pos);
   }
 }
@@ -283,8 +600,8 @@ function showDetail(c, box){
   h.appendChild(el("span","dr", ({compreso:"✅ compreso",parziale:"🟡 parziale",ignoto:"🔴 non riconosciuto"})[c.status]||""));
   box.appendChild(h);
   const axes = el("div","axes");
-  // asse conoscenza — cosa la parola È e FA (grounding dal KG)
-  const k = el("div","axis know"); k.appendChild(el("h4","Conoscenza — cosa ne sa"));
+  // asse conoscenza, cosa la parola È e FA (grounding dal KG)
+  const k = el("div","axis know"); k.appendChild(el("h4","Conoscenza: cosa ne sa"));
   k.appendChild(kv("nel grafo", c.known ? "sì" : "no"));
   k.appendChild(kv("relazioni note", String(c.arc_count)));
   const g = groundingFor(c.lemma, c.token);
@@ -299,12 +616,44 @@ function showDetail(c, box){
   }
   axes.appendChild(k);
   // asse comprensione
-  const cp = el("div","axis comp"); cp.appendChild(el("h4","Comprensione — qui"));
+  const cp = el("div","axis comp"); cp.appendChild(el("h4","Comprensione: qui"));
   cp.appendChild(kv("ruolo", friendlyRole(c.role, c.token)));
   cp.appendChild(kv("legato alla frase", c.bound ? "sì" : "no"));
   axes.appendChild(cp);
   box.appendChild(axes);
   box.appendChild(el("div","reason", friendlyReason(c)));
+
+  // ── Profilo di cura: ricchezza + famiglie + firma (lo strato del sentire) ──
+  if(g && g.richness && g.richness.degree>0){
+    const prof = el("div","reason"); prof.style.fontStyle="normal"; prof.style.paddingTop="0";
+    const rl = el("div","rich-line");
+    rl.appendChild(el("span","lab","Ricchezza:"));
+    rl.appendChild(richPips(g.richness));
+    rl.appendChild(el("span","tier r-"+g.richness.label, g.richness.label));
+    rl.appendChild(el("span","rich-num",
+      g.richness.degree+" relazioni · "+g.richness.relation_types+" tipi · "+g.richness.multihop+" cammini"));
+    prof.appendChild(rl);
+    prof.appendChild(famSpectrum(g.richness.family_ids));
+    box.appendChild(prof);
+  }
+  if(g && g.signature){
+    const fb = el("div","reason"); fb.style.fontStyle="normal";
+    if(g.region) fb.appendChild(el("span","region-chip","regione del sentire: "+g.region));
+    fb.appendChild(firmaBars(g.signature, g.connotation));
+    // Denotazione (grafo) ↔ connotazione (firma): la firma aggiunge il TONO.
+    const isaGrp = (g.outgoing||[]).find(o=>o.relation==="IS_A");
+    const cat = isaGrp && isaGrp.targets[0] ? isaGrp.targets[0].word : null;
+    const tones = (g.connotation||[]).map(x=>x.reading);
+    if(cat || tones.length){
+      const dr = el("div","dual-read");
+      let html = "";
+      if(cat) html += '<span class="lab">dal grafo è</span> <span class="kg">'+cat+'</span>';
+      if(tones.length) html += (cat?' · ':'')+'<span class="lab">dalla firma suona</span> <span class="firma-tag">'+tones.join(", ")+'</span>';
+      dr.innerHTML = html;
+      fb.appendChild(dr);
+    }
+    box.appendChild(fb);
+  }
   box.classList.add("show");
 }
 function kv(k,val){const d=el("div","kv");d.innerHTML=k+": <b>"+val+"</b>";return d;}
@@ -312,16 +661,44 @@ function kv(k,val){const d=el("div","kv");d.innerHTML=k+": <b>"+val+"</b>";retur
 function propBox(p){
   const box = el("div","prop-box");
   if(!p || !p.relation){ box.appendChild(el("div","prop-empty","Nessuna proposizione estratta (input non proposizionale).")); return box; }
-  const subj = p.subject_surface || (p.subject_kind==="World" ? p.subject_name : (SUBJ[p.subject_kind]||p.subject_name||"?"));
+  // Soggetto in prospettiva deittica (l'«io» del parlante è «tu» per UI-r1),
+  // coerente con la narrazione.
+  const subj = (p.subject_surface ? deictic(p.subject_surface)
+               : (p.subject_kind==="World" ? p.subject_name : (SUBJ[p.subject_kind]||p.subject_name||"?")));
   const hasObj = !!(p.object_name && p.object_name.length) || p.object_kind==="Variable";
   const obj = (p.object_kind==="Variable" ? "?"+(p.object_name||"") : p.object_name);
-  const verb = (RELVERB[p.relation]||p.relation) + (p.polarity===false ? " (non)" : "");
+  // Il verbo del grafo è quello REALMENTE usato, `verb_display` (verb_lemma
+  // coniugato dal backend alla persona deittica): "preferisci", non il generico
+  // verbo-relazione "provi". Fallback al verbo-relazione per le copule.
+  const verbBase = p.verb_display || (RELVERB[p.relation]||p.relation);
+  const verb = verbBase + (p.polarity===false ? " (non)" : "");
   // Con oggetto diretto: [subj]→[obj], il via è un ramo-complemento. Senza
   // oggetto (intransitivo): il via È l'endpoint (complemento di luogo/origine).
   if(hasObj) box.appendChild(propSvg(subj, verb, obj, p.via, null));
   else if(p.via) box.appendChild(propSvg(subj, verb, p.via, null, "complemento"));
   else box.appendChild(propSvg(subj, verb, "·", null, null));
+  // ── Complementi: l'analisi logica COMPLETA, oltre il via primario. Ogni
+  // sintagma preposizionale è un legame tipato, niente più parole buttate via.
+  const compl = extraComplements(p);
+  if(compl.length){
+    const row=el("div","compl-row");
+    compl.forEach(c=>{
+      const chip=el("span","compl");
+      // Ruolo logico (paragone/termine/fine/…) se presente, altrimenti la
+      // relazione kg_sem disambiguata.
+      const tag = c.role ? " · "+c.role : (c.relation ? " · "+(RELVERB[c.relation]||c.relation) : "");
+      chip.innerHTML = "<b>"+c.preposition+" "+c.noun+"</b>"+tag;
+      row.appendChild(chip);
+    });
+    box.appendChild(row);
+  }
   return box;
+}
+// Complementi diversi dal via/oggetto/soggetto già mostrati (il via compare
+// anche nei complements: lo escludiamo per non duplicarlo).
+function extraComplements(p){
+  const dup = new Set([p.via,p.object_name,p.subject_name].filter(Boolean).map(w=>w.toLowerCase()));
+  return (p.complements||[]).filter(c => c.noun && !dup.has(c.noun.toLowerCase()));
 }
 function propSvg(subj, verb, obj, via, endpointTag){
   const NS="http://www.w3.org/2000/svg";
@@ -378,15 +755,15 @@ function worldConfront(p, kc){
   if(!p || !p.relation || !kc){ box.style.display="none"; return box; }
   let cls, txt;
   if(kc.contradictions && kc.contradictions.length){
-    cls="w-bad"; txt="✗ contraddetta dal mondo — il grafo tiene l'opposto.";
+    cls="w-bad"; txt="✗ contraddetta dal mondo, il grafo tiene l'opposto.";
   } else if(kc.matches){
-    cls="w-ok"; txt="✓ confermata dal mondo — questa relazione esiste già nel grafo.";
+    cls="w-ok"; txt="✓ confermata dal mondo, questa relazione esiste già nel grafo.";
   } else if(kc.object_in_kg){
     cls="w-new"; txt = kc.via_in_kg
-      ? "○ nuova ma ancorata — i concetti esistono nel mondo, la relazione è nuova."
-      : "○ nuova — l'oggetto è noto al mondo, la relazione è nuova.";
+      ? "○ nuova ma ancorata, i concetti esistono nel mondo, la relazione è nuova."
+      : "○ nuova, l'oggetto è noto al mondo, la relazione è nuova.";
   } else {
-    cls="w-none"; txt="○ non ancorata — questa relazione non la trovo nel mondo.";
+    cls="w-none"; txt="○ non ancorata, questa relazione non la trovo nel mondo.";
   }
   box.classList.add(cls);
   box.appendChild(el("span","w-txt",txt));
@@ -394,7 +771,7 @@ function worldConfront(p, kc){
 }
 
 // Verbi-relazione ACCORDATI col soggetto recuperato (pro-drop): la desinenza
-// segue chi parla. Tabella finita (relazione × persona) — è "educare il frame",
+// segue chi parla. Tabella finita (relazione × persona), è "educare il frame",
 // non un trucco. `_` = 3ª persona (soggetto del mondo).
 const RELVERB_AGREED = {
   IsA:      {io:"sono", noi:"siamo", tu:"sei", voi:"siete", _:"è"},
@@ -430,7 +807,7 @@ function verbFor(p, surf){
 function joinIt(a){ a=a.filter(Boolean); if(a.length<=1) return a.join("");
   return a.slice(0,-1).join(", ")+" e "+a[a.length-1]; }
 // Clausola ANCORATA: cosa il grafo sa del nodo GIÀ COMPRESO (legato). Solo
-// relazioni tipate del nodo — niente attivazioni libere (anti-nuclei).
+// relazioni tipate del nodo, niente attivazioni libere (anti-nuclei).
 function groundedClause(lemma){
   const g = groundingFor(lemma, lemma);
   if(!g || !g.outgoing) return null;
@@ -445,12 +822,28 @@ function groundedClause(lemma){
   return frags.length ? frags.slice(0,3).join("; ") : null;
 }
 
+// Lettura compatta di UNA clausola (riusata per le clausole secondarie). Niente
+// "Ho capito che", il prefisso lo mette chi la chiama.
+function clauseReading(p){
+  const surf = p.subject_surface || null;
+  const dsurf = surf ? deictic(surf) : null;
+  const subj = dsurf || (p.subject_kind==="World" ? p.subject_name : (SUBJ[p.subject_kind]||"?"));
+  const neg = p.polarity===false ? "non " : "";
+  const hasObj = !!(p.object_name && p.object_name.length);
+  if(p.object_kind==="Variable") return `${cap(subj)} pone una domanda (${p.object_name||"?"})`;
+  const v = p.verb_display || verbFor(p, dsurf);
+  let txt = `${cap(subj)} ${neg}${v}`;
+  if(hasObj && p.object_name!==p.verb_lemma) txt += ` ${p.object_name}`;
+  if(p.via) txt += `, riguardo a ${p.via}`;
+  return txt;
+}
+
 function narration(r, cov, s){
   const box=el("div","narr");
   const p=r.primary;
   if(p && p.relation){
     const surf = p.subject_surface || null;
-    // DEISSI: nella comprensione di UI-r1 il punto di vista si ribalta —
+    // DEISSI: nella comprensione di UI-r1 il punto di vista si ribalta , 
     // l'«io» dell'utente diventa «tu». Il verbo si accorda al pronome SHIFTATO.
     const dsurf = surf ? deictic(surf) : null;
     const subj = dsurf || (p.subject_kind==="World" ? p.subject_name : (SUBJ[p.subject_kind]||"?"));
@@ -466,35 +859,57 @@ function narration(r, cov, s){
     let txt;
     if(isQuestion){
       txt = `${cap(subj)} mi pone una domanda (${p.object_name||"?"}).`;
-    } else if(p.relation==="Does" && p.verb_lemma && (!hasObj || p.object_name===p.verb_lemma)){
-      txt = `Ho capito che ${subj} ${neg}${advWord?advWord+" ":""}${agreedVerb("Does", dsurf)} l'azione di ${p.verb_lemma}.`;
     } else {
-      txt = `Ho capito che ${subj} ${neg}${verbFor(p, dsurf)}`;
+      // Verbo concreto coniugato (verb_display: "preferisci"/"giochi"), col
+      // fallback al verbo-relazione per le copule.
+      const v = p.verb_display || verbFor(p, dsurf);
+      txt = `Ho capito che ${subj} ${neg}${v}`;
       if(advWord) txt += ` ${advWord}`;
-      if(hasObj) txt += ` ${p.object_name}`;
-      if(p.via) txt += ` — riguardo a ${p.via}`;
+      // L'oggetto COMPOSTO coi suoi attributi: "futuro bello", non "futuro"
+      // (futuro ≠ futuro bello). Il dettaglio del grafo e la messa a fuoco
+      // vivono nel "Ragionamento" qui sotto, non in un dump generico.
+      const objDisp = objectDisplay(p, cov);
+      if(objDisp && objDisp!==p.verb_lemma) txt += ` ${objDisp}`;
+      if(p.via) txt += `, riguardo a ${p.via}`;
       txt += ".";
     }
     const l=el("div","lead"); l.textContent=txt; box.appendChild(l);
     const dn = surf ? deixisNote(surf) : null;
     if(dn) box.appendChild(el("div","subj-hint", dn));
 
-    // ── La CARNE: cosa so dei nodi che ho legato (oltre la ripetizione) ──
-    // Per i claim sul mondo grondo il SOGGETTO (il tema); per i claim di chi
-    // parla, l'OGGETTO (il contenuto) ed eventualmente il complemento via.
-    const seen = new Set();
-    const groundNodes = [];
-    if(p.subject_kind==="World" && p.subject_name) groundNodes.push(p.subject_name);
-    if(hasObj && !isQuestion) groundNodes.push(p.object_name);
-    if(p.via) groundNodes.push(p.via);
-    groundNodes.forEach(node=>{
-      const key=(node||"").toLowerCase(); if(!node||seen.has(key)) return; seen.add(key);
-      const clause = groundedClause(node);
-      if(clause){ const g=el("div","ground"); g.innerHTML="Nel mio grafo, <b>"+node+"</b> "+clause+"."; box.appendChild(g); }
+    // ── Complementi: i legami che NON entrano nella tripla principale ──
+    const compl = extraComplements(p);
+    if(compl.length){
+      const parts = compl.map(c=>{
+        const tag = c.role || (c.relation ? (RELVERB[c.relation]||c.relation) : "");
+        return "«"+c.preposition+" "+c.noun+"»"+(tag?" ("+tag+")":"");
+      });
+      const d=el("div","ground"); d.innerHTML="Altri legami della frase: "+parts.join(", ")+"."; box.appendChild(d);
+    }
+
+    // ── Clausole secondarie: ogni altra proposizione dell'enunciato ──
+    // ("devo finire il report e comprare il latte" → due clausole, entrambe lette).
+    (r.propositions||[]).filter(x=>x.proposition && !x.is_primary).forEach(x=>{
+      const c=el("div","clause"); c.innerHTML="<b>Inoltre:</b> "+clauseReading(x.proposition)+"."; box.appendChild(c);
     });
   } else {
-    box.appendChild(el("div","partial","Nessuna proposizione: l'input non porta un'affermazione che io possa legare al mondo."));
+    // ── Nessuna proposizione: il Gate si posiziona comunque, secondo l'ATTO ──
+    const sa = r.speech_act || {};
+    if(sa.kind==="atto-fatico"){
+      box.appendChild(el("div","lead","Riconosco un atto d'apertura del canale (un saluto): non un'affermazione da legare al mondo, ma un gesto comunicativo. Lo ricambio nello stesso registro."));
+    } else if(sa.kind==="interrogazione"){
+      box.appendChild(el("div","lead","Mi stai rivolgendo una domanda. Non porta un'affermazione ma una richiesta: cerco nel mio grafo ciò che la riguarda."));
+    } else if(sa.kind==="frammento"){
+      const cl=(sa.content_lemmas||[]);
+      box.appendChild(el("div","lead","Non è una frase compiuta, ma "+(cl.length>1?"parole che conosco":"una parola che conosco")+": "+cl.join(", ")+". Le àncoro al mondo, in attesa di ciò che vuoi dirne."));
+      cl.forEach(node=>{ const clause=groundedClause(node); if(clause){ const g=el("div","ground"); g.innerHTML="Nel mio grafo, <b>"+node+"</b> "+clause+"."; box.appendChild(g);} });
+    } else {
+      box.appendChild(el("div","none","Non riconosco nulla a cui agganciarmi: né una proposizione, né parole che il mio grafo conosca. Spiegamelo e imparo."));
+    }
   }
+
+  // (Gli attributi sono ora composti nell'oggetto del lead e messi a fuoco nel
+  // "Ragionamento", niente più riga "Qualità" separata.)
 
   // ── Incongruenza grafo↔input ──
   const kc = r.kg_confrontation;
@@ -522,11 +937,12 @@ function narration(r, cov, s){
 
   // ── Limiti onesti (compatti) ──
   if(s.open_slots && s.open_slots.length)
-    box.appendChild(el("div","miss","Mi manca: "+s.open_slots.join(", ")+" — l'informazione è incompleta."));
+    box.appendChild(el("div","miss","Mi manca: "+s.open_slots.join(", ")+", l'informazione è incompleta."));
   const red = cov.filter(c=>c.status==="ignoto").map(c=>c.token);
   if(red.length) box.appendChild(el("div","none","Non riconosco: "+red.join(", ")+"."));
   const yellow = cov.filter(c=>c.status==="parziale").map(c=>c.token);
-  if(yellow.length) box.appendChild(el("div","partial","Conosco ma non ho legato a questa frase: "+yellow.join(", ")+"."));
+  if(yellow.length && (r.speech_act&&r.speech_act.kind)!=="frammento")
+    box.appendChild(el("div","partial","Conosco ma non ho legato a questa frase: "+yellow.join(", ")+"."));
   return box;
 }
 function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
@@ -534,14 +950,14 @@ function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
 // ── Deissi (shifter lacaniano): nella COMPRENSIONE di UI-r1 il punto di vista
 // si ribalta. L'utente che dice «io» è «tu» per UI-r1; «tu» (rivolto a UI-r1) è
 // «io». «noi» può includere o no UI-r1; «voi»/«loro» hanno un referente da
-// chiarire — rilevante nel dialogo multi-turno.
+// chiarire, rilevante nel dialogo multi-turno.
 const DEIXIS = { io:"tu", tu:"io", noi:"voi", voi:"voi", loro:"loro", lui:"lui", lei:"lei", egli:"lui", ella:"lei" };
 function deictic(surf){ return surf ? (DEIXIS[surf.toLowerCase()]||surf) : surf; }
 function deixisNote(surf){
   const s=(surf||"").toLowerCase();
   if(s==="io")  return "(parli di te: nella mia comprensione «io» diventa «tu»)";
   if(s==="tu")  return "(ti rivolgi a me: «tu» qui sono io, UI-r1)";
-  if(s==="noi") return "(«noi»: non so se mi includi o no — da chiarire)";
+  if(s==="noi") return "(«noi»: non so se mi includi o no, da chiarire)";
   if(s==="voi"||s==="loro") return "(«"+s+"»: a chi ti riferisci esattamente? da chiarire)";
   return null;
 }
@@ -558,7 +974,7 @@ function adverbInfo(tok){
   return {cat:"avverbio", eff:null};
 }
 
-// ── La POSIZIONE di UI-r1: lo step fra comprensione e risposta. ONESTA —
+// ── La POSIZIONE di UI-r1: lo step fra comprensione e risposta. ONESTA , 
 // lettura della tensione + cosa è in gioco nel grafo + cosa la muove (need).
 // NON prescrive comportamenti né fabbrica opinioni (Principio 3): con 0 opinioni
 // cristallizzate, lo dice. La posizione è dove la porta il SUO grafo.
@@ -569,7 +985,7 @@ const NEED_LABEL = {
 };
 function tensionReading(p){
   const obj=p.object_name, via=p.via, rel=p.relation, neg=p.polarity===false;
-  if(neg && rel==="FeelsAs")  return via ? `una riluttanza — manca lo slancio verso «${via}».` : `un non-provare «${obj}».`;
+  if(neg && rel==="FeelsAs")  return via ? `una riluttanza, manca lo slancio verso «${via}».` : `un non-provare «${obj}».`;
   if(neg && rel==="Does")     return `un rifiuto o una rinuncia verso «${obj}».`;
   if(neg && rel==="Has")      return `un'assenza dichiarata di «${obj}».`;
   if(neg && rel==="IsA")      return `una negazione d'identità: non «${obj}».`;
@@ -590,7 +1006,7 @@ function stakeOf(p){
   if(opp.length) frags.push(`il suo opposto è «${opp[0]}»`);
   return frags.length ? frags.join("; ")+"." : null;
 }
-// Di COSA UI-r1 si posiziona — concreto, dal nodo/tensione dell'input (non
+// Di COSA UI-r1 si posiziona, concreto, dal nodo/tensione dell'input (non
 // "posizionarsi" e basta).
 function positionTopic(p, freq){
   const obj=p.object_name, via=p.via, rel=p.relation, neg=p.polarity===false;
@@ -632,23 +1048,29 @@ function positionBox(r, cov){
   const fa=(cov||[]).find(c=>c.role==="avverbio" && !propW.has((c.lemma||c.token).toLowerCase()) && adverbInfo(c.token).cat==="frequenza");
   const freq = fa ? fa.token.toLowerCase() : "";
   const openSlots = (r.saturation && r.saturation.open_slots) || [];
+  // Oggetto COMPOSTO (con attributo) + la lettura messa a fuoco dalle firme:
+  // il posizionamento riguarda «futuro bello», non «futuro», e UI-r1 lo legge
+  // come ciò che l'attributo illumina (speranza), non genericamente.
+  const objDisp = p ? objectDisplay(p, cov) : "";
+  const lit = (r.qualified||[]).flatMap(q=>q.illuminated);
+  const composedTopic = (p && objDisp && objDisp!==p.object_name) ? "«"+objDisp+"»" : null;
 
   // ── STRUTTURARE: il dump → ordine (il superpotere ADHD) ──
   if(need==="strutturare"){
     const loci=(r.propositions||[]).filter(x=>x.proposition).map(x=>lociLabel(x.proposition));
     box.appendChild(rowEl("pos-topic","Sento più cose insieme", loci.length+" cose"));
     box.appendChild(el("div","pos-read","Il mio impulso è metterle in fila: "+loci.join(" · ")+"."));
-    box.appendChild(rowEl("pos-ask","Ti direi","«vedo "+loci.length+" cose — "+loci.join(", ")+" — da quale partiamo?»"));
+    box.appendChild(rowEl("pos-ask","Ti direi","«vedo "+loci.length+" cose, "+loci.join(", ")+", da quale partiamo?»"));
     return box;
   }
-  // ── RICONOSCERE: il mondo conferma — niente domanda, una conferma ──
+  // ── RICONOSCERE: il mondo conferma, niente domanda, una conferma ──
   if(need==="riconoscere" && p){
     box.appendChild(rowEl("pos-topic","Riconosco", positionTopic(p, freq)));
     box.appendChild(el("div","pos-read","Questa relazione è già nel mio mondo: la confermo."));
     const st=stakeOf(p); if(st) box.appendChild(rowEl("pos-stake","Nel mio grafo", st));
     return box;
   }
-  // ── CAPIRE: c'è un vuoto — il moto è chiarirlo ──
+  // ── CAPIRE: c'è un vuoto, il moto è chiarirlo ──
   if(need==="capire" && p){
     box.appendChild(rowEl("pos-topic","Mi manca un pezzo", openSlots[0]||"un elemento"));
     const reading=tensionReading(p); if(reading) box.appendChild(rowEl("pos-read","Leggo", reading));
@@ -663,19 +1085,53 @@ function positionBox(r, cov){
   }
   // ── POSIZIONARSI (default per claim nuovo): tensione + cosa è in gioco + domanda ──
   if(need==="posizionarsi" && p){
-    box.appendChild(rowEl("pos-topic","Mi posiziono riguardo a", positionTopic(p, freq)));
-    const reading=tensionReading(p); if(reading) box.appendChild(rowEl("pos-read","Leggo", reading));
+    box.appendChild(rowEl("pos-topic","Mi posiziono riguardo a", composedTopic || positionTopic(p, freq)));
+    if(lit.length) box.appendChild(rowEl("pos-read","Lo leggo soprattutto come", joinIt(lit)));
+    else { const reading=tensionReading(p); if(reading) box.appendChild(rowEl("pos-read","Leggo", reading)); }
     const stake=stakeOf(p); if(stake) box.appendChild(rowEl("pos-stake","In gioco, dal mio grafo", stake));
     box.appendChild(rowEl("pos-ask","Per posizionarmi ti chiederei","«"+wouldAsk(p, openSlots, freq)+"»"));
-    box.appendChild(el("div","pos-op","Non ho ancora un'opinione cristallizzata: mi oriento dalla tensione e da ciò che il mio grafo lega — e ti chiedo, non ti dico cosa fare."));
+    box.appendChild(el("div","pos-op","Non ho ancora un'opinione cristallizzata: mi oriento dalla tensione e da ciò che il mio grafo lega, e ti chiedo, non ti dico cosa fare."));
     return box;
   }
-  return null; // fatico (ciao) o nessun appiglio → nessun pannello
+  // ── Input NON proposizionali: il Gate si posiziona comunque (mai un vuoto) ──
+  const sa = r.speech_act || {};
+  if(sa.kind==="atto-fatico"){
+    box.appendChild(rowEl("pos-topic","Riconosco","un saluto, apri il canale"));
+    box.appendChild(el("div","pos-read","Non c'è una posizione da prendere: è un gesto, non un'affermazione."));
+    box.appendChild(rowEl("pos-ask","Ti ricambio","«Ciao.»"));
+    return box;
+  }
+  if(sa.kind==="interrogazione" && !p){
+    box.appendChild(rowEl("pos-topic","Mi stai interrogando","vuoi sapere qualcosa"));
+    box.appendChild(rowEl("pos-ask","Ti risponderei","«da ciò che il mio grafo tiene a riguardo»"));
+    return box;
+  }
+  if(sa.kind==="frammento"){
+    const cl=(sa.content_lemmas||[]);
+    box.appendChild(rowEl("pos-topic","Una o più parole, non una frase", cl.join(", ")||"·"));
+    const node=cl[0];
+    const st = node ? stakeOf({object_name:node, via:null, relation:"", polarity:true}) : null;
+    if(st) box.appendChild(rowEl("pos-stake","Nel mio grafo", st));
+    box.appendChild(rowEl("pos-ask","Per posizionarmi ti chiederei","«cosa vuoi dirmi con "+(cl.join(", ")||"questo")+"?»"));
+    return box;
+  }
+  if(sa.kind==="non-comprensibile"){
+    box.appendChild(rowEl("pos-topic","Non ho appigli","·"));
+    box.appendChild(el("div","pos-read","Non riconosco le parole né una struttura: non posso ancora posizionarmi. Spiegamelo e lo imparo."));
+    return box;
+  }
+  return null; // input vuoto → nessun pannello
 }
 function rowEl(cls,label,txt){ const d=el("div",cls); d.innerHTML="<b>"+label+":</b> "+txt; return d; }
 
 $("#go").onclick=()=>{ const t=$("#in").value.trim(); if(t) analyze(t); };
 $("#in").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const t=e.target.value.trim(); if(t) analyze(t);} });
+// Link condivisibile: /comprensione?q=vogliamo un futuro bello → analizza subito.
+// Comodo per l'evento (aprire il Gate già sulla frase) e per il prima/dopo cura.
+(function(){
+  const q = new URLSearchParams(location.search).get("q");
+  if(q){ $("#in").value = q; analyze(q); }
+})();
 </script>
 </body>
 </html>

@@ -94,6 +94,15 @@ pub enum RelationType {
     /// X COESISTE Y — complementarietà, co-occorrenza necessaria
     /// "sale COESISTE pepe", "domanda COESISTE risposta"
     Coexists,
+
+    // ── Morfologiche (Phase 86 — famiglie derivazionali) ─────────────────
+    /// X DERIVA_DA Y — X è un lessema *derivato* dalla base Y, col `via` = tipo
+    /// di derivazione (nominalizzazione/aggettivazione/agentivo/participio…).
+    /// NON è sinonimia (`SimilarTo`) né flessione (quella si genera, non è un
+    /// arco): è parentela di formazione delle parole.
+    /// "pulizia DERIVA_DA pulire via=nominalizzazione",
+    /// "affamato DERIVA_DA fame via=aggettivazione".
+    DerivesFrom,
 }
 
 impl RelationType {
@@ -136,6 +145,8 @@ impl RelationType {
             "EQUIVALENT" | "EQUIVALE" | "UGUALE_A" => Some(Self::Equivalent),
             "EXCLUDES" | "ESCLUDE" | "INCOMPATIBILE" => Some(Self::Excludes),
             "COEXISTS" | "COESISTE" | "COMPLEMENTA" => Some(Self::Coexists),
+            // Morfologiche
+            "DERIVES_FROM" | "DERIVESFROM" | "DERIVA_DA" | "DERIVADA" => Some(Self::DerivesFrom),
             _ => None,
         }
     }
@@ -164,6 +175,7 @@ impl RelationType {
             Self::Equivalent => "EQUIVALENT",
             Self::Excludes => "EXCLUDES",
             Self::Coexists => "COEXISTS",
+            Self::DerivesFrom => "DERIVES_FROM",
         }
     }
 
@@ -191,6 +203,7 @@ impl RelationType {
             Self::FeelsAs => "si sente come",
             Self::WondersAbout => "si interroga su",
             Self::RemembersAs => "ricorda come",
+            Self::DerivesFrom => "deriva da",
         }
     }
 
@@ -203,6 +216,7 @@ impl RelationType {
             | Self::Expresses | Self::Symbolizes | Self::ContextOf => "semantica",
             Self::Implies | Self::Equivalent | Self::Excludes | Self::Coexists => "logica",
             Self::FeelsAs | Self::WondersAbout | Self::RemembersAs => "fenomenologica",
+            Self::DerivesFrom => "morfologica",
         }
     }
 
@@ -235,6 +249,8 @@ impl RelationType {
             Self::FeelsAs => "#d2a8ff",
             Self::WondersAbout => "#bc8cff",
             Self::RemembersAs => "#f778ba",
+            // Morfologiche — turchese
+            Self::DerivesFrom => "#39c5cf",
         }
     }
 
@@ -269,6 +285,8 @@ impl RelationType {
             Self::FeelsAs => 0.20,
             Self::WondersAbout => 0.15,
             Self::RemembersAs => 0.18,
+            // Morfologiche — lega un lessema alla sua famiglia (moderato)
+            Self::DerivesFrom => 0.14,
         }
     }
 }
@@ -293,6 +311,22 @@ pub enum EdgeSource {
     Inferred,
     /// Contributo dalla sessione community
     Community,
+    /// Curata da un agente LLM (es. verdetti Qwen applicati via `apply_verdicts.py`).
+    /// Semanticamente equivalente a `Curated`, ma traccia che la curatela è
+    /// passata per un agente.
+    AgentCurated,
+    /// Rete di sicurezza per la deserializzazione: qualunque provenance
+    /// sconosciuta degrada qui invece di far fallire l'intero parsing del KG.
+    /// Un'etichetta di metadati non deve poter spegnere il pensiero — un singolo
+    /// token ignoto non azzera 83K archi. Vedi il fix dello Strato 1.
+    #[serde(other)]
+    Unknown,
+}
+
+/// Default serde per `TypedEdge::source` quando l'edge omette il campo: `Unknown`
+/// (onesto: "provenance non dichiarata"), NON `EdgeSource::default()` (= Wikidata).
+fn default_edge_source() -> EdgeSource {
+    EdgeSource::Unknown
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -310,7 +344,11 @@ pub struct TypedEdge {
     pub object: String,
     /// Grado di certezza [0.0, 1.0]
     pub confidence: f32,
-    /// Origine della relazione
+    /// Origine della relazione. `#[serde(default)]`: se un edge curato la omette,
+    /// degrada a `Unknown` invece di far fallire il parsing dell'INTERO KG — un
+    /// campo di metadati mancante non deve spegnere 85K archi (stesso principio
+    /// del fix Strato 1 sul valore-provenance ignoto).
+    #[serde(default = "default_edge_source")]
     pub source: EdgeSource,
     /// Tramite/mezzo attraverso cui avviene la relazione (opzionale).
     /// Es: "ghiaccio DIVENTA acqua VIA calore", "fumo CAUSA cancro VIA infiammazione"
@@ -386,6 +424,35 @@ mod tests {
         assert_eq!(RelationType::from_str("isa"), Some(RelationType::IsA));
         assert_eq!(RelationType::from_str("CAUSES"), Some(RelationType::Causes));
         assert_eq!(RelationType::from_str("sconosciuto"), None);
+    }
+
+    #[test]
+    fn derives_from_carica_e_round_trip() {
+        // Phase 86: gli archi DerivesFrom curati dall'agente DEVONO caricare —
+        // niente drop silenzioso (cfr. regressione AgentCurated dello Strato 1).
+        // (1) from_str italiano/inglese
+        assert_eq!(RelationType::from_str("DERIVES_FROM"), Some(RelationType::DerivesFrom));
+        assert_eq!(RelationType::from_str("DERIVA_DA"), Some(RelationType::DerivesFrom));
+        // (2) as_str round-trip
+        assert_eq!(RelationType::from_str(RelationType::DerivesFrom.as_str()), Some(RelationType::DerivesFrom));
+        // (3) serde (il KG JSON usa i nomi-variant: "relation": "DerivesFrom")
+        let edge: TypedEdge = serde_json::from_str(
+            r#"{"subject":"pulizia","relation":"DerivesFrom","object":"pulire","confidence":0.9,"source":"AgentCurated","via":"nominalizzazione"}"#
+        ).expect("un arco DerivesFrom deve deserializzare");
+        assert_eq!(edge.relation, RelationType::DerivesFrom);
+        assert_eq!(edge.via.as_deref(), Some("nominalizzazione"));
+    }
+
+    #[test]
+    fn edge_senza_source_non_rompe_il_parsing() {
+        // Robustezza: un edge che OMETTE `source` deve caricare (source=Unknown),
+        // non far fallire l'intero KG (principio Strato 1). Così le modifiche
+        // dell'agente caricano anche se dimentica la provenance.
+        let edge: TypedEdge = serde_json::from_str(
+            r#"{"subject":"pulizia","relation":"DerivesFrom","object":"pulire","confidence":0.9,"via":"nominalizzazione"}"#
+        ).expect("un edge senza source deve comunque deserializzare");
+        assert_eq!(edge.source, EdgeSource::Unknown);
+        assert_eq!(edge.relation, RelationType::DerivesFrom);
     }
 
     #[test]

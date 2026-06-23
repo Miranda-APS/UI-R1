@@ -260,6 +260,17 @@ pub fn compose(
     kg_proc: Option<&KnowledgeGraph>,
     action_decision: Option<&crate::topology::action_reasoning::ActionDecision>,
     comprehension_report: Option<&crate::topology::comprehension_report::ComprehensionReport>,
+    // Phase 84 (2b): la proposizione strutturale dell'enunciato. Porta `via`
+    // (l'oggetto-specificazione: "futuro", "madre") al rendering del pattern,
+    // così il riconoscimento dice "la mancanza di tua madre" invece di
+    // riempire lo slot con una categoria astratta.
+    prop: Option<&crate::topology::sentence_proposition::SentenceProposition>,
+    // Phase 85 (kg_self): l'esito del confronto con le convinzioni del sé.
+    // Quando la frase confligge con (o conferma) una convinzione, semina
+    // `dissonanza`/`conferma` nel campo procedurale → il pattern
+    // `posizionamento` può vincere per risonanza: l'entità RIFRANGE invece di
+    // elaborare. Secondo canale di posizionamento, accanto al CD5 affettivo.
+    self_confrontation: Option<&crate::topology::sentence_proposition::SelfConfrontation>,
 ) -> Option<Expression> {
     // ─── Phase 71: ActionShape gate ──────────────────────────────────
     // Se la Deliberation ha scelto Silence o Word, dispatch immediato.
@@ -285,30 +296,25 @@ pub fn compose(
     // Funziona per: articolazione, identificazione, riconoscimento.
     // Per asserzione/ricambio cade nel pipeline standard (i nuclei
     // semantici e compose_word_response funzionano già bene).
-    let mut pattern_base = None;
+    // Phase 84 (2b): quando un pattern risuona, QUELLA è la risposta — un atto
+    // solo. Niente più coda-nuclei appesa: il riconoscimento "Senti la mancanza
+    // di tua madre." non viene più seguito da una frase di nuclei scollegata
+    // ("L'amore porta la cura…"). Recognition è un gesto, non un saggio.
     if let (Some(decision), Some(report), Some(proc_kg)) =
         (action_decision, comprehension_report, kg_proc)
     {
         if let Some(emergent) = crate::topology::pattern_matcher::compose_from_pattern(
-            decision, report, proc_kg, word_topology, lexicon, Some(valence_drives),
+            decision, report, proc_kg, word_topology, lexicon, Some(valence_drives), prop,
+            self_confrontation, Some(kg),
         ) {
-            let should_expand = decision.kind == crate::topology::action_reasoning::ActionKind::RecognizeClaim;
-
-            if should_expand {
-                // Per il riconoscimento (es. "Hai paura del buio.") vogliamo ANCHE un'espansione.
-                // Salviamo il pattern base e lasciamo che il flusso continui per generare
-                // l'elaborazione semantica.
-                pattern_base = Some(emergent);
-            } else {
-                return Some(emergent);
-            }
+            return Some(emergent);
         }
     }
 
     // 1. Raccogli le parole attive del campo — la materia disponibile.
     let active = word_topology.active_words();
     if active.is_empty() {
-        return pattern_base;
+        return None;
     }
 
     // Due pool: uno per CAPIRE (include input), uno per ESPRIMERE (esclude echo).
@@ -328,7 +334,7 @@ pub fn compose(
         .collect();
 
     if comprehension_pool.is_empty() || candidates.is_empty() {
-        return pattern_base;
+        return None;
     }
 
     // 2. Estrai nuclei semantici — relazioni KG tra parole attive.
@@ -383,28 +389,27 @@ pub fn compose(
     }
 
     // 5. Componi l'espressione.
-    let mut expr = if !nuclei.is_empty() {
-        compose_from_nuclei(&nuclei, &voice, &candidates, lexicon, echo_exclude)
-    } else {
-        compose_from_field(&voice, &candidates, lexicon, echo_exclude, valence_drives)
-    };
-
-    if let Some(mut base) = pattern_base {
-        // Unisci il pattern base (es. "Hai paura del buio.") con l'espansione semantica.
-        // Aggiungiamo uno spazio e combiniamo.
-        if let Some(ref mut e) = expr {
-            base.text.push(' ');
-            base.text.push_str(&e.text);
-            base.words_used.extend(e.words_used.clone());
-        }
-        expr = Some(base);
-    }
-
-    // Nota: is_question (input utente contiene '?') influenza l'interpretazione
-    // dell'input ma non necessariamente la risposta — la voce è già determinata.
-    let _ = is_question;
-
-    expr
+    //
+    // RITIRO DEL FALLBACK NUCLEI (2026-06-10, politica anti-fallback).
+    // I nuclei (`extract_nuclei` + `compose_from_nuclei`/`compose_from_field`)
+    // sono il "secondo cervello": ri-derivano un significato dalle ATTIVAZIONI
+    // grezze del campo, BYPASSANDO la proposizione. Producono grammatica
+    // corretta su parole attive a caso → non-sequitur sicuri ("La radice è un
+    // fondamento?", "Lo sviluppo articoli, è un'azione?", "L'ordine ha la
+    // struttura?" su `asdfgh`). Audit dal vivo: ~35% degli output, TUTTI
+    // spazzatura; ZERO output buoni venivano da qui (i buoni vengono da
+    // position_voice/structure_voice/pattern_matcher, già tentati sopra).
+    //
+    // La regola: l'atto DERIVA dalla proposizione o è minimo onesto. Se i path
+    // strutturati non hanno prodotto nulla, ritornare `None` — l'engine emette
+    // la parola-più-viva (rumore prima delle parole) o tace. Nessuna sicurezza
+    // fabbricata senza comprensione dietro.
+    //
+    // I nuclei restano come funzioni (`extract_nuclei` alimenta ancora la
+    // mappa di comprensione interna, sotto) ma NON compongono più l'output.
+    // Per riabilitarli: ripristinare il branch qui sotto.
+    let _ = (&nuclei, &voice, &candidates, valence_drives, is_question);
+    None
 }
 
 // ─── Estrazione nuclei semantici ───────────────────────────────────────────
@@ -490,9 +495,23 @@ pub fn extract_nuclei(
     }
 
     for &(word, act) in candidates {
+        // Phase 84 (2b): un verbo all'infinito non è un soggetto. `render_nucleus`
+        // gli metterebbe un articolo davanti ("il ritmare", "la stare") — artefatto
+        // del KG (agent_kg genera "ritmare CAUSES tempo"). Il soggetto di un nucleo
+        // dev'essere un nome: scartiamo i soggetti POS=Verb.
+        if lexicon.get(word).map(|p| p.pos == Some(PartOfSpeech::Verb)).unwrap_or(false) {
+            continue;
+        }
         for &rel in &rel_types {
             for (obj, conf) in kg.query_objects_weighted(word, rel) {
                 let obj_str = obj.to_string();
+                // Un oggetto-verbo riceve l'articolo in tutte le relazioni tranne
+                // DOES (dove viene coniugato). "la tremare" è errato: lo saltiamo.
+                if rel != RelationType::Does
+                    && lexicon.get(obj_str.as_str()).map(|p| p.pos == Some(PartOfSpeech::Verb)).unwrap_or(false)
+                {
+                    continue;
+                }
                 if active_set.contains(obj_str.as_str()) && obj_str != word {
                     let obj_act = candidates.iter()
                         .find(|(w, _)| *w == obj_str.as_str())

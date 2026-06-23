@@ -78,6 +78,59 @@ struct MetaSection {
     self_model: Option<crate::topology::self_model::SelfModelSnapshot>,
     /// Phase 58: episodi semantici nominati (la storia vissuta dell'entità).
     semantic_episodes: Option<crate::topology::semantic_episode::SemanticEpisodeLog>,
+    /// P2 (Tsunami): memoria del parlante (ritratto-utente), persistita
+    /// cross-sessione. Vedi `MetaSectionPreP86` per la retrocompat.
+    speaker_profile: Option<crate::topology::speaker_profile::SpeakerProfile>,
+}
+
+/// P2 (Tsunami) fallback — MetaSection pre-speaker_profile. Identica al formato
+/// corrente MA senza `speaker_profile`. I .bin salvati prima di P2 non possono
+/// essere deserializzati come MetaSection corrente (bincode è strict-positional).
+/// Prima opzione di fallback nella catena.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct MetaSectionPreP86 {
+    version: String,
+    total_perturbations: u64,
+    dream_cycles: u64,
+    complex: ComplexSnapshot,
+    memory: MemorySnapshot,
+    locus: Option<LocusSnapshot>,
+    curriculum: Option<CurriculumProgress>,
+    semantic_axes: Option<Vec<SemanticAxisSnapshot>>,
+    knowledge: Option<KnowledgeSnapshot>,
+    episodes: Option<crate::topology::episodic::EpisodeSnapshot>,
+    instance_born: Option<u64>,
+    identity: Option<crate::topology::identity::IdentitySnapshot>,
+    narrative: Option<crate::topology::narrative::NarrativeSnapshot>,
+    desire: Option<crate::topology::desire::DesireSnapshot>,
+    interlocutor: Option<crate::topology::interlocutor::InterlocutorSnapshot>,
+    self_model: Option<crate::topology::self_model::SelfModelSnapshot>,
+    semantic_episodes: Option<crate::topology::semantic_episode::SemanticEpisodeLog>,
+}
+
+impl From<MetaSectionPreP86> for MetaSection {
+    fn from(l: MetaSectionPreP86) -> Self {
+        MetaSection {
+            version: l.version,
+            total_perturbations: l.total_perturbations,
+            dream_cycles: l.dream_cycles,
+            complex: l.complex,
+            memory: l.memory,
+            locus: l.locus,
+            curriculum: l.curriculum,
+            semantic_axes: l.semantic_axes,
+            knowledge: l.knowledge,
+            episodes: l.episodes,
+            instance_born: l.instance_born,
+            identity: l.identity,
+            narrative: l.narrative,
+            desire: l.desire,
+            interlocutor: l.interlocutor,
+            self_model: l.self_model,
+            semantic_episodes: l.semantic_episodes,
+            speaker_profile: None, // .bin pre-P2: nessuna memoria-parlante salvata
+        }
+    }
 }
 
 /// Phase 83 fallback — MetaSection pre-P83. Identica al formato corrente
@@ -126,6 +179,7 @@ impl From<MetaSectionPreP83> for MetaSection {
             interlocutor: l.interlocutor,
             self_model: l.self_model,
             semantic_episodes: l.semantic_episodes,
+            speaker_profile: None,
         }
     }
 }
@@ -171,6 +225,7 @@ impl From<MetaSectionPreP58> for MetaSection {
             interlocutor: l.interlocutor,
             self_model: l.self_model,
             semantic_episodes: None,
+            speaker_profile: None,
         }
     }
 }
@@ -213,6 +268,7 @@ impl From<MetaSectionPreP54> for MetaSection {
             interlocutor: None,
             self_model: None,
             semantic_episodes: None,
+            speaker_profile: None,
         }
     }
 }
@@ -339,6 +395,7 @@ impl From<MetaSectionPreP52> for MetaSection {
             interlocutor: None,
             self_model: None,
             semantic_episodes: None,
+            speaker_profile: None,
         }
     }
 }
@@ -461,6 +518,7 @@ impl SimplDB {
             interlocutor: state.interlocutor.clone(),
             self_model: state.self_model.clone(),
             semantic_episodes: state.semantic_episodes.clone(),
+            speaker_profile: state.speaker_profile.clone(),
         };
         let meta_data = bincode::serialize(&meta)
             .expect("MetaSection deve essere serializzabile");
@@ -501,13 +559,18 @@ impl SimplDB {
     /// Converte il SimplDB in PrometeoState (per compatibilità con restore_lexicon).
     pub fn to_state(&self) -> Result<PrometeoState, String> {
         // Catena fallback — bincode è posizionale, #[serde(default)] non basta.
-        // 1. Formato corrente (Phase 83+: simplessi con category/ordered/function_fractal)
-        // 2. Pre-Phase83 (Phase 58+: simplessi senza i 3 campi grammaticali)
-        // 3. Pre-Phase58 (Phase 54+: desire/interlocutor/self_model, senza semantic_episodes)
-        // 4. Pre-Phase54 (Phase 52+: source_words, senza desire/interlocutor/self_model)
-        // 5. Pre-Phase52 (con instance_born/identity/narrative, senza source_words)
-        // 6. Legacy originale (senza instance_born/identity/narrative)
+        // 1. Formato corrente (P2+: include speaker_profile)
+        // 2. Pre-P2 (Phase 83+, senza speaker_profile)
+        // 3. Pre-Phase83 (Phase 58+: simplessi senza i 3 campi grammaticali)
+        // 4. Pre-Phase58 (Phase 54+: desire/interlocutor/self_model, senza semantic_episodes)
+        // 5. Pre-Phase54 (Phase 52+: source_words, senza desire/interlocutor/self_model)
+        // 6. Pre-Phase52 (con instance_born/identity/narrative, senza source_words)
+        // 7. Legacy originale (senza instance_born/identity/narrative)
         let meta: MetaSection = bincode::deserialize(&self.meta_data)
+            .or_else(|_| {
+                bincode::deserialize::<MetaSectionPreP86>(&self.meta_data)
+                    .map(MetaSection::from)
+            })
             .or_else(|_| {
                 bincode::deserialize::<MetaSectionPreP83>(&self.meta_data)
                     .map(MetaSection::from)
@@ -590,6 +653,7 @@ impl SimplDB {
             semantic_episodes: meta.semantic_episodes,
             desire: meta.desire,
             interlocutor: meta.interlocutor,
+            speaker_profile: meta.speaker_profile,
         })
     }
 
@@ -1201,6 +1265,65 @@ mod tests {
             "Perturbazioni devono sopravvivere al ciclo SimplDB");
         assert_eq!(engine2.complex.count(), engine1.complex.count(),
             "Simplessi devono sopravvivere al ciclo SimplDB");
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn test_simpdb_speaker_profile_persists() {
+        // P2 (Tsunami): la memoria del parlante (ritratto-utente) deve
+        // sopravvivere al ciclo SimplDB → file → open → to_state → restore.
+        use crate::topology::speaker_profile::{SpokenFact, FactKind, KnowledgeGap, CorrectionFact};
+
+        let mut engine1 = PrometeoTopologyEngine::new();
+        engine1.speaker_profile.name = Some("francesco".to_string());
+        engine1.speaker_profile.turn_count = 7;
+        engine1.speaker_profile.self_facts.push(SpokenFact {
+            kind: FactKind::Feeling,
+            predicate: "paura".to_string(),
+            turn: 1,
+            raw_input: "ho paura del buio".to_string(),
+        });
+        engine1.speaker_profile.mentioned.insert("buio".to_string(), 3);
+        engine1.speaker_profile.gaps.push(KnowledgeGap {
+            question: "Di cosa hai paura?".to_string(),
+            trigger: "paura".to_string(),
+            gap_kind: "emotion_object".to_string(),
+            turn: 1,
+            closed: true,
+            closed_by: Some("buio".to_string()),
+            closed_at_turn: Some(2),
+        });
+        engine1.speaker_profile.corrections.push(CorrectionFact {
+            turn: 3,
+            input: "ciao".to_string(),
+            given: "Salve.".to_string(),
+            wanted: "Ehi!".to_string(),
+            via_context: Some("amico".to_string()),
+            positive_words: vec!["ehi".to_string()],
+            negative_words: vec!["salve".to_string()],
+        });
+
+        let state1 = PrometeoState::capture(&engine1);
+        let db = SimplDB::from_state(&state1);
+        let tmp = std::env::temp_dir().join("prometeo_test_speaker_profile.bin");
+        db.save(&tmp).unwrap();
+        let db2 = SimplDB::open(&tmp).unwrap();
+        let state2 = db2.to_state().unwrap();
+        let mut engine2 = PrometeoTopologyEngine::new();
+        state2.restore_lexicon(&mut engine2);
+
+        let sp = &engine2.speaker_profile;
+        assert_eq!(sp.name.as_deref(), Some("francesco"), "il nome deve persistere");
+        assert_eq!(sp.turn_count, 7, "turn_count deve persistere");
+        assert_eq!(sp.self_facts.len(), 1, "self_facts deve persistere");
+        assert_eq!(sp.self_facts[0].predicate, "paura");
+        assert_eq!(sp.mentioned.get("buio"), Some(&3), "mentioned deve persistere");
+        assert_eq!(sp.gaps.len(), 1);
+        assert_eq!(sp.gaps[0].closed_by.as_deref(), Some("buio"), "closed_by deve persistere");
+        assert_eq!(sp.gaps[0].closed_at_turn, Some(2));
+        assert_eq!(sp.corrections.len(), 1, "le correzioni devono persistere");
+        assert_eq!(sp.corrections[0].wanted, "Ehi!");
 
         let _ = std::fs::remove_file(&tmp);
     }
